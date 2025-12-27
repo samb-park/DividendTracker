@@ -130,7 +130,8 @@ export function PortfolioHeader({
     const minValue = Math.min(...allValues);
     const maxValue = Math.max(...allValues);
     const range = maxValue - minValue;
-    const padding = range * 0.1 || maxValue * 0.05; // 10% padding, or 5% of max if range is 0
+    // Use larger padding: 50% of range or 2% of minValue, whichever is larger
+    const padding = Math.max(range * 0.5, minValue * 0.02);
 
     return [minValue - padding, maxValue + padding] as [number, number];
   })();
