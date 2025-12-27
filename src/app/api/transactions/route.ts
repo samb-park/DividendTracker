@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserId } from "@/lib/auth-helper";
 import {
   createTransactionSchema,
   transactionFilterSchema,
@@ -8,6 +9,11 @@ import { syncHoldingsForAccount } from "@/lib/calculations/holdings";
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const filters = transactionFilterSchema.parse({
       accountId: searchParams.get("accountId") || undefined,
@@ -19,7 +25,9 @@ export async function GET(request: NextRequest) {
       offset: searchParams.get("offset") || 0,
     });
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = {
+      account: { userId },
+    };
     if (filters.accountId) where.accountId = filters.accountId;
     if (filters.ticker) where.ticker = filters.ticker.toUpperCase();
     if (filters.type) where.type = filters.type;
@@ -58,8 +66,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const validated = createTransactionSchema.parse(body);
+
+    // Verify the account belongs to the user
+    const account = await prisma.account.findFirst({
+      where: { id: validated.accountId, userId },
+    });
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
 
     const transaction = await prisma.transaction.create({
       data: {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAllCachedPrices } from "@/lib/api/price-cache";
+import { getCurrentUserId } from "@/lib/auth-helper";
 import {
   calculateExpectedAnnualDividend,
   getYtdDividends,
@@ -10,8 +11,14 @@ import type { AccountSummary, DashboardData } from "@/types";
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const [accounts, prices, ytdDividends, expectedDividends] = await Promise.all([
       prisma.account.findMany({
+        where: { userId },
         include: {
           holdings: true,
           _count: { select: { transactions: true } },

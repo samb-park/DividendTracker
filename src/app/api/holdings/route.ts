@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getPricesForTickers, refreshPricesForTickers } from "@/lib/api/price-cache";
+import { getCurrentUserId } from "@/lib/auth-helper";
 import Decimal from "decimal.js";
 import type { HoldingWithPrice } from "@/types";
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get("accountId");
     const aggregate = searchParams.get("aggregate") === "true";
     const forceRefresh = searchParams.get("refresh") === "true";
 
-    const where = accountId ? { accountId } : {};
+    // Filter by userId through account relationship
+    const where = accountId
+      ? { accountId, account: { userId } }
+      : { account: { userId } };
 
     const holdings = await prisma.holding.findMany({
       where,

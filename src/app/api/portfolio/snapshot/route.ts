@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserId } from "@/lib/auth-helper";
 import { getPricesForTickers } from "@/lib/api/price-cache";
 import Decimal from "decimal.js";
 
 // GET: Retrieve portfolio snapshots for chart
 export async function GET(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "1M";
 
@@ -41,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     const snapshots = await prisma.portfolioSnapshot.findMany({
       where: {
+        userId,
         date: {
           gte: startDate,
         },
@@ -69,8 +76,17 @@ export async function GET(request: NextRequest) {
 // POST: Save current portfolio value as a snapshot
 export async function POST() {
   try {
-    // Get all holdings
-    const holdings = await prisma.holding.findMany();
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get all holdings for the user
+    const holdings = await prisma.holding.findMany({
+      where: {
+        account: { userId },
+      },
+    });
 
     if (holdings.length === 0) {
       return NextResponse.json(
@@ -108,12 +124,13 @@ export async function POST() {
     today.setHours(0, 0, 0, 0);
 
     const snapshot = await prisma.portfolioSnapshot.upsert({
-      where: { date: today },
+      where: { userId_date: { userId, date: today } },
       update: {
         totalValue: totalValue.toDecimalPlaces(2),
         totalCost: totalCost.toDecimalPlaces(2),
       },
       create: {
+        userId,
         date: today,
         totalValue: totalValue.toDecimalPlaces(2),
         totalCost: totalCost.toDecimalPlaces(2),

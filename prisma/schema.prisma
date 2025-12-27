@@ -7,10 +7,65 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============ MODELS ============
+// ============ NEXTAUTH MODELS ============
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("user") // admin, user
+  approved      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  authAccounts AuthAccount[]
+  sessions     Session[]
+  accounts     Account[]
+}
+
+model AuthAccount {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============ PORTFOLIO MODELS ============
 
 model Account {
   id        String   @id @default(cuid())
+  userId    String
   broker    String   // WEALTHSIMPLE, QUESTRADE, INTERACTIVE_BROKERS, TD_DIRECT, OTHER
   name      String
   currency  String   // CAD, USD
@@ -21,10 +76,12 @@ model Account {
   questradeAccountNumber String?
   lastSyncedAt           DateTime?
 
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions   Transaction[]
   holdings       Holding[]
   questradeToken QuestradeToken?
 
+  @@index([userId])
   @@index([broker])
 }
 
@@ -120,11 +177,14 @@ model QuestradeToken {
 
 model PortfolioSnapshot {
   id         String   @id @default(cuid())
-  date       DateTime @unique // One snapshot per day
+  userId     String
+  date       DateTime
   totalValue Decimal
   totalCost  Decimal          // Total cost basis for P/L calculation
   currency   String           // CAD
   createdAt  DateTime @default(now())
 
+  @@unique([userId, date])
+  @@index([userId])
   @@index([date])
 }

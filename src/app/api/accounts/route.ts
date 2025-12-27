@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createAccountSchema } from "@/lib/validations/account";
+import { getCurrentUserId } from "@/lib/auth-helper";
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const accounts = await prisma.account.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { holdings: true, transactions: true } },
@@ -23,11 +30,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const validated = createAccountSchema.parse(body);
 
     const account = await prisma.account.create({
-      data: validated,
+      data: {
+        ...validated,
+        userId,
+      },
     });
 
     return NextResponse.json(account, { status: 201 });

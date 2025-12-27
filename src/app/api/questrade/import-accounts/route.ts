@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserId } from "@/lib/auth-helper";
 import { QuestradeClient, syncQuestradeAccount } from "@/lib/api/questrade";
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { sourceAccountId, selectedAccounts } = body;
 
@@ -35,9 +41,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get source account to copy token
-    const sourceAccount = await prisma.account.findUnique({
-      where: { id: sourceAccountId },
+    // Get source account to copy token (verify ownership)
+    const sourceAccount = await prisma.account.findFirst({
+      where: { id: sourceAccountId, userId },
       include: { questradeToken: true },
     });
 
@@ -69,9 +75,9 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Check if account with this Questrade number already exists
+      // Check if account with this Questrade number already exists for this user
       const existing = await prisma.account.findFirst({
-        where: { questradeAccountNumber: number },
+        where: { questradeAccountNumber: number, userId },
       });
 
       if (existing) {
@@ -82,6 +88,7 @@ export async function POST(request: NextRequest) {
       // Create new account
       const newAccount = await prisma.account.create({
         data: {
+          userId,
           broker: "QUESTRADE",
           name: `Questrade ${type}`,
           currency: currency || "CAD",

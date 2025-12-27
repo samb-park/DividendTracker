@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "./user-menu";
 import type { SearchResult } from "@/types";
 
 export function SearchHeader() {
@@ -64,8 +65,8 @@ export function SearchHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-background border-b">
-      <div className="px-4 py-3">
-        <div ref={containerRef} className="relative max-w-md mx-auto md:mx-0 md:ml-auto">
+      <div className="px-4 py-3 flex items-center gap-4">
+        <div ref={containerRef} className="relative flex-1 max-w-md">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -117,6 +118,7 @@ export function SearchHeader() {
             </div>
           )}
         </div>
+        <UserMenu />
       </div>
     </header>
   );
