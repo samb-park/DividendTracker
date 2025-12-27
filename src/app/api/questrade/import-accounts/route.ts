@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const selected of selectedAccounts) {
-      const { number, type, currency, customName } = selected;
+      const { number, type, customName } = selected;
 
       // Validate account exists in Questrade
       const qtAccount = qtAccountMap.get(number);
@@ -92,7 +92,6 @@ export async function POST(request: NextRequest) {
           userId,
           broker: "QUESTRADE",
           name: accountName,
-          currency: currency || "CAD",
           questradeAccountNumber: number,
         },
       });

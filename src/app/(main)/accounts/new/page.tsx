@@ -38,7 +38,6 @@ export default function NewAccountPage() {
     resolver: zodResolver(createAccountSchema),
     defaultValues: {
       broker: "QUESTRADE",
-      currency: "CAD",
     },
   });
 

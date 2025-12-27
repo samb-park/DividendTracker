@@ -86,7 +86,6 @@ export function QuestradeConnectDialog({
         body: JSON.stringify({
           name: "__QUESTRADE_BRIDGE__",
           broker: "QUESTRADE",
-          currency: "CAD",
         }),
       });
 

@@ -69,10 +69,7 @@ export default function AccountsPage() {
                       {account._count.transactions} transactions
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{account.broker}</Badge>
-                    <Badge>{account.currency}</Badge>
-                  </div>
+                  <Badge variant="outline">{account.broker}</Badge>
                 </div>
               </div>
             </Link>

@@ -27,7 +27,6 @@ interface AccountDetail {
   id: string;
   name: string;
   broker: string;
-  currency: string;
   questradeAccountNumber: string | null;
   lastSyncedAt: string | null;
   questradeToken: { id: string } | null;
@@ -370,10 +369,7 @@ export default function AccountDetailPage() {
               </Button>
             </div>
           )}
-          <div className="flex gap-2 mt-1">
-            <Badge variant="outline">{account.broker}</Badge>
-            <Badge>{account.currency}</Badge>
-          </div>
+          <Badge variant="outline" className="mt-1">{account.broker}</Badge>
         </div>
       </div>
 

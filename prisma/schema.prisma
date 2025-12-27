@@ -68,7 +68,7 @@ model Account {
   userId    String
   broker    String   // WEALTHSIMPLE, QUESTRADE, INTERACTIVE_BROKERS, TD_DIRECT, OTHER
   name      String
-  currency  String   // CAD, USD
+  currency  String   @default("CAD") // CAD, USD
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
