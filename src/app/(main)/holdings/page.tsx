@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,9 +14,10 @@ import {
 } from "@/components/ui/select";
 import {
   HoldingsTable,
-  HoldingsCards,
   type ColumnKey,
 } from "@/components/holdings/holdings-table";
+import { PortfolioHeader } from "@/components/holdings/portfolio-header";
+import { HoldingCardsList } from "@/components/holdings/holding-card";
 import type { HoldingWithPrice } from "@/types";
 
 interface Account {
@@ -56,6 +57,7 @@ export default function HoldingsPage() {
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
     () => new Set(DEFAULT_COLUMNS)
   );
+  const [showFilters, setShowFilters] = useState(false);
 
   // Load column preferences from localStorage
   useEffect(() => {
@@ -158,39 +160,64 @@ export default function HoldingsPage() {
       currentPrice: convertValue(holding.currentPrice),
       marketValue: convertValue(holding.marketValue),
       profitLoss: convertValue(holding.profitLoss),
+      dailyChange: convertValue(holding.dailyChange),
       fiftyTwoWeekHigh: convertValue(holding.fiftyTwoWeekHigh),
       fiftyTwoWeekLow: convertValue(holding.fiftyTwoWeekLow),
     };
   });
 
+  // Determine primary display currency for header
+  const primaryCurrency = displayCurrency === "original" ? "CAD" : displayCurrency;
+
   if (isLoading) {
     return (
       <div className="p-4 space-y-4">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-10 w-48" />
+        <div className="text-center space-y-2">
+          <Skeleton className="h-4 w-24 mx-auto" />
+          <Skeleton className="h-10 w-40 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
+        </div>
+        <Skeleton className="h-40" />
+        <Skeleton className="h-8 w-48 mx-auto" />
         <Skeleton className="h-64" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-6">
+      {/* Portfolio Header with Chart */}
+      {holdings.length > 0 && (
+        <PortfolioHeader holdings={convertedHoldings} currency={primaryCurrency} />
+      )}
+
+      {/* Stocks Section Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Holdings</h1>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => fetchHoldings(true)}
-          disabled={isRefreshing}
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-          />
-        </Button>
+        <h2 className="text-lg font-semibold">Stocks</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            className="md:hidden"
+          >
+            <Filter className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => fetchHoldings(true)}
+            disabled={isRefreshing}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+          </Button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      {/* Filters - Always visible on desktop, toggleable on mobile */}
+      <div className={`flex-wrap gap-2 ${showFilters ? "flex" : "hidden md:flex"}`}>
         <Select value={selectedAccount} onValueChange={setSelectedAccount}>
           <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Select account" />
@@ -237,12 +264,11 @@ export default function HoldingsPage() {
             />
           </div>
 
-          {/* Mobile: Card view */}
+          {/* Mobile: New Card view */}
           <div className="md:hidden">
-            <HoldingsCards
+            <HoldingCardsList
               holdings={convertedHoldings}
-              onRowClick={handleRowClick}
-              visibleColumns={visibleColumns}
+              onCardClick={handleRowClick}
             />
           </div>
         </>

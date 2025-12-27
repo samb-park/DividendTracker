@@ -90,6 +90,19 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // Calculate daily change
+        let dailyChange: Decimal | undefined;
+        let dailyChangePercent: Decimal | undefined;
+        if (priceData?.price && priceData?.previousClose) {
+          const currentPrice = new Decimal(priceData.price);
+          const prevClose = new Decimal(priceData.previousClose);
+          const priceChange = currentPrice.sub(prevClose);
+          dailyChange = data.quantity.mul(priceChange);
+          dailyChangePercent = prevClose.gt(0)
+            ? priceChange.div(prevClose).mul(100)
+            : new Decimal(0);
+        }
+
         enrichedHoldings.push({
           id: ticker, // Use ticker as ID for aggregated view
           accountId: "all",
@@ -97,7 +110,7 @@ export async function GET(request: NextRequest) {
           quantity: data.quantity.toFixed(4),
           avgCost: avgCost.toFixed(2),
           currency: data.currency,
-          currentPrice: priceData?.price.toFixed(2),
+          currentPrice: priceData?.price?.toFixed(2),
           marketValue: marketValue?.toFixed(2),
           profitLoss: profitLoss?.toFixed(2),
           profitLossPercent: profitLossPercent?.toFixed(2),
@@ -106,6 +119,9 @@ export async function GET(request: NextRequest) {
           weight: weight?.toFixed(2),
           fiftyTwoWeekHigh: priceData?.fiftyTwoWeekHigh?.toFixed(2),
           fiftyTwoWeekLow: priceData?.fiftyTwoWeekLow?.toFixed(2),
+          dailyChange: dailyChange?.toFixed(2),
+          dailyChangePercent: dailyChangePercent?.toFixed(2),
+          previousClose: priceData?.previousClose?.toFixed(2),
         });
       }
 
@@ -147,6 +163,19 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // Calculate daily change
+        let dailyChange: Decimal | undefined;
+        let dailyChangePercent: Decimal | undefined;
+        if (priceData?.price && priceData?.previousClose) {
+          const currentPrice = new Decimal(priceData.price);
+          const prevClose = new Decimal(priceData.previousClose);
+          const priceChange = currentPrice.sub(prevClose);
+          dailyChange = qty.mul(priceChange);
+          dailyChangePercent = prevClose.gt(0)
+            ? priceChange.div(prevClose).mul(100)
+            : new Decimal(0);
+        }
+
         return {
           id: holding.id,
           accountId: holding.accountId,
@@ -154,7 +183,7 @@ export async function GET(request: NextRequest) {
           quantity: qty.toFixed(4),
           avgCost: avgCost.toFixed(2),
           currency: holding.currency,
-          currentPrice: priceData?.price.toFixed(2),
+          currentPrice: priceData?.price?.toFixed(2),
           marketValue: marketValue?.toFixed(2),
           profitLoss: profitLoss?.toFixed(2),
           profitLossPercent: profitLossPercent?.toFixed(2),
@@ -163,6 +192,9 @@ export async function GET(request: NextRequest) {
           weight: weight?.toFixed(2),
           fiftyTwoWeekHigh: priceData?.fiftyTwoWeekHigh?.toFixed(2),
           fiftyTwoWeekLow: priceData?.fiftyTwoWeekLow?.toFixed(2),
+          dailyChange: dailyChange?.toFixed(2),
+          dailyChangePercent: dailyChangePercent?.toFixed(2),
+          previousClose: priceData?.previousClose?.toFixed(2),
         };
       }
     );

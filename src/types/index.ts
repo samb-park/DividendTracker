@@ -64,6 +64,9 @@ export interface HoldingWithPrice {
   weight?: string;
   fiftyTwoWeekHigh?: string;
   fiftyTwoWeekLow?: string;
+  dailyChange?: string;
+  dailyChangePercent?: string;
+  previousClose?: string;
 }
 
 export interface AccountSummary {
@@ -180,4 +183,24 @@ export interface QuestradeActivity {
   commission: number;
   netAmount: number;
   type: string;
+}
+
+// Portfolio snapshot for historical tracking
+export interface PortfolioSnapshot {
+  id: string;
+  date: string;
+  totalValue: string;
+  totalCost: string;
+  currency: string;
+}
+
+// Portfolio summary for header display
+export interface PortfolioSummary {
+  totalValue: number;
+  totalCost: number;
+  profitLoss: number;
+  profitLossPercent: number;
+  dailyChange: number;
+  dailyChangePercent: number;
+  currency: string;
 }

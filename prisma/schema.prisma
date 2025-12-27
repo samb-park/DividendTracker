@@ -116,3 +116,14 @@ model QuestradeToken {
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
+
+model PortfolioSnapshot {
+  id         String   @id @default(cuid())
+  date       DateTime @unique // One snapshot per day
+  totalValue Decimal
+  totalCost  Decimal          // Total cost basis for P/L calculation
+  currency   String           // CAD
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+}
