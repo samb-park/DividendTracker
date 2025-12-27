@@ -45,7 +45,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data) {
+  if (!data || !data.totals) {
     return (
       <div className="p-4 text-center">
         <p>Failed to load dashboard</p>
@@ -56,8 +56,8 @@ export default function DashboardPage() {
     );
   }
 
-  const hasCAD = parseFloat(data.totals.CAD.value) > 0;
-  const hasUSD = parseFloat(data.totals.USD.value) > 0;
+  const hasCAD = data.totals.CAD && parseFloat(data.totals.CAD.value) > 0;
+  const hasUSD = data.totals.USD && parseFloat(data.totals.USD.value) > 0;
 
   return (
     <div className="p-4 space-y-6">
