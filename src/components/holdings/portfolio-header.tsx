@@ -236,7 +236,7 @@ export function PortfolioHeader({
                     }}
                     formatter={(value, name) => [
                       formatCurrency(value as number),
-                      name === "value" ? "Market Value" : "Cost Basis"
+                      name === "value" ? "Portfolio Value" : "Net Deposits"
                     ]}
                     labelFormatter={(label) => label}
                   />
@@ -245,30 +245,30 @@ export function PortfolioHeader({
                     height={24}
                     formatter={(value) => (
                       <span className="text-xs">
-                        {value === "value" ? "Market Value" : "Cost Basis"}
+                        {value === "value" ? "Portfolio Value" : "Net Deposits"}
                       </span>
                     )}
                   />
-                  {/* Cost Basis Line - dashed gray */}
+                  {/* Net Deposits Line - dashed gray */}
                   <Line
                     type="monotone"
                     dataKey="cost"
                     name="cost"
-                    stroke="hsl(var(--muted-foreground))"
+                    stroke="#9ca3af"
                     strokeWidth={1.5}
                     strokeDasharray="5 5"
                     dot={false}
                     activeDot={{ r: 3 }}
                   />
-                  {/* Market Value Line - solid color */}
+                  {/* Portfolio Value Line - solid green */}
                   <Line
                     type="monotone"
                     dataKey="value"
                     name="value"
-                    stroke={chartColor}
+                    stroke="#22c55e"
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 4, fill: chartColor }}
+                    activeDot={{ r: 4, fill: "#22c55e" }}
                   />
                 </LineChart>
               </ResponsiveContainer>
