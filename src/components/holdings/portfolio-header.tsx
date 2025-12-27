@@ -12,10 +12,15 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { HoldingWithPrice, PortfolioSnapshot } from "@/types";
+import type { HoldingWithPrice } from "@/types";
 
 const PERIODS = ["1D", "1W", "1M", "3M", "YTD", "1Y", "5Y"] as const;
 type Period = (typeof PERIODS)[number];
+
+interface ChartDataPoint {
+  date: string;
+  totalValue: number;
+}
 
 interface PortfolioHeaderProps {
   holdings: HoldingWithPrice[];
@@ -27,7 +32,7 @@ export function PortfolioHeader({
   currency = "CAD",
 }: PortfolioHeaderProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("1M");
-  const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>([]);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [hideValue, setHideValue] = useState(false);
 
@@ -55,70 +60,64 @@ export function PortfolioHeader({
       ? (summary.dailyChange / (summary.totalValue - summary.dailyChange)) * 100
       : 0;
 
-  // Fetch snapshots for chart
+  // Fetch chart data from Yahoo Finance historical API
   useEffect(() => {
-    const fetchSnapshots = async () => {
+    const fetchChartData = async () => {
+      if (holdings.length === 0) return;
+
       setIsLoadingChart(true);
       try {
-        const res = await fetch(`/api/portfolio/snapshot?period=${selectedPeriod}`);
+        const res = await fetch(`/api/portfolio/chart?period=${selectedPeriod}`);
         if (res.ok) {
-          const data = await res.json();
-          setSnapshots(data);
+          const data: ChartDataPoint[] = await res.json();
+          setChartData(data);
         }
       } catch (error) {
-        console.error("Failed to fetch snapshots:", error);
+        console.error("Failed to fetch chart data:", error);
       } finally {
         setIsLoadingChart(false);
       }
     };
 
-    fetchSnapshots();
-  }, [selectedPeriod]);
+    fetchChartData();
+  }, [selectedPeriod, holdings.length]);
 
-  // Save snapshot when component mounts (once per page load)
-  useEffect(() => {
-    const saveSnapshot = async () => {
-      try {
-        await fetch("/api/portfolio/snapshot", { method: "POST" });
-      } catch (error) {
-        console.error("Failed to save snapshot:", error);
-      }
-    };
+  // Format chart data for display
+  const formattedChartData = chartData.map((point) => {
+    const date = new Date(point.date);
+    let dateLabel: string;
 
-    if (holdings.length > 0) {
-      saveSnapshot();
-    }
-  }, [holdings.length]);
-
-  // Format chart data
-  const chartData = snapshots.map((s) => ({
-    date: new Date(s.date).toLocaleDateString("en-CA", {
-      month: "short",
-      day: "numeric",
-    }),
-    value: parseFloat(s.totalValue),
-    fullDate: s.date,
-  }));
-
-  // Add current value as the last point if we have data
-  if (chartData.length > 0 && summary.totalValue > 0) {
-    const today = new Date().toLocaleDateString("en-CA", {
-      month: "short",
-      day: "numeric",
-    });
-    const lastPoint = chartData[chartData.length - 1];
-    if (lastPoint.date !== today) {
-      chartData.push({
-        date: today,
-        value: summary.totalValue,
-        fullDate: new Date().toISOString(),
+    if (selectedPeriod === "1D") {
+      dateLabel = date.toLocaleTimeString("en-CA", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } else if (selectedPeriod === "1W") {
+      dateLabel = date.toLocaleDateString("en-CA", {
+        weekday: "short",
+        hour: "2-digit",
+      });
+    } else {
+      dateLabel = date.toLocaleDateString("en-CA", {
+        month: "short",
+        day: "numeric",
       });
     }
-  }
+
+    return {
+      date: dateLabel,
+      value: point.totalValue,
+      fullDate: point.date,
+    };
+  });
 
   // Calculate chart color based on period change
-  const startValue = chartData.length > 0 ? chartData[0].value : summary.totalValue;
-  const periodChange = summary.totalValue - startValue;
+  const startValue = formattedChartData.length > 0 ? formattedChartData[0].value : summary.totalValue;
+  const endValue = formattedChartData.length > 0
+    ? formattedChartData[formattedChartData.length - 1].value
+    : summary.totalValue;
+  const periodChange = endValue - startValue;
+  const periodChangePercent = startValue > 0 ? (periodChange / startValue) * 100 : 0;
   const isPositive = periodChange >= 0;
   const chartColor = isPositive ? "#22c55e" : "#ef4444";
 
@@ -201,45 +200,58 @@ export function PortfolioHeader({
       </div>
 
       {/* Chart */}
-      <div className="h-40 w-full">
+      <div className="h-48 w-full">
         {isLoadingChart ? (
           <div className="h-full flex items-center justify-center text-muted-foreground">
             Loading chart...
           </div>
-        ) : chartData.length > 1 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-              <XAxis dataKey="date" hide />
-              <YAxis domain={["dataMin", "dataMax"]} hide />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--background))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-                formatter={(value) => [formatCurrency(value as number), "Value"]}
-                labelFormatter={(label) => label}
-              />
-              <ReferenceLine
-                y={startValue}
-                stroke="hsl(var(--muted-foreground))"
-                strokeDasharray="3 3"
-                strokeOpacity={0.5}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={chartColor}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: chartColor }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        ) : formattedChartData.length > 1 ? (
+          <div className="h-full flex flex-col">
+            <div className="flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={formattedChartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis domain={["dataMin", "dataMax"]} hide />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--background))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                    formatter={(value) => [formatCurrency(value as number), "Value"]}
+                    labelFormatter={(label) => label}
+                  />
+                  <ReferenceLine
+                    y={startValue}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="3 3"
+                    strokeOpacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={chartColor}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, fill: chartColor }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Period change indicator */}
+            <div className="text-center py-2">
+              <span className={cn(
+                "text-xs",
+                isPositive ? "text-green-500" : "text-red-500"
+              )}>
+                {selectedPeriod}: {formatChange(periodChange)} ({formatPercent(periodChangePercent)})
+              </span>
+            </div>
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-            Not enough data for chart. Check back tomorrow!
+            Loading historical data...
           </div>
         )}
       </div>

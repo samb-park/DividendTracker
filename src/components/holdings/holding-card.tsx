@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 import type { HoldingWithPrice } from "@/types";
 
 // Generate a consistent color based on ticker string
@@ -24,6 +26,77 @@ function getTickerColor(ticker: string): string {
   }
 
   return colors[Math.abs(hash) % colors.length];
+}
+
+interface SparklineProps {
+  ticker: string;
+}
+
+function Sparkline({ ticker }: SparklineProps) {
+  const [data, setData] = useState<{ close: number }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setHasError(false);
+        // Encode ticker for URL safety (handles special characters like .)
+        const encodedTicker = encodeURIComponent(ticker);
+        const res = await fetch(`/api/historical/${encodedTicker}?period=1W`);
+        if (res.ok) {
+          const prices = await res.json();
+          if (Array.isArray(prices) && prices.length > 0) {
+            setData(prices.map((p: { close: number }) => ({ close: p.close })));
+          } else {
+            setHasError(true);
+          }
+        } else {
+          setHasError(true);
+        }
+      } catch (error) {
+        console.error(`Failed to fetch sparkline for ${ticker}:`, error);
+        setHasError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [ticker]);
+
+  // Show loading skeleton
+  if (isLoading) {
+    return (
+      <div className="w-16 h-8 bg-muted/50 rounded animate-pulse" />
+    );
+  }
+
+  // Show nothing if error or not enough data
+  if (hasError || data.length < 2) {
+    return <div className="w-16 h-8" />;
+  }
+
+  const startPrice = data[0].close;
+  const endPrice = data[data.length - 1].close;
+  const isPositive = endPrice >= startPrice;
+  const color = isPositive ? "#22c55e" : "#ef4444";
+
+  return (
+    <div className="w-16 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line
+            type="monotone"
+            dataKey="close"
+            stroke={color}
+            strokeWidth={1.5}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 interface HoldingCardProps {
@@ -82,7 +155,7 @@ export function HoldingCard({ holding, onClick }: HoldingCardProps) {
       {/* Ticker Avatar */}
       <div
         className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-full text-white font-semibold text-sm",
+          "flex items-center justify-center w-10 h-10 rounded-full text-white font-semibold text-sm flex-shrink-0",
           avatarColor
         )}
       >
@@ -94,7 +167,7 @@ export function HoldingCard({ holding, onClick }: HoldingCardProps) {
         <div className="flex items-center gap-2">
           <span className="font-semibold">{ticker}</span>
           {name && (
-            <span className="text-sm text-muted-foreground truncate">
+            <span className="text-sm text-muted-foreground truncate max-w-[120px]">
               {name}
             </span>
           )}
@@ -104,8 +177,11 @@ export function HoldingCard({ holding, onClick }: HoldingCardProps) {
         </div>
       </div>
 
+      {/* Sparkline Chart */}
+      <Sparkline ticker={ticker} />
+
       {/* Value Section */}
-      <div className="text-right">
+      <div className="text-right flex-shrink-0">
         <div className="font-semibold">{formatCurrency(marketValue)}</div>
         <div
           className={cn(
