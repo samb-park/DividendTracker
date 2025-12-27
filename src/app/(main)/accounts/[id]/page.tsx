@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Link2, Link2Off, Trash2, Key, Plus, Check } from "lucide-react";
+import { ArrowLeft, RefreshCw, Link2, Link2Off, Trash2, Key, Plus, Check, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,6 +54,9 @@ export default function AccountDetailPage() {
   const [selectedQtAccounts, setSelectedQtAccounts] = useState<Set<string>>(new Set());
   const [isLoadingQtAccounts, setIsLoadingQtAccounts] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
 
   const fetchAccount = async () => {
     try {
@@ -256,6 +259,45 @@ export default function AccountDetailPage() {
     }
   };
 
+  const handleStartEditName = () => {
+    if (account) {
+      setEditedName(account.name);
+      setIsEditingName(true);
+    }
+  };
+
+  const handleCancelEditName = () => {
+    setIsEditingName(false);
+    setEditedName("");
+  };
+
+  const handleSaveName = async () => {
+    if (!editedName.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+
+    setIsSavingName(true);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editedName.trim() }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update name");
+
+      toast.success("Account name updated");
+      setIsEditingName(false);
+      fetchAccount();
+    } catch (err) {
+      console.error("Failed to update name:", err);
+      toast.error("Failed to update account name");
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 space-y-4">
@@ -287,7 +329,47 @@ export default function AccountDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold">{account.name}</h1>
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                className="h-8 text-xl font-bold"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveName();
+                  if (e.key === "Escape") handleCancelEditName();
+                }}
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleSaveName}
+                disabled={isSavingName}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCancelEditName}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">{account.name}</h1>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleStartEditName}
+                className="h-6 w-6"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
           <div className="flex gap-2 mt-1">
             <Badge variant="outline">{account.broker}</Badge>
             <Badge>{account.currency}</Badge>

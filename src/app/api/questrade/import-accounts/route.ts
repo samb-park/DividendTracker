@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const selected of selectedAccounts) {
-      const { number, type, currency } = selected;
+      const { number, type, currency, customName } = selected;
 
       // Validate account exists in Questrade
       const qtAccount = qtAccountMap.get(number);
@@ -85,12 +85,13 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Create new account
+      // Create new account with custom name or default
+      const accountName = customName?.trim() || `Questrade ${type}`;
       const newAccount = await prisma.account.create({
         data: {
           userId,
           broker: "QUESTRADE",
-          name: `Questrade ${type}`,
+          name: accountName,
           currency: currency || "CAD",
           questradeAccountNumber: number,
         },

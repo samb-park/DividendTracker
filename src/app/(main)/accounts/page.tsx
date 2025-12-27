@@ -12,18 +12,19 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchAccounts() {
-      try {
-        const res = await fetch("/api/accounts");
-        const data = await res.json();
-        setAccounts(data);
-      } catch (err) {
-        console.error("Failed to fetch accounts:", err);
-      } finally {
-        setIsLoading(false);
-      }
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      setAccounts(data);
+    } catch (err) {
+      console.error("Failed to fetch accounts:", err);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchAccounts();
   }, []);
 
@@ -40,11 +41,10 @@ export default function AccountsPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Accounts</h1>
+        <h1 className="text-2xl font-bold">Portfolio</h1>
         <Link href="/accounts/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add
+          <Button size="icon">
+            <Plus className="h-4 w-4" />
           </Button>
         </Link>
       </div>

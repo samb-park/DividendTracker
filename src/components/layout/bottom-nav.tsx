@@ -56,7 +56,7 @@ export function DesktopNav() {
 
   const allItems = [
     ...navItems,
-    { href: "/accounts", icon: Settings, label: "Accounts" },
+    { href: "/accounts", icon: Settings, label: "Portfolio" },
     { href: "/import", icon: Upload, label: "Import" },
   ];
 
