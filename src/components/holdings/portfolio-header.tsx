@@ -123,6 +123,19 @@ export function PortfolioHeader({
   const isPositive = periodChange >= 0;
   const chartColor = isPositive ? "#22c55e" : "#ef4444";
 
+  // Calculate Y-axis domain to show both lines clearly
+  const yAxisDomain = (() => {
+    if (formattedChartData.length === 0) return ["auto", "auto"] as const;
+
+    const allValues = formattedChartData.flatMap(d => [d.value, d.cost]);
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+    const range = maxValue - minValue;
+    const padding = range * 0.1 || maxValue * 0.05; // 10% padding, or 5% of max if range is 0
+
+    return [minValue - padding, maxValue + padding] as [number, number];
+  })();
+
   const formatCurrency = (value: number) => {
     if (hideValue) return "••••••";
     return new Intl.NumberFormat("en-CA", {
@@ -213,7 +226,7 @@ export function PortfolioHeader({
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={formattedChartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                   <XAxis dataKey="date" hide />
-                  <YAxis domain={["auto", "auto"]} hide />
+                  <YAxis domain={yAxisDomain} hide />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--background))",
