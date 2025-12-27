@@ -53,7 +53,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Create data directory for SQLite
-RUN mkdir -p /app/prisma/data && chown -R nextjs:nodejs /app/prisma/data
+RUN mkdir -p /data && chown -R nextjs:nodejs /data
 
 USER nextjs
 
@@ -61,6 +61,5 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-ENV DATABASE_URL="file:/app/prisma/data/portfolio.db"
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
