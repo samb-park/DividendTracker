@@ -220,7 +220,7 @@ export function PortfolioHeader({
                 "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
                 currency === "CAD"
                   ? "ring-2 ring-primary"
-                  : "opacity-40"
+                  : "opacity-40 hover:opacity-70"
               )}
             >
               <CA title="CAD" className="w-6 h-6 rounded-sm" />
@@ -231,7 +231,7 @@ export function PortfolioHeader({
                 "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
                 currency === "USD"
                   ? "ring-2 ring-primary"
-                  : "opacity-40"
+                  : "opacity-40 hover:opacity-70"
               )}
             >
               <US title="USD" className="w-6 h-6 rounded-sm" />

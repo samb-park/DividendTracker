@@ -46,8 +46,7 @@ function SearchContent() {
   }, [initialQuery]);
 
   const handleSelect = (symbol: string) => {
-    router.push("/search?q=" + symbol);
-    fetchQuote(symbol);
+    router.push(`/stock/${symbol}`);
   };
 
   const handleAddToPortfolio = () => {

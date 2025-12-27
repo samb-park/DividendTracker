@@ -51,11 +51,19 @@ export const ALL_COLUMNS: ColumnConfig[] = [
   { key: "yield", label: "Yield" },
 ];
 
+type DisplayCurrency = "CAD" | "USD";
+
+const EXCHANGE_RATES = {
+  CAD_TO_USD: 0.74,
+  USD_TO_CAD: 1.35,
+};
+
 interface HoldingsTableProps {
   holdings: HoldingWithPrice[];
   onRowClick?: (ticker: string) => void;
   visibleColumns: Set<ColumnKey>;
   onToggleColumn: (key: ColumnKey) => void;
+  displayCurrency?: DisplayCurrency;
 }
 
 export function HoldingsTable({
@@ -63,6 +71,7 @@ export function HoldingsTable({
   onRowClick,
   visibleColumns,
   onToggleColumn,
+  displayCurrency = "CAD",
 }: HoldingsTableProps) {
   if (holdings.length === 0) {
     return (
@@ -74,6 +83,22 @@ export function HoldingsTable({
   }
 
   const isVisible = (key: ColumnKey) => visibleColumns.has(key);
+
+  // Convert currency if needed
+  const convertValue = (val: string | undefined, holdingCurrency: string) => {
+    if (!val) return val;
+    if (holdingCurrency === displayCurrency) return val;
+    const num = parseFloat(val);
+    if (isNaN(num)) return val;
+    const rate = holdingCurrency === "USD" ? EXCHANGE_RATES.USD_TO_CAD : EXCHANGE_RATES.CAD_TO_USD;
+    return (num * rate).toFixed(2);
+  };
+
+  const formatCurrency = (value: string | undefined, holdingCurrency: string) => {
+    if (!value) return "—";
+    const converted = convertValue(value, holdingCurrency);
+    return `$${converted}`;
+  };
 
   return (
     <div className="space-y-2">
@@ -194,17 +219,17 @@ export function HoldingsTable({
                   )}
                   {isVisible("avgCost") && (
                     <TableCell className="text-right font-mono hidden sm:table-cell">
-                      ${holding.avgCost}
+                      {formatCurrency(holding.avgCost, holding.currency)}
                     </TableCell>
                   )}
                   {isVisible("price") && (
                     <TableCell className="text-right font-mono">
-                      {holding.currentPrice ? `$${holding.currentPrice}` : "—"}
+                      {formatCurrency(holding.currentPrice, holding.currency)}
                     </TableCell>
                   )}
                   {isVisible("value") && (
                     <TableCell className="text-right font-mono hidden sm:table-cell">
-                      {holding.marketValue ? `$${holding.marketValue}` : "—"}
+                      {formatCurrency(holding.marketValue, holding.currency)}
                     </TableCell>
                   )}
                   {isVisible("pl") && (
@@ -217,7 +242,7 @@ export function HoldingsTable({
                               isPositive ? "text-green-600" : "text-red-600"
                             )}
                           >
-                            {isPositive ? "+" : ""}${holding.profitLoss}
+                            {isPositive ? "+" : ""}{formatCurrency(holding.profitLoss, holding.currency)}
                           </span>
                           {holding.profitLossPercent && (
                             <Badge
@@ -246,9 +271,7 @@ export function HoldingsTable({
                         pricePosition === "high" && "text-green-600"
                       )}
                     >
-                      {holding.fiftyTwoWeekHigh
-                        ? `$${holding.fiftyTwoWeekHigh}`
-                        : "—"}
+                      {formatCurrency(holding.fiftyTwoWeekHigh, holding.currency)}
                     </TableCell>
                   )}
                   {isVisible("52wLow") && (
@@ -258,9 +281,7 @@ export function HoldingsTable({
                         pricePosition === "low" && "text-red-600"
                       )}
                     >
-                      {holding.fiftyTwoWeekLow
-                        ? `$${holding.fiftyTwoWeekLow}`
-                        : "—"}
+                      {formatCurrency(holding.fiftyTwoWeekLow, holding.currency)}
                     </TableCell>
                   )}
                   {isVisible("yield") && (

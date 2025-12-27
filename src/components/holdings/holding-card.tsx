@@ -45,11 +45,19 @@ function getTickerColor(ticker: string): string {
 // Return display mode type
 export type ReturnDisplayMode = "all_time" | "daily";
 
+type DisplayCurrency = "CAD" | "USD";
+
+const EXCHANGE_RATES = {
+  CAD_TO_USD: 0.74,
+  USD_TO_CAD: 1.35,
+};
+
 interface HoldingCardProps {
   holding: HoldingWithPrice;
   onClick?: () => void;
   returnMode?: ReturnDisplayMode;
   visibleFields?: Set<MobileCardField>;
+  displayCurrency?: DisplayCurrency;
 }
 
 const DEFAULT_VISIBLE_FIELDS: MobileCardField[] = [
@@ -65,6 +73,7 @@ export function HoldingCard({
   onClick,
   returnMode = "all_time",
   visibleFields = new Set(DEFAULT_VISIBLE_FIELDS),
+  displayCurrency = "CAD",
 }: HoldingCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -96,18 +105,30 @@ export function HoldingCard({
   const changePercentNum = parseFloat(displayChangePercent || "0");
   const isPositive = changeNum >= 0;
 
+  // Convert value if currency differs from displayCurrency
+  const convertValue = (val: string | undefined) => {
+    if (!val) return val;
+    if (currency === displayCurrency) return val;
+    const num = parseFloat(val);
+    if (isNaN(num)) return val;
+    const rate = currency === "USD" ? EXCHANGE_RATES.USD_TO_CAD : EXCHANGE_RATES.CAD_TO_USD;
+    return (num * rate).toFixed(2);
+  };
+
   const formatCurrency = (value: string | undefined, showCurrency = false) => {
     if (!value) return "-";
-    const num = parseFloat(value);
+    const converted = convertValue(value);
+    if (!converted) return "-";
+    const num = parseFloat(converted);
     let formatted = new Intl.NumberFormat("en-CA", {
       style: "currency",
-      currency: currency,
+      currency: displayCurrency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(Math.abs(num));
     // Remove "US" prefix from USD formatting
     formatted = formatted.replace("US$", "$");
-    return showCurrency ? `${formatted} ${currency}` : formatted;
+    return showCurrency ? `${formatted} ${displayCurrency}` : formatted;
   };
 
   const formatQuantity = (qty: string) => {
@@ -298,6 +319,7 @@ interface HoldingCardsListProps {
   onCardClick?: (ticker: string) => void;
   returnMode?: ReturnDisplayMode;
   visibleFields?: Set<MobileCardField>;
+  displayCurrency?: DisplayCurrency;
 }
 
 export function HoldingCardsList({
@@ -305,6 +327,7 @@ export function HoldingCardsList({
   onCardClick,
   returnMode = "all_time",
   visibleFields,
+  displayCurrency = "CAD",
 }: HoldingCardsListProps) {
   // Sort by market value descending
   const sortedHoldings = [...holdings].sort((a, b) => {
@@ -322,6 +345,7 @@ export function HoldingCardsList({
           onClick={() => onCardClick?.(holding.ticker)}
           returnMode={returnMode}
           visibleFields={visibleFields}
+          displayCurrency={displayCurrency}
         />
       ))}
     </div>

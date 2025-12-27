@@ -32,6 +32,14 @@ import {
 import { cn } from "@/lib/utils";
 import type { HoldingWithPrice } from "@/types";
 
+// Exchange rates for currency conversion
+const EXCHANGE_RATES = {
+  USD_TO_CAD: 1.35,
+  CAD_TO_USD: 0.74,
+};
+
+type DisplayCurrency = "CAD" | "USD";
+
 // Mobile card display fields configuration
 const ALL_MOBILE_FIELDS: { key: MobileCardField; label: string }[] = [
   { key: "avgCost", label: "Avg Cost" },
@@ -61,7 +69,6 @@ interface Account {
 }
 
 type CurrencyFilter = "all" | "CAD" | "USD";
-type DisplayCurrency = "CAD" | "USD";
 
 // Default visible columns
 const DEFAULT_COLUMNS: ColumnKey[] = [
@@ -73,21 +80,15 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
   "weight",
 ];
 
-// Simplified exchange rate (in real app, would fetch from API)
-const EXCHANGE_RATES = {
-  CAD_TO_USD: 0.74,
-  USD_TO_CAD: 1.35,
-};
-
 export default function HoldingsPage() {
   const router = useRouter();
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("CAD");
   const [holdings, setHoldings] = useState<HoldingWithPrice[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] =
     useState<string>("all-combined");
   const [isLoading, setIsLoading] = useState(true);
   const [currencyFilter, setCurrencyFilter] = useState<CurrencyFilter>("all");
-  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("CAD");
   const [returnMode, setReturnMode] = useState<ReturnDisplayMode>("all_time");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
     () => new Set(DEFAULT_COLUMNS)
@@ -187,7 +188,7 @@ export default function HoldingsPage() {
   }, [selectedAccount]);
 
   const handleRowClick = (ticker: string) => {
-    router.push(`/search?q=${ticker}`);
+    router.push(`/stock/${ticker}`);
   };
 
   // Filter holdings by currency
@@ -356,6 +357,7 @@ export default function HoldingsPage() {
               onRowClick={handleRowClick}
               visibleColumns={visibleColumns}
               onToggleColumn={handleToggleColumn}
+              displayCurrency={displayCurrency}
             />
           </div>
 
@@ -366,6 +368,7 @@ export default function HoldingsPage() {
               onCardClick={handleRowClick}
               returnMode={returnMode}
               visibleFields={visibleMobileFields}
+              displayCurrency={displayCurrency}
             />
           </div>
         </>
