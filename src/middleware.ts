@@ -21,7 +21,6 @@ export const config = {
     "/accounts/:path*",
     "/dividends/:path*",
     "/import/:path*",
-    "/search/:path*",
     "/stock/:path*",
     "/admin/:path*",
   ],
