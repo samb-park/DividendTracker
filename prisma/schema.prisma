@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ MODELS ============
+
+model Account {
+  id        String   @id @default(cuid())
+  broker    String   // WEALTHSIMPLE, QUESTRADE, INTERACTIVE_BROKERS, TD_DIRECT, OTHER
+  name      String
+  currency  String   // CAD, USD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Questrade integration
+  questradeAccountNumber String?
+  lastSyncedAt           DateTime?
+
+  transactions   Transaction[]
+  holdings       Holding[]
+  questradeToken QuestradeToken?
+
+  @@index([broker])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  accountId String
+  ticker    String
+  type      String   // BUY, SELL, DIVIDEND_CASH, DIVIDEND_DRIP, TRANSFER_IN, TRANSFER_OUT, SPLIT
+  quantity  Decimal
+  price     Decimal
+  fee       Decimal  @default(0)
+  tradeDate DateTime
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([ticker])
+  @@index([tradeDate])
+  @@index([type])
+  @@index([accountId, ticker])
+}
+
+model Holding {
+  id            String   @id @default(cuid())
+  accountId     String
+  ticker        String
+  quantity      Decimal
+  avgCost       Decimal
+  currency      String
+  lastUpdatedAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, ticker])
+  @@index([ticker])
+}
+
+model DividendSchedule {
+  id                   String   @id @default(cuid())
+  ticker               String   @unique
+  lastDividendPerShare Decimal
+  lastDividendDate     DateTime
+  frequency            String   // MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, IRREGULAR
+  source               String   @default("manual") // api, manual, imported
+  updatedAt            DateTime @updatedAt
+
+  @@index([frequency])
+}
+
+model PriceCache {
+  id               String   @id @default(cuid())
+  ticker           String   @unique
+  price            Decimal
+  currency         String
+  dividendYield    Decimal?
+  previousClose    Decimal?
+  name             String?
+  fiftyTwoWeekHigh Decimal?
+  fiftyTwoWeekLow  Decimal?
+  updatedAt        DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model ImportLog {
+  id        String   @id @default(cuid())
+  accountId String
+  filename  String
+  rowCount  Int
+  status    String   // success, partial, failed
+  errors    String?  // JSON string
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([createdAt])
+}
+
+model QuestradeToken {
+  id           String   @id @default(cuid())
+  accountId    String   @unique
+  accessToken  String
+  refreshToken String
+  apiServer    String   // e.g., "https://api01.iq.questrade.com/"
+  expiresAt    DateTime
+  updatedAt    DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}

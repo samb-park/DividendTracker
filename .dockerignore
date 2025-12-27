@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+prisma/data
+prisma/*.db
+prisma/*.db-journal
+.claude

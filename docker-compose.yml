@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist SQLite database
+      - portfolio_data:/app/prisma/data
+    environment:
+      - DATABASE_URL=file:./data/portfolio.db
+    restart: unless-stopped
+
+volumes:
+  portfolio_data:

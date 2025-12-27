@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(npx shadcn@latest init:*)",
+      "Bash(npx shadcn@latest add button card input table dialog select tabs badge toast form dropdown-menu separator skeleton label -y)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx prisma:*)",
+      "Bash(cat:*)",
+      "Bash(npm run build:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
