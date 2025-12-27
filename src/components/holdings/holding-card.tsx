@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { HoldingWithPrice } from "@/types";
 
 // Generate a consistent color based on ticker string
@@ -28,176 +29,223 @@ function getTickerColor(ticker: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-interface SparklineProps {
-  ticker: string;
-}
-
-function Sparkline({ ticker }: SparklineProps) {
-  const [data, setData] = useState<{ close: number }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setHasError(false);
-        // Encode ticker for URL safety (handles special characters like .)
-        const encodedTicker = encodeURIComponent(ticker);
-        const res = await fetch(`/api/historical/${encodedTicker}?period=1W`);
-        if (res.ok) {
-          const prices = await res.json();
-          if (Array.isArray(prices) && prices.length > 0) {
-            setData(prices.map((p: { close: number }) => ({ close: p.close })));
-          } else {
-            setHasError(true);
-          }
-        } else {
-          setHasError(true);
-        }
-      } catch (error) {
-        console.error(`Failed to fetch sparkline for ${ticker}:`, error);
-        setHasError(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [ticker]);
-
-  // Show loading skeleton
-  if (isLoading) {
-    return (
-      <div className="w-16 h-8 bg-muted/50 rounded animate-pulse" />
-    );
-  }
-
-  // Show nothing if error or not enough data
-  if (hasError || data.length < 2) {
-    return <div className="w-16 h-8" />;
-  }
-
-  const startPrice = data[0].close;
-  const endPrice = data[data.length - 1].close;
-  const isPositive = endPrice >= startPrice;
-  const color = isPositive ? "#22c55e" : "#ef4444";
-
-  return (
-    <div className="w-16 h-8">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <Line
-            type="monotone"
-            dataKey="close"
-            stroke={color}
-            strokeWidth={1.5}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
+// Return display mode type
+export type ReturnDisplayMode = "all_time" | "daily";
 
 interface HoldingCardProps {
   holding: HoldingWithPrice;
   onClick?: () => void;
+  returnMode?: ReturnDisplayMode;
 }
 
-export function HoldingCard({ holding, onClick }: HoldingCardProps) {
+export function HoldingCard({
+  holding,
+  onClick,
+  returnMode = "all_time",
+}: HoldingCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
   const {
     ticker,
-    name,
     quantity,
-    avgCost,
     currency,
     marketValue,
+    profitLoss,
+    profitLossPercent,
     dailyChange,
     dailyChangePercent,
+    logoUrl,
+    avgCost,
+    currentPrice,
+    fiftyTwoWeekHigh,
+    fiftyTwoWeekLow,
+    dividendYield,
   } = holding;
 
-  const dailyChangeNum = parseFloat(dailyChange || "0");
-  const dailyChangePercentNum = parseFloat(dailyChangePercent || "0");
-  const isPositive = dailyChangeNum >= 0;
+  // Use all-time return or daily change based on mode
+  const displayChange =
+    returnMode === "all_time" ? profitLoss : dailyChange;
+  const displayChangePercent =
+    returnMode === "all_time" ? profitLossPercent : dailyChangePercent;
 
-  const formatCurrency = (value: string | undefined) => {
+  const changeNum = parseFloat(displayChange || "0");
+  const changePercentNum = parseFloat(displayChangePercent || "0");
+  const isPositive = changeNum >= 0;
+
+  const formatCurrency = (value: string | undefined, showCurrency = false) => {
     if (!value) return "-";
     const num = parseFloat(value);
-    return new Intl.NumberFormat("en-CA", {
+    let formatted = new Intl.NumberFormat("en-CA", {
       style: "currency",
       currency: currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(num);
+    }).format(Math.abs(num));
+    // Remove "US" prefix from USD formatting
+    formatted = formatted.replace("US$", "$");
+    return showCurrency ? `${formatted} ${currency}` : formatted;
   };
 
   const formatQuantity = (qty: string) => {
     const num = parseFloat(qty);
     if (num >= 1000) {
-      return num.toLocaleString("en-CA", { maximumFractionDigits: 2 });
+      return num.toLocaleString("en-CA", { maximumFractionDigits: 3 });
     }
-    return num.toFixed(num % 1 === 0 ? 0 : 4);
+    // Show more decimal places for fractional shares
+    const decimals = num % 1 === 0 ? 0 : num < 1 ? 4 : 3;
+    return num.toFixed(decimals);
   };
 
-  // Get first 2 characters for avatar
+  const formatPercent = (value: string | undefined) => {
+    if (!value) return "-";
+    const num = parseFloat(value);
+    const sign = num >= 0 ? "+" : "";
+    return `${sign}${num.toFixed(2)}%`;
+  };
+
+  // Get first 2 characters for avatar fallback
   const avatarText = ticker.slice(0, 2).toUpperCase();
   const avatarColor = getTickerColor(ticker);
 
+  const handleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded(!expanded);
+  };
+
   return (
     <div
-      onClick={onClick}
       className={cn(
-        "flex items-center gap-3 p-4 rounded-lg",
-        "bg-card hover:bg-muted/50 transition-colors cursor-pointer",
-        "border border-transparent hover:border-border"
+        "rounded-lg transition-colors",
+        "bg-card hover:bg-muted/30"
       )}
     >
-      {/* Ticker Avatar */}
+      {/* Main Row */}
       <div
-        className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-full text-white font-semibold text-sm flex-shrink-0",
-          avatarColor
-        )}
+        onClick={onClick}
+        className="flex items-center gap-3 p-4 cursor-pointer"
       >
-        {avatarText}
-      </div>
-
-      {/* Info Section */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold">{ticker}</span>
-          {name && (
-            <span className="text-sm text-muted-foreground truncate max-w-[120px]">
-              {name}
-            </span>
+        {/* Logo/Avatar */}
+        <div className="relative w-10 h-10 flex-shrink-0">
+          {logoUrl && !imgError ? (
+            <Image
+              src={logoUrl}
+              alt={ticker}
+              fill
+              className="rounded-full object-cover"
+              onError={() => setImgError(true)}
+              unoptimized
+            />
+          ) : (
+            <div
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-full text-white font-semibold text-sm",
+                avatarColor
+              )}
+            >
+              {avatarText}
+            </div>
           )}
         </div>
-        <div className="text-sm text-muted-foreground">
-          {formatQuantity(quantity)} | {formatCurrency(avgCost)}
+
+        {/* Ticker & Shares */}
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-base">{ticker}</div>
+          <div className="text-sm text-muted-foreground">
+            {formatQuantity(quantity)} shares
+          </div>
         </div>
-      </div>
 
-      {/* Sparkline Chart */}
-      <Sparkline ticker={ticker} />
+        {/* Value & Return */}
+        <div className="text-right flex-shrink-0">
+          <div className="font-semibold">
+            {formatCurrency(marketValue, true)}
+          </div>
+          <div
+            className={cn(
+              "text-sm font-medium",
+              isPositive ? "text-green-500" : "text-red-500"
+            )}
+          >
+            {isPositive ? "+" : "-"}
+            {formatCurrency(displayChange)} ({formatPercent(displayChangePercent)})
+          </div>
+        </div>
 
-      {/* Value Section */}
-      <div className="text-right flex-shrink-0">
-        <div className="font-semibold">{formatCurrency(marketValue)}</div>
-        <div
-          className={cn(
-            "text-sm",
-            isPositive ? "text-green-500" : "text-red-500"
-          )}
+        {/* Expand Button */}
+        <button
+          onClick={handleExpand}
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors"
         >
-          {isPositive ? "+" : ""}
-          {formatCurrency(dailyChange?.replace("-", ""))}
-          {dailyChangeNum < 0 && "-"}
-          <span className="ml-1">
-            {isPositive ? "+" : ""}
-            {dailyChangePercentNum.toFixed(2)}%
-          </span>
-        </div>
+          {expanded ? (
+            <ChevronUp className="h-5 w-5" />
+          ) : (
+            <ChevronDown className="h-5 w-5" />
+          )}
+        </button>
       </div>
+
+      {/* Expanded Details */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-border/50">
+          <div className="grid grid-cols-2 gap-3 pt-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">Avg Cost</span>
+              <div className="font-medium">{formatCurrency(avgCost)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Current Price</span>
+              <div className="font-medium">{formatCurrency(currentPrice)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">52W High</span>
+              <div className="font-medium">{formatCurrency(fiftyTwoWeekHigh)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">52W Low</span>
+              <div className="font-medium">{formatCurrency(fiftyTwoWeekLow)}</div>
+            </div>
+            {dividendYield && (
+              <div>
+                <span className="text-muted-foreground">Dividend Yield</span>
+                <div className="font-medium">{dividendYield}%</div>
+              </div>
+            )}
+            {returnMode === "all_time" && dailyChange && (
+              <div>
+                <span className="text-muted-foreground">Today</span>
+                <div
+                  className={cn(
+                    "font-medium",
+                    parseFloat(dailyChange) >= 0
+                      ? "text-green-500"
+                      : "text-red-500"
+                  )}
+                >
+                  {parseFloat(dailyChange) >= 0 ? "+" : ""}
+                  {formatCurrency(dailyChange)} ({formatPercent(dailyChangePercent)})
+                </div>
+              </div>
+            )}
+            {returnMode === "daily" && profitLoss && (
+              <div>
+                <span className="text-muted-foreground">All Time</span>
+                <div
+                  className={cn(
+                    "font-medium",
+                    parseFloat(profitLoss) >= 0
+                      ? "text-green-500"
+                      : "text-red-500"
+                  )}
+                >
+                  {parseFloat(profitLoss) >= 0 ? "+" : ""}
+                  {formatCurrency(profitLoss)} ({formatPercent(profitLossPercent)})
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -205,11 +253,13 @@ export function HoldingCard({ holding, onClick }: HoldingCardProps) {
 interface HoldingCardsListProps {
   holdings: HoldingWithPrice[];
   onCardClick?: (ticker: string) => void;
+  returnMode?: ReturnDisplayMode;
 }
 
 export function HoldingCardsList({
   holdings,
   onCardClick,
+  returnMode = "all_time",
 }: HoldingCardsListProps) {
   // Sort by market value descending
   const sortedHoldings = [...holdings].sort((a, b) => {
@@ -219,12 +269,13 @@ export function HoldingCardsList({
   });
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {sortedHoldings.map((holding) => (
         <HoldingCard
           key={holding.id}
           holding={holding}
           onClick={() => onCardClick?.(holding.ticker)}
+          returnMode={returnMode}
         />
       ))}
     </div>

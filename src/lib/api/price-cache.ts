@@ -22,6 +22,7 @@ export async function getCachedQuote(ticker: string): Promise<QuoteData | null> 
         currency: cached.currency,
         dividendYield: cached.dividendYield ? Number(cached.dividendYield) : undefined,
         name: cached.name || undefined,
+        logoUrl: cached.logoUrl || undefined,
         fiftyTwoWeekHigh: cached.fiftyTwoWeekHigh ? Number(cached.fiftyTwoWeekHigh) : undefined,
         fiftyTwoWeekLow: cached.fiftyTwoWeekLow ? Number(cached.fiftyTwoWeekLow) : undefined,
         cached: true,
@@ -49,6 +50,7 @@ export async function getCachedQuote(ticker: string): Promise<QuoteData | null> 
         ? new Prisma.Decimal(quote.previousClose)
         : null,
       name: quote.name || null,
+      logoUrl: quote.logoUrl || null,
       fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
         ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
         : null,
@@ -67,6 +69,7 @@ export async function getCachedQuote(ticker: string): Promise<QuoteData | null> 
         ? new Prisma.Decimal(quote.previousClose)
         : null,
       name: quote.name || null,
+      logoUrl: quote.logoUrl || null,
       fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
         ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
         : null,
@@ -86,7 +89,10 @@ export async function refreshPricesForHoldings(): Promise<void> {
   });
 
   const tickers = holdings.map((h) => h.ticker);
+  await refreshPricesForTickers(tickers);
+}
 
+export async function refreshPricesForTickers(tickers: string[]): Promise<void> {
   if (tickers.length === 0) return;
 
   const quotes = await getMultipleQuotes(tickers);
@@ -105,6 +111,7 @@ export async function refreshPricesForHoldings(): Promise<void> {
           ? new Prisma.Decimal(quote.previousClose)
           : null,
         name: quote.name || null,
+        logoUrl: quote.logoUrl || null,
         fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
           ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
           : null,
@@ -123,6 +130,7 @@ export async function refreshPricesForHoldings(): Promise<void> {
           ? new Prisma.Decimal(quote.previousClose)
           : null,
         name: quote.name || null,
+        logoUrl: quote.logoUrl || null,
         fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
           ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
           : null,
@@ -147,6 +155,7 @@ export async function getAllCachedPrices(): Promise<Map<string, QuoteData>> {
         currency: c.currency,
         dividendYield: c.dividendYield ? Number(c.dividendYield) : undefined,
         name: c.name || undefined,
+        logoUrl: c.logoUrl || undefined,
         fiftyTwoWeekHigh: c.fiftyTwoWeekHigh ? Number(c.fiftyTwoWeekHigh) : undefined,
         fiftyTwoWeekLow: c.fiftyTwoWeekLow ? Number(c.fiftyTwoWeekLow) : undefined,
         cached: true,
@@ -185,6 +194,7 @@ export async function getPricesForTickers(
             ? Number(cachedItem.dividendYield)
             : undefined,
           name: cachedItem.name || undefined,
+          logoUrl: cachedItem.logoUrl || undefined,
           fiftyTwoWeekHigh: cachedItem.fiftyTwoWeekHigh
             ? Number(cachedItem.fiftyTwoWeekHigh)
             : undefined,
@@ -217,6 +227,7 @@ export async function getPricesForTickers(
             ? new Prisma.Decimal(quote.previousClose)
             : null,
           name: quote.name || null,
+          logoUrl: quote.logoUrl || null,
           fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
             ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
             : null,
@@ -235,6 +246,7 @@ export async function getPricesForTickers(
             ? new Prisma.Decimal(quote.previousClose)
             : null,
           name: quote.name || null,
+          logoUrl: quote.logoUrl || null,
           fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh
             ? new Prisma.Decimal(quote.fiftyTwoWeekHigh)
             : null,

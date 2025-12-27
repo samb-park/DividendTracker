@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getPricesForTickers } from "@/lib/api/price-cache";
+import { getPricesForTickers, refreshPricesForTickers } from "@/lib/api/price-cache";
 import Decimal from "decimal.js";
 import type { HoldingWithPrice } from "@/types";
 
@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get("accountId");
     const aggregate = searchParams.get("aggregate") === "true";
+    const forceRefresh = searchParams.get("refresh") === "true";
 
     const where = accountId ? { accountId } : {};
 
@@ -22,6 +23,12 @@ export async function GET(request: NextRequest) {
 
     // Get unique tickers and fetch prices (from cache or fresh)
     const uniqueTickers = [...new Set(holdings.map((h) => h.ticker))];
+
+    // Force refresh prices if requested (to update logos, etc.)
+    if (forceRefresh) {
+      await refreshPricesForTickers(uniqueTickers);
+    }
+
     const prices = await getPricesForTickers(uniqueTickers);
 
     // If aggregate mode, combine same tickers across accounts
@@ -109,13 +116,15 @@ export async function GET(request: NextRequest) {
           ticker,
           quantity: data.quantity.toFixed(4),
           avgCost: avgCost.toFixed(2),
-          currency: data.currency,
+          // Use Yahoo Finance currency if available, fallback to holding currency
+          currency: priceData?.currency || data.currency,
           currentPrice: priceData?.price?.toFixed(2),
           marketValue: marketValue?.toFixed(2),
           profitLoss: profitLoss?.toFixed(2),
           profitLossPercent: profitLossPercent?.toFixed(2),
           dividendYield: priceData?.dividendYield?.toFixed(2),
           name: priceData?.name,
+          logoUrl: priceData?.logoUrl,
           weight: weight?.toFixed(2),
           fiftyTwoWeekHigh: priceData?.fiftyTwoWeekHigh?.toFixed(2),
           fiftyTwoWeekLow: priceData?.fiftyTwoWeekLow?.toFixed(2),
@@ -182,13 +191,15 @@ export async function GET(request: NextRequest) {
           ticker: holding.ticker,
           quantity: qty.toFixed(4),
           avgCost: avgCost.toFixed(2),
-          currency: holding.currency,
+          // Use Yahoo Finance currency if available, fallback to holding currency
+          currency: priceData?.currency || holding.currency,
           currentPrice: priceData?.price?.toFixed(2),
           marketValue: marketValue?.toFixed(2),
           profitLoss: profitLoss?.toFixed(2),
           profitLossPercent: profitLossPercent?.toFixed(2),
           dividendYield: priceData?.dividendYield?.toFixed(2),
           name: priceData?.name,
+          logoUrl: priceData?.logoUrl,
           weight: weight?.toFixed(2),
           fiftyTwoWeekHigh: priceData?.fiftyTwoWeekHigh?.toFixed(2),
           fiftyTwoWeekLow: priceData?.fiftyTwoWeekLow?.toFixed(2),

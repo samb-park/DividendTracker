@@ -25,6 +25,36 @@ export async function getQuote(ticker: string): Promise<QuoteData | null> {
       return null;
     }
 
+    // Get logo URL from quoteSummary if available
+    let logoUrl: string | undefined;
+    try {
+      const summary = await yahooFinance.quoteSummary(ticker, {
+        modules: ["assetProfile"],
+      });
+      const profile = summary as {
+        assetProfile?: {
+          website?: string;
+        };
+      };
+      // Use Clearbit logo API with company website domain
+      if (profile?.assetProfile?.website) {
+        const domain = new URL(profile.assetProfile.website).hostname.replace(
+          "www.",
+          ""
+        );
+        logoUrl = `https://logo.clearbit.com/${domain}`;
+      }
+    } catch {
+      // Ignore errors when fetching logo
+    }
+
+    // Fallback: Use ticker-based logo services for ETFs and stocks without website
+    if (!logoUrl) {
+      // Use logo.dev with ticker symbol (works for most US stocks/ETFs)
+      const baseTicker = (quote.symbol || ticker).replace(".TO", "").replace(".V", "");
+      logoUrl = `https://assets.parqet.com/logos/symbol/${baseTicker}?format=png`;
+    }
+
     return {
       ticker: quote.symbol || ticker,
       price: quote.regularMarketPrice,
@@ -34,6 +64,7 @@ export async function getQuote(ticker: string): Promise<QuoteData | null> {
         ? quote.trailingAnnualDividendYield * 100
         : undefined,
       name: quote.shortName || quote.longName,
+      logoUrl,
       exchange: quote.exchange,
       fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
       fiftyTwoWeekLow: quote.fiftyTwoWeekLow,

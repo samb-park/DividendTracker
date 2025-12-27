@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Filter } from "lucide-react";
+import { RefreshCw, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -13,11 +13,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   HoldingsTable,
   type ColumnKey,
 } from "@/components/holdings/holdings-table";
 import { PortfolioHeader } from "@/components/holdings/portfolio-header";
-import { HoldingCardsList } from "@/components/holdings/holding-card";
+import {
+  HoldingCardsList,
+  type ReturnDisplayMode,
+} from "@/components/holdings/holding-card";
+import { cn } from "@/lib/utils";
 import type { HoldingWithPrice } from "@/types";
 
 interface Account {
@@ -26,7 +36,8 @@ interface Account {
   broker: string;
 }
 
-type DisplayCurrency = "original" | "CAD" | "USD";
+type CurrencyFilter = "all" | "CAD" | "USD";
+type DisplayCurrency = "CAD" | "USD";
 
 // Default visible columns
 const DEFAULT_COLUMNS: ColumnKey[] = [
@@ -52,12 +63,12 @@ export default function HoldingsPage() {
     useState<string>("all-combined");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [displayCurrency, setDisplayCurrency] =
-    useState<DisplayCurrency>("original");
+  const [currencyFilter, setCurrencyFilter] = useState<CurrencyFilter>("all");
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("CAD");
+  const [returnMode, setReturnMode] = useState<ReturnDisplayMode>("all_time");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
     () => new Set(DEFAULT_COLUMNS)
   );
-  const [showFilters, setShowFilters] = useState(false);
 
   // Load column preferences from localStorage
   useEffect(() => {
@@ -96,15 +107,19 @@ export default function HoldingsPage() {
     }
   };
 
-  const fetchHoldings = async (showRefreshing = false) => {
+  const fetchHoldings = async (showRefreshing = false, forceRefresh = false) => {
     if (showRefreshing) setIsRefreshing(true);
     try {
-      let url = "/api/holdings";
+      const params = new URLSearchParams();
       if (selectedAccount === "all-combined") {
-        url += "?aggregate=true";
+        params.set("aggregate", "true");
       } else if (selectedAccount !== "all-separate") {
-        url += `?accountId=${selectedAccount}`;
+        params.set("accountId", selectedAccount);
       }
+      if (forceRefresh) {
+        params.set("refresh", "true");
+      }
+      const url = `/api/holdings${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url);
       const data = await res.json();
       setHoldings(data);
@@ -129,45 +144,44 @@ export default function HoldingsPage() {
     router.push(`/search?q=${ticker}`);
   };
 
-  // Convert holdings to display currency
-  const convertedHoldings: HoldingWithPrice[] = holdings.map((holding) => {
-    if (displayCurrency === "original") return holding;
-
-    const holdingCurrency = holding.currency;
-    const targetCurrency = displayCurrency;
-
-    if (holdingCurrency === targetCurrency) return holding;
-
-    // Determine conversion rate
-    let rate = 1;
-    if (holdingCurrency === "USD" && targetCurrency === "CAD") {
-      rate = EXCHANGE_RATES.USD_TO_CAD;
-    } else if (holdingCurrency === "CAD" && targetCurrency === "USD") {
-      rate = EXCHANGE_RATES.CAD_TO_USD;
-    }
-
-    const convertValue = (val: string | undefined) => {
-      if (!val) return val;
-      const num = parseFloat(val);
-      if (isNaN(num)) return val;
-      return (num * rate).toFixed(2);
-    };
-
-    return {
-      ...holding,
-      currency: targetCurrency,
-      avgCost: convertValue(holding.avgCost) || holding.avgCost,
-      currentPrice: convertValue(holding.currentPrice),
-      marketValue: convertValue(holding.marketValue),
-      profitLoss: convertValue(holding.profitLoss),
-      dailyChange: convertValue(holding.dailyChange),
-      fiftyTwoWeekHigh: convertValue(holding.fiftyTwoWeekHigh),
-      fiftyTwoWeekLow: convertValue(holding.fiftyTwoWeekLow),
-    };
+  // Filter holdings by currency
+  const filteredHoldings = holdings.filter((holding) => {
+    if (currencyFilter === "all") return true;
+    return holding.currency === currencyFilter;
   });
 
-  // Determine primary display currency for header
-  const primaryCurrency = displayCurrency === "original" ? "CAD" : displayCurrency;
+  // Convert holdings for header total calculation based on displayCurrency
+  const convertedHoldings: HoldingWithPrice[] = filteredHoldings.map(
+    (holding) => {
+      const convertValue = (val: string | undefined, rate: number) => {
+        if (!val) return val;
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        return (num * rate).toFixed(2);
+      };
+
+      // Convert to target display currency
+      if (displayCurrency === "CAD" && holding.currency === "USD") {
+        const rate = EXCHANGE_RATES.USD_TO_CAD;
+        return {
+          ...holding,
+          marketValue: convertValue(holding.marketValue, rate),
+          profitLoss: convertValue(holding.profitLoss, rate),
+          dailyChange: convertValue(holding.dailyChange, rate),
+        };
+      }
+      if (displayCurrency === "USD" && holding.currency === "CAD") {
+        const rate = EXCHANGE_RATES.CAD_TO_USD;
+        return {
+          ...holding,
+          marketValue: convertValue(holding.marketValue, rate),
+          profitLoss: convertValue(holding.profitLoss, rate),
+          dailyChange: convertValue(holding.dailyChange, rate),
+        };
+      }
+      return holding;
+    }
+  );
 
   if (isLoading) {
     return (
@@ -188,25 +202,39 @@ export default function HoldingsPage() {
     <div className="p-4 space-y-6">
       {/* Portfolio Header with Chart */}
       {holdings.length > 0 && (
-        <PortfolioHeader holdings={convertedHoldings} currency={primaryCurrency} />
+        <PortfolioHeader
+          holdings={convertedHoldings}
+          currency={displayCurrency}
+          onCurrencyChange={setDisplayCurrency}
+        />
       )}
 
-      {/* Stocks Section Header */}
+      {/* Holdings Section Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Stocks</h2>
+        <h2 className="text-lg font-semibold">Holdings</h2>
         <div className="flex items-center gap-2">
+          {/* Return Mode Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground">
+                {returnMode === "all_time" ? "All time return" : "Daily change"}
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setReturnMode("all_time")}>
+                All time return
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setReturnMode("daily")}>
+                Daily change
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setShowFilters(!showFilters)}
-            className="md:hidden"
-          >
-            <Filter className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fetchHoldings(true)}
+            onClick={() => fetchHoldings(true, true)}
             disabled={isRefreshing}
           >
             <RefreshCw
@@ -216,10 +244,28 @@ export default function HoldingsPage() {
         </div>
       </div>
 
-      {/* Filters - Always visible on desktop, toggleable on mobile */}
-      <div className={`flex-wrap gap-2 ${showFilters ? "flex" : "hidden md:flex"}`}>
+      {/* Currency Filter Tabs */}
+      <div className="flex gap-2">
+        {(["all", "CAD", "USD"] as CurrencyFilter[]).map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setCurrencyFilter(filter)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium rounded-full transition-colors",
+              currencyFilter === filter
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            {filter === "all" ? "All" : filter}
+          </button>
+        ))}
+      </div>
+
+      {/* Account Filter (Desktop) */}
+      <div className="hidden md:flex gap-2">
         <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-          <SelectTrigger className="w-full sm:w-[200px]">
+          <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Select account" />
           </SelectTrigger>
           <SelectContent>
@@ -232,23 +278,9 @@ export default function HoldingsPage() {
             ))}
           </SelectContent>
         </Select>
-
-        <Select
-          value={displayCurrency}
-          onValueChange={(v) => setDisplayCurrency(v as DisplayCurrency)}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="original">Original</SelectItem>
-            <SelectItem value="CAD">CAD</SelectItem>
-            <SelectItem value="USD">USD</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
-      {holdings.length === 0 ? (
+      {filteredHoldings.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p>No holdings found</p>
         </div>
@@ -257,18 +289,19 @@ export default function HoldingsPage() {
           {/* Desktop: Table view */}
           <div className="hidden md:block">
             <HoldingsTable
-              holdings={convertedHoldings}
+              holdings={filteredHoldings}
               onRowClick={handleRowClick}
               visibleColumns={visibleColumns}
               onToggleColumn={handleToggleColumn}
             />
           </div>
 
-          {/* Mobile: New Card view */}
+          {/* Mobile: Card view */}
           <div className="md:hidden">
             <HoldingCardsList
-              holdings={convertedHoldings}
+              holdings={filteredHoldings}
               onCardClick={handleRowClick}
+              returnMode={returnMode}
             />
           </div>
         </>

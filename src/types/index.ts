@@ -61,6 +61,7 @@ export interface HoldingWithPrice {
   profitLossPercent?: string;
   dividendYield?: string;
   name?: string;
+  logoUrl?: string;
   weight?: string;
   fiftyTwoWeekHigh?: string;
   fiftyTwoWeekLow?: string;
@@ -99,6 +100,7 @@ export interface QuoteData {
   currency: string;
   dividendYield?: number;
   name?: string;
+  logoUrl?: string;
   exchange?: string;
   cached?: boolean;
   fiftyTwoWeekHigh?: number;

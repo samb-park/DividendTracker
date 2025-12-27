@@ -33,13 +33,13 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full",
-                "text-xs transition-colors touch-manipulation",
+                "flex items-center justify-center flex-1 h-full",
+                "transition-colors touch-manipulation",
                 isActive ? "text-primary" : "text-muted-foreground"
               )}
+              aria-label={item.label}
             >
-              <item.icon className="h-5 w-5 mb-1" />
-              <span>{item.label}</span>
+              <item.icon className="h-6 w-6" />
             </Link>
           );
         })}

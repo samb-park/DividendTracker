@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LineChart,
@@ -22,19 +21,67 @@ interface ChartDataPoint {
   totalCost: number;
 }
 
+type DisplayCurrency = "CAD" | "USD";
+
 interface PortfolioHeaderProps {
   holdings: HoldingWithPrice[];
-  currency?: string;
+  currency?: DisplayCurrency;
+  onCurrencyChange?: (currency: DisplayCurrency) => void;
+}
+
+// Canadian Flag SVG
+function CanadaFlag() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-full h-full">
+      <circle cx="20" cy="20" r="20" fill="#f5f5f5" />
+      <rect x="0" y="0" width="10" height="40" fill="#ff0000" />
+      <rect x="30" y="0" width="10" height="40" fill="#ff0000" />
+      <path
+        d="M20 8 L21 14 L24 12 L22 16 L26 16 L22 18 L24 22 L20 19 L16 22 L18 18 L14 16 L18 16 L16 12 L19 14 Z"
+        fill="#ff0000"
+      />
+    </svg>
+  );
+}
+
+// US Flag SVG
+function USFlag() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-full h-full">
+      <circle cx="20" cy="20" r="20" fill="#bf0a30" />
+      <rect x="0" y="6" width="40" height="3" fill="#ffffff" />
+      <rect x="0" y="12" width="40" height="3" fill="#ffffff" />
+      <rect x="0" y="18" width="40" height="3" fill="#ffffff" />
+      <rect x="0" y="24" width="40" height="3" fill="#ffffff" />
+      <rect x="0" y="30" width="40" height="3" fill="#ffffff" />
+      <rect x="0" y="0" width="18" height="21" fill="#002868" />
+      <g fill="#ffffff">
+        <circle cx="4" cy="4" r="1" />
+        <circle cx="9" cy="4" r="1" />
+        <circle cx="14" cy="4" r="1" />
+        <circle cx="6.5" cy="7" r="1" />
+        <circle cx="11.5" cy="7" r="1" />
+        <circle cx="4" cy="10" r="1" />
+        <circle cx="9" cy="10" r="1" />
+        <circle cx="14" cy="10" r="1" />
+        <circle cx="6.5" cy="13" r="1" />
+        <circle cx="11.5" cy="13" r="1" />
+        <circle cx="4" cy="16" r="1" />
+        <circle cx="9" cy="16" r="1" />
+        <circle cx="14" cy="16" r="1" />
+      </g>
+    </svg>
+  );
 }
 
 export function PortfolioHeader({
   holdings,
   currency = "CAD",
+  onCurrencyChange,
 }: PortfolioHeaderProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("1M");
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
-  const [hideValue, setHideValue] = useState(false);
 
   // Calculate portfolio summary from holdings
   const summary = holdings.reduce(
@@ -122,107 +169,119 @@ export function PortfolioHeader({
   const isPositive = periodChange >= 0;
   const chartColor = isPositive ? "#22c55e" : "#ef4444";
 
-  // Calculate Y-axis domain to show both lines clearly
+  // Calculate Y-axis domain to show both Portfolio Value and Net Deposits clearly
   const yAxisDomain = (() => {
     if (formattedChartData.length === 0) return ["auto", "auto"] as const;
 
-    // Filter out zero or very small values to get meaningful range
+    // Get all non-zero values from both lines
     const valueData = formattedChartData.map(d => d.value).filter(v => v > 0);
     const costData = formattedChartData.map(d => d.cost).filter(v => v > 0);
+    const allData = [...valueData, ...costData];
 
-    // If no meaningful cost data, just use value data for range
-    const allValues = costData.length > 0
-      ? [...valueData, ...costData]
-      : valueData;
+    if (allData.length === 0) return ["auto", "auto"] as const;
 
-    if (allValues.length === 0) return ["auto", "auto"] as const;
-
-    const minValue = Math.min(...allValues);
-    const maxValue = Math.max(...allValues);
+    const minValue = Math.min(...allData);
+    const maxValue = Math.max(...allData);
     const range = maxValue - minValue;
 
-    // Use 50% of range as padding, minimum 2% of minValue
-    const padding = Math.max(range * 0.5, minValue * 0.02);
+    // Add 15% padding on each side to make variations visible
+    // Minimum padding of 0.5% of minValue for flat ranges
+    const padding = Math.max(range * 0.15, minValue * 0.005);
 
     return [minValue - padding, maxValue + padding] as [number, number];
   })();
 
   const formatCurrency = (value: number) => {
-    if (hideValue) return "••••••";
-    return new Intl.NumberFormat("en-CA", {
+    const formatted = new Intl.NumberFormat("en-CA", {
       style: "currency",
       currency: currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+    // Remove "US" prefix from USD formatting (US$1,234.56 -> $1,234.56)
+    return formatted.replace("US$", "$");
   };
 
   const formatPercent = (value: number) => {
-    if (hideValue) return "••••";
     const sign = value >= 0 ? "+" : "";
     return `${sign}${value.toFixed(2)}%`;
   };
 
   const formatChange = (value: number) => {
-    if (hideValue) return "••••••";
     const sign = value >= 0 ? "+" : "";
     return `${sign}${formatCurrency(Math.abs(value)).replace(currency, currency)}`;
   };
 
   return (
     <div className="space-y-4">
-      {/* Summary Section */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-2">
-          <p className="text-sm text-muted-foreground uppercase tracking-wide">
-            Market Value
-          </p>
-          <button
-            onClick={() => setHideValue(!hideValue)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {hideValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
+      {/* Summary Section - Wealthsimple Style */}
+      <div className="flex items-start justify-between">
+        {/* Left: Value and Changes */}
+        <div className="space-y-1">
+          {/* Total Value */}
+          <div className="flex items-baseline gap-1.5">
+            <h2 className="text-3xl font-bold tracking-tight">
+              {formatCurrency(summary.totalValue)}
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              {currency}
+            </span>
+          </div>
 
-        <h2 className="text-4xl font-bold tracking-tight">
-          {hideValue ? "••••••••" : formatCurrency(summary.totalValue)}
-        </h2>
-
-        {/* Daily Change */}
-        <div
-          className={cn(
-            "flex items-center justify-center gap-1 text-sm",
-            summary.dailyChange >= 0 ? "text-green-500" : "text-red-500"
-          )}
-        >
-          {summary.dailyChange >= 0 ? (
-            <TrendingUp className="h-4 w-4" />
-          ) : (
-            <TrendingDown className="h-4 w-4" />
-          )}
-          <span>
-            {formatChange(summary.dailyChange)} {formatPercent(dailyChangePercent)}
-          </span>
-        </div>
-
-        {/* Open P/L */}
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <span className="text-muted-foreground">Open P/L</span>
-          <span
+          {/* Daily Change */}
+          <div
             className={cn(
-              "font-medium",
-              profitLoss >= 0 ? "text-green-500" : "text-red-500"
+              "text-sm",
+              summary.dailyChange >= 0 ? "text-red-500" : "text-red-500"
             )}
           >
-            {profitLoss >= 0 ? (
-              <TrendingUp className="h-3 w-3 inline mr-1" />
-            ) : (
-              <TrendingDown className="h-3 w-3 inline mr-1" />
-            )}
-            {formatChange(profitLoss)} {formatPercent(profitLossPercent)}
-          </span>
+            <span className={summary.dailyChange >= 0 ? "text-green-500" : "text-red-500"}>
+              {formatChange(summary.dailyChange)} ({formatPercent(dailyChangePercent)})
+            </span>
+            <span className="text-muted-foreground ml-1">past day</span>
+          </div>
+
+          {/* Open P/L */}
+          <div className="text-sm">
+            <span className="text-muted-foreground">Open P/L </span>
+            <span
+              className={cn(
+                "font-medium",
+                profitLoss >= 0 ? "text-green-500" : "text-red-500"
+              )}
+            >
+              {formatChange(profitLoss)} ({formatPercent(profitLossPercent)})
+            </span>
+          </div>
         </div>
+
+        {/* Right: Currency Toggle */}
+        {onCurrencyChange && (
+          <div className="flex items-center bg-muted rounded-full p-0.5 gap-0.5">
+            <button
+              onClick={() => onCurrencyChange("CAD")}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
+                currency === "CAD"
+                  ? "ring-2 ring-white"
+                  : "opacity-40"
+              )}
+            >
+              <CanadaFlag />
+            </button>
+            <button
+              onClick={() => onCurrencyChange("USD")}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
+                currency === "USD"
+                  ? "ring-2 ring-white"
+                  : "opacity-40"
+              )}
+            >
+              <USFlag />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Chart */}

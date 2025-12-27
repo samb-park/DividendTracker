@@ -85,6 +85,7 @@ model PriceCache {
   dividendYield    Decimal?
   previousClose    Decimal?
   name             String?
+  logoUrl          String?
   fiftyTwoWeekHigh Decimal?
   fiftyTwoWeekLow  Decimal?
   updatedAt        DateTime @updatedAt
