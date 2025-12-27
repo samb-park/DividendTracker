@@ -126,11 +126,22 @@ export function PortfolioHeader({
   const yAxisDomain = (() => {
     if (formattedChartData.length === 0) return ["auto", "auto"] as const;
 
-    const allValues = formattedChartData.flatMap(d => [d.value, d.cost]);
+    // Filter out zero or very small values to get meaningful range
+    const valueData = formattedChartData.map(d => d.value).filter(v => v > 0);
+    const costData = formattedChartData.map(d => d.cost).filter(v => v > 0);
+
+    // If no meaningful cost data, just use value data for range
+    const allValues = costData.length > 0
+      ? [...valueData, ...costData]
+      : valueData;
+
+    if (allValues.length === 0) return ["auto", "auto"] as const;
+
     const minValue = Math.min(...allValues);
     const maxValue = Math.max(...allValues);
     const range = maxValue - minValue;
-    // Use larger padding: 50% of range or 2% of minValue, whichever is larger
+
+    // Use 50% of range as padding, minimum 2% of minValue
     const padding = Math.max(range * 0.5, minValue * 0.02);
 
     return [minValue - padding, maxValue + padding] as [number, number];
