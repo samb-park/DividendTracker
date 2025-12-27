@@ -44,17 +44,32 @@ export async function GET(request: NextRequest) {
     const period = (searchParams.get("period") || "1M") as ChartPeriod;
     const periodStartDate = getPeriodStartDate(period);
 
-    // Get all holdings with quantities and currency
+    // Get all holdings with quantities, avgCost, and currency
     const holdings = await prisma.holding.findMany({
       select: {
         ticker: true,
         quantity: true,
+        avgCost: true,
         currency: true,
       },
     });
 
     if (holdings.length === 0) {
       return NextResponse.json([]);
+    }
+
+    // Calculate current total cost basis from holdings (quantity × avgCost)
+    // This represents the total amount invested based on current holdings
+    let totalCostBasis = new Decimal(0);
+    for (const holding of holdings) {
+      const qty = new Decimal(holding.quantity.toString());
+      const cost = new Decimal(holding.avgCost.toString());
+      let holdingCost = qty.mul(cost);
+      // Convert USD to CAD
+      if (holding.currency === "USD") {
+        holdingCost = holdingCost.mul(USD_TO_CAD);
+      }
+      totalCostBasis = totalCostBasis.add(holdingCost);
     }
 
     // Get all transactions to calculate historical net deposits
@@ -75,15 +90,38 @@ export async function GET(request: NextRequest) {
     });
 
     // Build cumulative net deposits over time
-    // netDeposits[date] = cumulative amount invested up to that date
+    // We work backwards from the current total cost basis
+    // netDepositsHistory tracks changes from transactions
     const netDepositsHistory: { date: Date; amount: Decimal }[] = [];
-    let cumulativeDeposit = new Decimal(0);
 
+    // Calculate the net change from all transactions
+    let transactionNetChange = new Decimal(0);
     for (const tx of transactions) {
       const txAmount = new Decimal(tx.quantity.toString()).mul(
         new Decimal(tx.price.toString())
       );
-      // Convert USD to CAD
+      let amount = txAmount;
+      if (tx.account.currency === "USD") {
+        amount = amount.mul(USD_TO_CAD);
+      }
+
+      if (tx.type === "BUY") {
+        transactionNetChange = transactionNetChange.add(amount);
+      } else if (tx.type === "SELL") {
+        transactionNetChange = transactionNetChange.sub(amount);
+      }
+    }
+
+    // Calculate the "base" cost that existed before the earliest transaction
+    // baseCost = totalCostBasis - transactionNetChange
+    const baseCost = totalCostBasis.sub(transactionNetChange);
+
+    // Now build cumulative deposits starting from baseCost
+    let cumulativeDeposit = baseCost;
+    for (const tx of transactions) {
+      const txAmount = new Decimal(tx.quantity.toString()).mul(
+        new Decimal(tx.price.toString())
+      );
       let amount = txAmount;
       if (tx.account.currency === "USD") {
         amount = amount.mul(USD_TO_CAD);
@@ -101,8 +139,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Current total net deposits (for dates after last transaction)
-    const currentNetDeposits = cumulativeDeposit;
+    // Current total net deposits equals totalCostBasis
+    const currentNetDeposits = totalCostBasis;
 
     // Get unique tickers
     const tickers = [...new Set(holdings.map((h) => h.ticker))];
@@ -144,8 +182,8 @@ export async function GET(request: NextRequest) {
 
     // Helper to get net deposits for a specific date
     const getNetDepositsForDate = (targetDate: Date): Decimal => {
-      // Find the last transaction before or on this date
-      let result = new Decimal(0);
+      // Start with baseCost (cost before any recorded transactions)
+      let result = baseCost;
       for (const entry of netDepositsHistory) {
         if (entry.date <= targetDate) {
           result = entry.amount;
