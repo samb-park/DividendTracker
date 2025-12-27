@@ -1,14 +1,31 @@
 services:
-  app:
+  dividendtracker:
     build: .
-    ports:
-      - "3000:3000"
-    volumes:
-      # Persist SQLite database
-      - portfolio_data:/app/prisma/data
-    environment:
-      - DATABASE_URL=file:./data/portfolio.db
+    container_name: dividendtracker
     restart: unless-stopped
 
-volumes:
-  portfolio_data:
+    # 외부 포트 오픈은 하지 않음 (Cloudflare Tunnel에서 접근)
+    expose:
+      - "3000"
+
+    environment:
+      - TZ=America/Toronto
+      # DB 파일을 /data 아래에 두도록 강제
+      - DATABASE_URL=file:/data/portfolio.db
+      # NextAuth settings
+      - NEXTAUTH_SECRET=0E3ilQQL1JgLk8CXkDYp6VkgSxJDQmzP55UaFyhvs+g=
+      - NEXTAUTH_URL=https://dividend.buildwith.work
+      # Google OAuth (set these in .env file)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+
+    # 호스트 HDD에 DB를 저장(백업/복구 쉬움)
+    volumes:
+      - /mnt/storage/dividendtracker:/data
+
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true
