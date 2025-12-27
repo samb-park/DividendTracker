@@ -3,20 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Wallet,
-  ArrowLeftRight,
+  Home,
+  PieChart,
+  ArrowRightLeft,
   Search,
-  DollarSign,
+  Banknote,
   Settings,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Home" },
-  { href: "/holdings", icon: Wallet, label: "Holdings" },
-  { href: "/transactions", icon: ArrowLeftRight, label: "Activity" },
-  { href: "/dividends", icon: DollarSign, label: "Dividends" },
+  { href: "/dashboard", icon: Home, label: "Home" },
+  { href: "/holdings", icon: PieChart, label: "Holdings" },
+  { href: "/transactions", icon: ArrowRightLeft, label: "Activity" },
+  { href: "/dividends", icon: Banknote, label: "Dividends" },
   { href: "/search", icon: Search, label: "Search" },
 ];
 
@@ -54,7 +55,7 @@ export function DesktopNav() {
   const allItems = [
     ...navItems,
     { href: "/accounts", icon: Settings, label: "Accounts" },
-    { href: "/import", icon: ArrowLeftRight, label: "Import" },
+    { href: "/import", icon: Upload, label: "Import" },
   ];
 
   return (

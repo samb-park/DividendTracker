@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, ChevronDown } from "lucide-react";
+import { ChevronDown, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -26,9 +27,32 @@ import { PortfolioHeader } from "@/components/holdings/portfolio-header";
 import {
   HoldingCardsList,
   type ReturnDisplayMode,
+  type MobileCardField,
 } from "@/components/holdings/holding-card";
 import { cn } from "@/lib/utils";
 import type { HoldingWithPrice } from "@/types";
+
+// Mobile card display fields configuration
+const ALL_MOBILE_FIELDS: { key: MobileCardField; label: string }[] = [
+  { key: "avgCost", label: "Avg Cost" },
+  { key: "currentPrice", label: "Current Price" },
+  { key: "fiftyTwoWeekHigh", label: "52W High" },
+  { key: "fiftyTwoWeekLow", label: "52W Low" },
+  { key: "today", label: "Today" },
+  { key: "dividendYield", label: "Dividend Yield" },
+  { key: "weight", label: "Weight" },
+  { key: "allTimeReturn", label: "All Time Return" },
+  { key: "shares", label: "Shares" },
+  { key: "marketValue", label: "Market Value" },
+];
+
+const DEFAULT_MOBILE_FIELDS: MobileCardField[] = [
+  "avgCost",
+  "currentPrice",
+  "fiftyTwoWeekHigh",
+  "fiftyTwoWeekLow",
+  "today",
+];
 
 interface Account {
   id: string;
@@ -62,12 +86,14 @@ export default function HoldingsPage() {
   const [selectedAccount, setSelectedAccount] =
     useState<string>("all-combined");
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState<CurrencyFilter>("all");
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("CAD");
   const [returnMode, setReturnMode] = useState<ReturnDisplayMode>("all_time");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
     () => new Set(DEFAULT_COLUMNS)
+  );
+  const [visibleMobileFields, setVisibleMobileFields] = useState<Set<MobileCardField>>(
+    () => new Set(DEFAULT_MOBILE_FIELDS)
   );
 
   // Load column preferences from localStorage
@@ -77,6 +103,17 @@ export default function HoldingsPage() {
       try {
         const parsed = JSON.parse(saved) as ColumnKey[];
         setVisibleColumns(new Set(parsed));
+      } catch {
+        // Use defaults if parse fails
+      }
+    }
+
+    // Load mobile field preferences
+    const savedMobile = localStorage.getItem("mobile-card-fields");
+    if (savedMobile) {
+      try {
+        const parsed = JSON.parse(savedMobile) as MobileCardField[];
+        setVisibleMobileFields(new Set(parsed));
       } catch {
         // Use defaults if parse fails
       }
@@ -97,6 +134,20 @@ export default function HoldingsPage() {
     });
   }, []);
 
+  // Save mobile field preferences to localStorage
+  const handleToggleMobileField = useCallback((key: MobileCardField) => {
+    setVisibleMobileFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      localStorage.setItem("mobile-card-fields", JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   const fetchAccounts = async () => {
     try {
       const res = await fetch("/api/accounts");
@@ -107,17 +158,13 @@ export default function HoldingsPage() {
     }
   };
 
-  const fetchHoldings = async (showRefreshing = false, forceRefresh = false) => {
-    if (showRefreshing) setIsRefreshing(true);
+  const fetchHoldings = async () => {
     try {
       const params = new URLSearchParams();
       if (selectedAccount === "all-combined") {
         params.set("aggregate", "true");
       } else if (selectedAccount !== "all-separate") {
         params.set("accountId", selectedAccount);
-      }
-      if (forceRefresh) {
-        params.set("refresh", "true");
       }
       const url = `/api/holdings${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url);
@@ -127,7 +174,6 @@ export default function HoldingsPage() {
       console.error("Failed to fetch holdings:", err);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
@@ -231,16 +277,33 @@ export default function HoldingsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fetchHoldings(true, true)}
-            disabled={isRefreshing}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-          </Button>
+          {/* Mobile Settings Button */}
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5 text-sm font-semibold">
+                  Display Fields
+                </div>
+                {ALL_MOBILE_FIELDS.map((field) => (
+                  <label
+                    key={field.key}
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-muted"
+                  >
+                    <Checkbox
+                      checked={visibleMobileFields.has(field.key)}
+                      onCheckedChange={() => handleToggleMobileField(field.key)}
+                    />
+                    {field.label}
+                  </label>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -302,6 +365,7 @@ export default function HoldingsPage() {
               holdings={filteredHoldings}
               onCardClick={handleRowClick}
               returnMode={returnMode}
+              visibleFields={visibleMobileFields}
             />
           </div>
         </>

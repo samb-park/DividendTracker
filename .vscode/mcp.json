@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@upstash/context7-mcp",
+        "--config",
+        "{\"apiKey\":\"bc1c690d-1d11-4ee2-9616-6849ca6fc3c2\"}"
+      ]
+    }
+  }
+}

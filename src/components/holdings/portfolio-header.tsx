@@ -10,6 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { CA, US } from "country-flag-icons/react/3x2";
 import type { HoldingWithPrice } from "@/types";
 
 const PERIODS = ["1D", "1W", "1M", "3M", "YTD", "1Y", "5Y"] as const;
@@ -27,51 +28,6 @@ interface PortfolioHeaderProps {
   holdings: HoldingWithPrice[];
   currency?: DisplayCurrency;
   onCurrencyChange?: (currency: DisplayCurrency) => void;
-}
-
-// Canadian Flag SVG
-function CanadaFlag() {
-  return (
-    <svg viewBox="0 0 40 40" className="w-full h-full">
-      <circle cx="20" cy="20" r="20" fill="#f5f5f5" />
-      <rect x="0" y="0" width="10" height="40" fill="#ff0000" />
-      <rect x="30" y="0" width="10" height="40" fill="#ff0000" />
-      <path
-        d="M20 8 L21 14 L24 12 L22 16 L26 16 L22 18 L24 22 L20 19 L16 22 L18 18 L14 16 L18 16 L16 12 L19 14 Z"
-        fill="#ff0000"
-      />
-    </svg>
-  );
-}
-
-// US Flag SVG
-function USFlag() {
-  return (
-    <svg viewBox="0 0 40 40" className="w-full h-full">
-      <circle cx="20" cy="20" r="20" fill="#bf0a30" />
-      <rect x="0" y="6" width="40" height="3" fill="#ffffff" />
-      <rect x="0" y="12" width="40" height="3" fill="#ffffff" />
-      <rect x="0" y="18" width="40" height="3" fill="#ffffff" />
-      <rect x="0" y="24" width="40" height="3" fill="#ffffff" />
-      <rect x="0" y="30" width="40" height="3" fill="#ffffff" />
-      <rect x="0" y="0" width="18" height="21" fill="#002868" />
-      <g fill="#ffffff">
-        <circle cx="4" cy="4" r="1" />
-        <circle cx="9" cy="4" r="1" />
-        <circle cx="14" cy="4" r="1" />
-        <circle cx="6.5" cy="7" r="1" />
-        <circle cx="11.5" cy="7" r="1" />
-        <circle cx="4" cy="10" r="1" />
-        <circle cx="9" cy="10" r="1" />
-        <circle cx="14" cy="10" r="1" />
-        <circle cx="6.5" cy="13" r="1" />
-        <circle cx="11.5" cy="13" r="1" />
-        <circle cx="4" cy="16" r="1" />
-        <circle cx="9" cy="16" r="1" />
-        <circle cx="14" cy="16" r="1" />
-      </g>
-    </svg>
-  );
 }
 
 export function PortfolioHeader({
@@ -257,28 +213,28 @@ export function PortfolioHeader({
 
         {/* Right: Currency Toggle */}
         {onCurrencyChange && (
-          <div className="flex items-center bg-muted rounded-full p-0.5 gap-0.5">
+          <div className="flex items-center bg-muted rounded-full p-1 gap-1">
             <button
               onClick={() => onCurrencyChange("CAD")}
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
                 currency === "CAD"
-                  ? "ring-2 ring-white"
+                  ? "ring-2 ring-primary"
                   : "opacity-40"
               )}
             >
-              <CanadaFlag />
+              <CA title="CAD" className="w-6 h-6 rounded-sm" />
             </button>
             <button
               onClick={() => onCurrencyChange("USD")}
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center transition-all overflow-hidden",
                 currency === "USD"
-                  ? "ring-2 ring-white"
+                  ? "ring-2 ring-primary"
                   : "opacity-40"
               )}
             >
-              <USFlag />
+              <US title="USD" className="w-6 h-6 rounded-sm" />
             </button>
           </div>
         )}
@@ -358,7 +314,7 @@ export function PortfolioHeader({
             key={period}
             onClick={() => setSelectedPeriod(period)}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
+              "px-3 py-1.5 text-xs font-medium rounded-full transition-colors outline-none focus:outline-none",
               selectedPeriod === period
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"

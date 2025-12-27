@@ -12,7 +12,15 @@
       "Bash(cat:*)",
       "Bash(npm run build:*)",
       "Bash(git remote add:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(curl:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "context7-mcp"
+  ],
+  "enableAllProjectMcpServers": true
 }

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { PortfolioSummaryCard } from "@/components/dashboard/portfolio-summary-card";
 import { AccountCard } from "@/components/dashboard/account-card";
 import type { DashboardData } from "@/types";
@@ -11,10 +10,8 @@ import type { DashboardData } from "@/types";
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchData = async (showRefreshing = false) => {
-    if (showRefreshing) setIsRefreshing(true);
+  const fetchData = async () => {
     try {
       const res = await fetch("/api/dashboard");
       const json = await res.json();
@@ -23,7 +20,6 @@ export default function DashboardPage() {
       console.error("Failed to fetch dashboard:", err);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
@@ -63,14 +59,6 @@ export default function DashboardPage() {
     <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Portfolio</h1>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => fetchData(true)}
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

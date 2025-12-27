@@ -6,6 +6,19 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { HoldingWithPrice } from "@/types";
 
+// Mobile card display fields
+export type MobileCardField =
+  | "avgCost"
+  | "currentPrice"
+  | "fiftyTwoWeekHigh"
+  | "fiftyTwoWeekLow"
+  | "today"
+  | "dividendYield"
+  | "weight"
+  | "allTimeReturn"
+  | "shares"
+  | "marketValue";
+
 // Generate a consistent color based on ticker string
 function getTickerColor(ticker: string): string {
   const colors = [
@@ -36,12 +49,22 @@ interface HoldingCardProps {
   holding: HoldingWithPrice;
   onClick?: () => void;
   returnMode?: ReturnDisplayMode;
+  visibleFields?: Set<MobileCardField>;
 }
+
+const DEFAULT_VISIBLE_FIELDS: MobileCardField[] = [
+  "avgCost",
+  "currentPrice",
+  "fiftyTwoWeekHigh",
+  "fiftyTwoWeekLow",
+  "today",
+];
 
 export function HoldingCard({
   holding,
   onClick,
   returnMode = "all_time",
+  visibleFields = new Set(DEFAULT_VISIBLE_FIELDS),
 }: HoldingCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -189,29 +212,49 @@ export function HoldingCard({
       {expanded && (
         <div className="px-4 pb-4 pt-0 border-t border-border/50">
           <div className="grid grid-cols-2 gap-3 pt-3 text-sm">
-            <div>
-              <span className="text-muted-foreground">Avg Cost</span>
-              <div className="font-medium">{formatCurrency(avgCost)}</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Current Price</span>
-              <div className="font-medium">{formatCurrency(currentPrice)}</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">52W High</span>
-              <div className="font-medium">{formatCurrency(fiftyTwoWeekHigh)}</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">52W Low</span>
-              <div className="font-medium">{formatCurrency(fiftyTwoWeekLow)}</div>
-            </div>
-            {dividendYield && (
+            {visibleFields.has("shares") && (
+              <div>
+                <span className="text-muted-foreground">Shares</span>
+                <div className="font-medium">{formatQuantity(quantity)}</div>
+              </div>
+            )}
+            {visibleFields.has("marketValue") && (
+              <div>
+                <span className="text-muted-foreground">Market Value</span>
+                <div className="font-medium">{formatCurrency(marketValue)}</div>
+              </div>
+            )}
+            {visibleFields.has("avgCost") && (
+              <div>
+                <span className="text-muted-foreground">Avg Cost</span>
+                <div className="font-medium">{formatCurrency(avgCost)}</div>
+              </div>
+            )}
+            {visibleFields.has("currentPrice") && (
+              <div>
+                <span className="text-muted-foreground">Current Price</span>
+                <div className="font-medium">{formatCurrency(currentPrice)}</div>
+              </div>
+            )}
+            {visibleFields.has("fiftyTwoWeekHigh") && (
+              <div>
+                <span className="text-muted-foreground">52W High</span>
+                <div className="font-medium">{formatCurrency(fiftyTwoWeekHigh)}</div>
+              </div>
+            )}
+            {visibleFields.has("fiftyTwoWeekLow") && (
+              <div>
+                <span className="text-muted-foreground">52W Low</span>
+                <div className="font-medium">{formatCurrency(fiftyTwoWeekLow)}</div>
+              </div>
+            )}
+            {visibleFields.has("dividendYield") && dividendYield && (
               <div>
                 <span className="text-muted-foreground">Dividend Yield</span>
                 <div className="font-medium">{dividendYield}%</div>
               </div>
             )}
-            {returnMode === "all_time" && dailyChange && (
+            {visibleFields.has("today") && dailyChange && (
               <div>
                 <span className="text-muted-foreground">Today</span>
                 <div
@@ -227,7 +270,7 @@ export function HoldingCard({
                 </div>
               </div>
             )}
-            {returnMode === "daily" && profitLoss && (
+            {visibleFields.has("allTimeReturn") && profitLoss && (
               <div>
                 <span className="text-muted-foreground">All Time</span>
                 <div
@@ -254,12 +297,14 @@ interface HoldingCardsListProps {
   holdings: HoldingWithPrice[];
   onCardClick?: (ticker: string) => void;
   returnMode?: ReturnDisplayMode;
+  visibleFields?: Set<MobileCardField>;
 }
 
 export function HoldingCardsList({
   holdings,
   onCardClick,
   returnMode = "all_time",
+  visibleFields,
 }: HoldingCardsListProps) {
   // Sort by market value descending
   const sortedHoldings = [...holdings].sort((a, b) => {
@@ -276,6 +321,7 @@ export function HoldingCardsList({
           holding={holding}
           onClick={() => onCardClick?.(holding.ticker)}
           returnMode={returnMode}
+          visibleFields={visibleFields}
         />
       ))}
     </div>

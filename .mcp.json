@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context7-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://server.smithery.ai/@upstash/context7-mcp/mcp"
+      ]
+    }
+  }
+}
