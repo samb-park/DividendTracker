@@ -65,8 +65,11 @@ export async function GET() {
 
     for (const summary of accountSummaries) {
       const currency = summary.currency as "CAD" | "USD";
-      totals[currency].cost = totals[currency].cost.add(summary.totalCost);
-      totals[currency].value = totals[currency].value.add(summary.totalValue);
+      // Only add to totals if currency is CAD or USD
+      if (totals[currency]) {
+        totals[currency].cost = totals[currency].cost.add(summary.totalCost);
+        totals[currency].value = totals[currency].value.add(summary.totalValue);
+      }
     }
 
     const response: DashboardData = {
