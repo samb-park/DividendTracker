@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PortfolioSummaryCard } from "@/components/dashboard/portfolio-summary-card";
 import { AccountCard } from "@/components/dashboard/account-card";
+import { RefreshCw, TrendingUp, Calendar } from "lucide-react";
 import type { DashboardData } from "@/types";
 
 export default function DashboardPage() {
@@ -59,6 +60,17 @@ export default function DashboardPage() {
     <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Portfolio</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            setIsLoading(true);
+            fetchData();
+          }}
+          disabled={isLoading}
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -77,6 +89,7 @@ export default function DashboardPage() {
                   ).toFixed(2)
                 : "0"
             }
+            variant="hero"
           />
         )}
         {hasUSD && (
@@ -94,6 +107,7 @@ export default function DashboardPage() {
                   ).toFixed(2)
                 : "0"
             }
+            variant="hero"
           />
         )}
         {!hasCAD && !hasUSD && (
@@ -109,11 +123,13 @@ export default function DashboardPage() {
           title="YTD Dividends"
           value={data.ytdDividends.split(" / ")[0].replace("CAD ", "")}
           subtitle={data.ytdDividends}
+          icon={TrendingUp}
         />
         <PortfolioSummaryCard
           title="Expected Annual"
           value={data.expectedAnnualDividend.split(" / ")[0].replace("CAD ", "")}
           subtitle={data.expectedAnnualDividend}
+          icon={Calendar}
         />
       </div>
 

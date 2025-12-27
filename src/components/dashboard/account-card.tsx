@@ -4,7 +4,22 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  Building2,
+  Wallet,
+  Globe,
+  Building,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 import type { AccountSummary } from "@/types";
+
+const brokerIcons: Record<string, LucideIcon> = {
+  Questrade: Building2,
+  Wealthsimple: Wallet,
+  IBKR: Globe,
+  "Interactive Brokers": Globe,
+};
 
 interface AccountCardProps {
   account: AccountSummary;
@@ -12,18 +27,25 @@ interface AccountCardProps {
 
 export function AccountCard({ account }: AccountCardProps) {
   const isPositive = parseFloat(account.profitLoss) >= 0;
+  const BrokerIcon = brokerIcons[account.broker] || Building;
 
   return (
     <Link href={`/accounts/${account.id}`}>
-      <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+      <Card className="hover:bg-muted/50 hover:scale-[1.01] transition-all cursor-pointer group">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">
-              {account.name}
-            </CardTitle>
-            <Badge variant="outline" className="text-xs">
-              {account.broker}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <BrokerIcon className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base font-medium">
+                {account.name}
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-1">
+              <Badge variant="outline" className="text-xs">
+                {account.broker}
+              </Badge>
+              <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
