@@ -101,7 +101,8 @@ export async function GET(request: NextRequest) {
         new Decimal(tx.price.toString())
       );
       let amount = txAmount;
-      if (tx.account.currency === "USD") {
+      // Check if account and currency exist before accessing
+      if (tx.account?.currency === "USD") {
         amount = amount.mul(USD_TO_CAD);
       }
 
@@ -123,7 +124,8 @@ export async function GET(request: NextRequest) {
         new Decimal(tx.price.toString())
       );
       let amount = txAmount;
-      if (tx.account.currency === "USD") {
+      // Check if account and currency exist before accessing
+      if (tx.account?.currency === "USD") {
         amount = amount.mul(USD_TO_CAD);
       }
 
