@@ -10,7 +10,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 import type { HoldingWithPrice } from "@/types";
 
@@ -239,15 +238,6 @@ export function PortfolioHeader({
                       name === "value" ? "Portfolio Value" : "Net Deposits"
                     ]}
                     labelFormatter={(label) => label}
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    height={24}
-                    formatter={(value) => (
-                      <span className="text-xs">
-                        {value === "value" ? "Portfolio Value" : "Net Deposits"}
-                      </span>
-                    )}
                   />
                   {/* Net Deposits Line - dashed gray */}
                   <Line
