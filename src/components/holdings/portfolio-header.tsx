@@ -10,7 +10,7 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
+  Legend,
 } from "recharts";
 import type { HoldingWithPrice } from "@/types";
 
@@ -20,6 +20,7 @@ type Period = (typeof PERIODS)[number];
 interface ChartDataPoint {
   date: string;
   totalValue: number;
+  totalCost: number;
 }
 
 interface PortfolioHeaderProps {
@@ -107,6 +108,7 @@ export function PortfolioHeader({
     return {
       date: dateLabel,
       value: point.totalValue,
+      cost: point.totalCost,
       fullDate: point.date,
     };
   });
@@ -211,7 +213,7 @@ export function PortfolioHeader({
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={formattedChartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                   <XAxis dataKey="date" hide />
-                  <YAxis domain={["dataMin", "dataMax"]} hide />
+                  <YAxis domain={["auto", "auto"]} hide />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--background))",
@@ -219,18 +221,37 @@ export function PortfolioHeader({
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value) => [formatCurrency(value as number), "Value"]}
+                    formatter={(value, name) => [
+                      formatCurrency(value as number),
+                      name === "value" ? "Market Value" : "Cost Basis"
+                    ]}
                     labelFormatter={(label) => label}
                   />
-                  <ReferenceLine
-                    y={startValue}
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.5}
+                  <Legend
+                    verticalAlign="top"
+                    height={24}
+                    formatter={(value) => (
+                      <span className="text-xs">
+                        {value === "value" ? "Market Value" : "Cost Basis"}
+                      </span>
+                    )}
                   />
+                  {/* Cost Basis Line - dashed gray */}
+                  <Line
+                    type="monotone"
+                    dataKey="cost"
+                    name="cost"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={1.5}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                  />
+                  {/* Market Value Line - solid color */}
                   <Line
                     type="monotone"
                     dataKey="value"
+                    name="value"
                     stroke={chartColor}
                     strokeWidth={2}
                     dot={false}

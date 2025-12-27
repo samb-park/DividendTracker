@@ -9,6 +9,7 @@ import Decimal from "decimal.js";
 export interface PortfolioChartPoint {
   date: string;
   totalValue: number;
+  totalCost: number;
 }
 
 // Exchange rate for USD to CAD conversion
@@ -19,11 +20,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const period = (searchParams.get("period") || "1M") as ChartPeriod;
 
-    // Get all holdings with quantities
+    // Get all holdings with quantities and average cost
     const holdings = await prisma.holding.findMany({
       select: {
         ticker: true,
         quantity: true,
+        avgCost: true,
         currency: true,
       },
     });
@@ -42,19 +44,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
-    // Create a map of ticker -> quantity (aggregated across accounts)
-    const tickerQuantities = new Map<string, { quantity: Decimal; currency: string }>();
+    // Create a map of ticker -> quantity and cost (aggregated across accounts)
+    const tickerData = new Map<string, { quantity: Decimal; totalCost: Decimal; currency: string }>();
     for (const holding of holdings) {
-      const existing = tickerQuantities.get(holding.ticker);
+      const existing = tickerData.get(holding.ticker);
       const qty = new Decimal(holding.quantity.toString());
+      const cost = qty.mul(new Decimal(holding.avgCost.toString()));
       if (existing) {
         existing.quantity = existing.quantity.add(qty);
+        existing.totalCost = existing.totalCost.add(cost);
       } else {
-        tickerQuantities.set(holding.ticker, {
+        tickerData.set(holding.ticker, {
           quantity: qty,
+          totalCost: cost,
           currency: holding.currency,
         });
       }
+    }
+
+    // Calculate total cost basis (constant line)
+    let totalCostBasis = new Decimal(0);
+    for (const [, data] of tickerData) {
+      let cost = data.totalCost;
+      // Convert USD to CAD
+      if (data.currency === "USD") {
+        cost = cost.mul(USD_TO_CAD);
+      }
+      totalCostBasis = totalCostBasis.add(cost);
     }
 
     // Group all dates from all tickers
@@ -89,7 +105,7 @@ export async function GET(request: NextRequest) {
       let totalValue = new Decimal(0);
       let hasAllTickers = true;
 
-      for (const [ticker, data] of tickerQuantities) {
+      for (const [ticker, data] of tickerData) {
         const price = pricesForDate.get(ticker) ?? lastKnownPrices.get(ticker);
         if (price !== undefined) {
           let value = data.quantity.mul(price);
@@ -104,10 +120,11 @@ export async function GET(request: NextRequest) {
       }
 
       // Only include data points where we have prices for most tickers
-      if (hasAllTickers || lastKnownPrices.size >= tickerQuantities.size * 0.5) {
+      if (hasAllTickers || lastKnownPrices.size >= tickerData.size * 0.5) {
         chartData.push({
           date: dateKey,
           totalValue: totalValue.toNumber(),
+          totalCost: totalCostBasis.toNumber(),
         });
       }
     }
