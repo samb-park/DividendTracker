@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, Link2, Link2Off, Trash2, Key, Plus, Check, Pencil, X } from "lucide-react";
+import { ArrowLeft, Link2Off, Trash2, Key, Plus, Check, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,7 +44,6 @@ export default function AccountDetailPage() {
 
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [refreshToken, setRefreshToken] = useState("");
@@ -207,36 +206,6 @@ export default function AccountDetailPage() {
     } catch (err) {
       console.error("Failed to disconnect:", err);
       toast.error("Failed to disconnect Questrade");
-    }
-  };
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch("/api/questrade/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId,
-          questradeAccountNumber: account?.questradeAccountNumber,
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Sync failed");
-      }
-
-      const result = await res.json();
-      toast.success(
-        `Synced! ${result.holdingsCount} holdings, ${result.transactionsImported} new transactions`
-      );
-      fetchAccount();
-    } catch (err) {
-      console.error("Failed to sync:", err);
-      toast.error(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -412,13 +381,6 @@ export default function AccountDetailPage() {
               )}
 
               <div className="flex gap-2 flex-wrap">
-                <Button onClick={handleSync} disabled={isSyncing}>
-                  <RefreshCw
-                    className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`}
-                  />
-                  {isSyncing ? "Syncing..." : "Sync Now"}
-                </Button>
-
                 <Button
                   variant="outline"
                   onClick={fetchQuestradeAccounts}
