@@ -1,5 +1,7 @@
+name: dividend
+
 services:
-  dividendtracker:
+  app:
     container_name: dividendtracker
     build:
       context: .
