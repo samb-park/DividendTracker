@@ -1,7 +1,6 @@
-version: '3.8'
-
 services:
-  app:
+  dividendtracker:
+    container_name: dividendtracker
     build:
       context: .
       dockerfile: Dockerfile
