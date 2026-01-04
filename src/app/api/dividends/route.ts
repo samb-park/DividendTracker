@@ -3,34 +3,41 @@ import {
   calculateMonthlyDividends,
   calculateDividendsBySymbol,
   getDividendSymbols,
+  getDividendYears,
 } from "@/lib/calculations/dividends";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const months = parseInt(searchParams.get("months") || "12");
+    const year = searchParams.get("year") ? parseInt(searchParams.get("year")!) : null;
     const accountId = searchParams.get("accountId");
     const symbol = searchParams.get("symbol");
     const type = searchParams.get("type") || "monthly";
 
     if (type === "symbols") {
-      // 배당 심볼 목록
-      const symbols = await getDividendSymbols(accountId);
+      // Dividend symbol list (filtered by year if provided)
+      const symbols = await getDividendSymbols(accountId, year);
       return NextResponse.json(symbols);
     }
 
+    if (type === "years") {
+      // Available years list
+      const years = await getDividendYears(accountId);
+      return NextResponse.json(years);
+    }
+
     if (type === "bySymbol") {
-      // 심볼별 배당
-      const dividends = await calculateDividendsBySymbol(months, accountId);
+      // Dividends by symbol
+      const dividends = await calculateDividendsBySymbol(year, accountId);
       return NextResponse.json(dividends);
     }
 
-    // 월별 배당
-    const dividends = await calculateMonthlyDividends(months, accountId, symbol);
+    // Monthly dividends
+    const dividends = await calculateMonthlyDividends(year, accountId, symbol);
     return NextResponse.json(dividends);
   } catch (error) {
     console.error("Error fetching dividends:", error);
-    return NextResponse.json({ error: "배당 조회 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch dividends" }, { status: 500 });
   }
 }

@@ -124,8 +124,8 @@ export default function HoldingsPage() {
   ];
 
   const currencyViews: { value: CurrencyView; label: string }[] = [
-    { value: "combined_cad", label: "Combined in CAD" },
-    { value: "combined_usd", label: "Combined in USD" },
+    { value: "combined_cad", label: "Combined (CAD)" },
+    { value: "combined_usd", label: "Combined (USD)" },
     { value: "cad", label: "CAD" },
     { value: "usd", label: "USD" },
   ];
@@ -267,31 +267,29 @@ export default function HoldingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 계좌 선택 탭 */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Account tabs */}
+      <div className="flex gap-3 flex-wrap">
         <button
           onClick={() => setSelectedAccount("all")}
-          className={`px-4 py-3 rounded-lg border transition-colors ${
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
             selectedAccount === "all"
-              ? "border-gray-300 bg-white"
-              : "border-gray-200 bg-gray-50 hover:bg-white"
+              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
           }`}
         >
-          All accounts
+          All
         </button>
         {accounts.map((acc) => (
           <button
             key={acc.id}
             onClick={() => setSelectedAccount(acc.id)}
-            className={`px-4 py-3 rounded-lg border transition-colors ${
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
               selectedAccount === acc.id
-                ? "border-green-500 bg-white"
-                : "border-gray-200 bg-gray-50 hover:bg-white"
+                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
             }`}
           >
-            <div className="font-medium">
-              {acc.accountType}
-            </div>
+            {acc.accountType}
           </button>
         ))}
       </div>
@@ -307,7 +305,7 @@ export default function HoldingsPage() {
             <div className="text-sm text-gray-500 mb-1">
               Total equity ({currencyView === "combined_cad" ? "Combined in CAD" :
                            currencyView === "combined_usd" ? "Combined in USD" :
-                           currencyView === "cad" ? "CAD only" : "USD only"})
+                           currencyView === "cad" ? "CAD" : "USD"})
             </div>
             <div className="text-4xl font-bold text-gray-900">
               {formatCurrency(displayValues.totalEquity)}

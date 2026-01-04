@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Account {
   id: string;
@@ -153,30 +160,28 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       {/* Account tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-3 flex-wrap">
         <button
           onClick={() => setAccountFilter("all")}
-          className={`px-4 py-3 rounded-lg border transition-colors ${
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
             accountFilter === "all"
-              ? "border-gray-300 bg-white"
-              : "border-gray-200 bg-gray-50 hover:bg-white"
+              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
           }`}
         >
-          All accounts
+          All
         </button>
         {accounts.map((acc) => (
           <button
             key={acc.id}
             onClick={() => setAccountFilter(acc.id)}
-            className={`px-4 py-3 rounded-lg border transition-colors ${
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
               accountFilter === acc.id
-                ? "border-green-500 bg-white"
-                : "border-gray-200 bg-gray-50 hover:bg-white"
+                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
             }`}
           >
-            <div className="font-medium">
-              {acc.accountType}
-            </div>
+            {acc.accountType}
           </button>
         ))}
       </div>
@@ -184,31 +189,33 @@ export default function TransactionsPage() {
       {/* Filters */}
       <div className="bg-white rounded-lg p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          >
-            <option value="all">All actions</option>
-            {actions.map((action) => (
-              <option key={action} value={action}>
-                {action}
-              </option>
-            ))}
-          </select>
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="All actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All actions</SelectItem>
+              {actions.map((action) => (
+                <SelectItem key={action} value={action}>
+                  {action}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            value={symbolFilter}
-            onChange={(e) => setSymbolFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          >
-            <option value="">All symbols</option>
-            {symbols.map((symbol) => (
-              <option key={symbol} value={symbol}>
-                {symbol}
-              </option>
-            ))}
-          </select>
+          <Select value={symbolFilter || "all"} onValueChange={(value) => setSymbolFilter(value === "all" ? "" : value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="All symbols" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All symbols</SelectItem>
+              {symbols.map((symbol) => (
+                <SelectItem key={symbol} value={symbol}>
+                  {symbol}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <input
             type="text"

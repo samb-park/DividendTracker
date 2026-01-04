@@ -135,32 +135,27 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
-      {/* 계좌 선택 탭 */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Account tabs */}
+      <div className="flex gap-3 flex-wrap">
         <button
           onClick={() => setSelectedAccount("all")}
-          className={`px-4 py-3 rounded-lg border transition-colors ${
-            selectedAccount === "all"
-              ? "border-gray-300 bg-white"
-              : "border-gray-200 bg-gray-50 hover:bg-white"
-          }`}
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${selectedAccount === "all"
+              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
         >
-          All accounts
+          All
         </button>
         {accounts.map((acc) => (
           <button
             key={acc.id}
             onClick={() => setSelectedAccount(acc.id)}
-            className={`px-4 py-3 rounded-lg border transition-colors ${
-              selectedAccount === acc.id
-                ? "border-green-500 bg-white"
-                : "border-gray-200 bg-gray-50 hover:bg-white"
-            }`}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${selectedAccount === acc.id
+                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+              }`}
           >
-            <div className="font-medium">
-              {acc.accountType} - {acc.accountNumber}
-            </div>
-            <div className="text-xs text-gray-500">Self-directed</div>
+            {acc.accountType}
           </button>
         ))}
       </div>
@@ -228,11 +223,10 @@ export default function HomePage() {
               <button
                 key={p.value}
                 onClick={() => setSelectedPeriod(p.value)}
-                className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                  selectedPeriod === p.value
+                className={`px-4 py-2 rounded-full border text-sm transition-colors ${selectedPeriod === p.value
                     ? "border-gray-400 bg-white font-medium"
                     : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-                }`}
+                  }`}
               >
                 {p.label}
               </button>
@@ -247,11 +241,10 @@ export default function HomePage() {
                 <button
                   key={cv.value}
                   onClick={() => setCurrencyView(cv.value)}
-                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                    currencyView === cv.value
+                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${currencyView === cv.value
                       ? "border-green-500 text-green-600 bg-white font-medium"
                       : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-                  }`}
+                    }`}
                 >
                   {cv.label}
                 </button>

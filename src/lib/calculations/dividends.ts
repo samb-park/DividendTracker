@@ -14,33 +14,32 @@ export interface DividendBySymbol {
 }
 
 /**
- * 월별 배당 합계 계산
- * @param months 최근 몇 개월 (기본 12개월)
- * @param accountId 계좌 ID (null이면 전체)
- * @param symbol 특정 심볼 필터 (null이면 전체)
+ * Calculate monthly dividend totals
+ * @param year Year filter (null for all years)
+ * @param accountId Account ID (null for all)
+ * @param symbol Symbol filter (null for all)
  */
 export async function calculateMonthlyDividends(
-  months: number = 12,
+  year?: number | null,
   accountId?: string | null,
   symbol?: string | null
 ): Promise<DividendSummary[]> {
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
-  startDate.setDate(1);
-  startDate.setHours(0, 0, 0, 0);
-
   const where: {
     action: string;
-    settlementDate: { gte: Date };
+    settlementDate?: { gte?: Date; lte?: Date };
     netAmount: { not: null };
     accountId?: string;
     symbolMapped?: string;
-    symbol?: string;
   } = {
     action: "DIV",
-    settlementDate: { gte: startDate },
     netAmount: { not: null },
   };
+
+  if (year) {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    where.settlementDate = { gte: startDate, lte: endDate };
+  }
 
   if (accountId) {
     where.accountId = accountId;
@@ -60,7 +59,7 @@ export async function calculateMonthlyDividends(
     orderBy: { settlementDate: "asc" },
   });
 
-  // 월별로 그룹핑
+  // Group by month
   const monthlyMap = new Map<string, { CAD: number; USD: number }>();
 
   for (const div of dividends) {
@@ -70,10 +69,9 @@ export async function calculateMonthlyDividends(
     monthlyMap.set(month, existing);
   }
 
-  // 배열로 변환 (USD + CAD 합산하여 CAD 기준으로 반환)
+  // Convert to array
   const results: DividendSummary[] = [];
   for (const [month, amounts] of monthlyMap) {
-    // USD 배당은 별도로 표시하거나 합산 가능
     if (amounts.CAD > 0) {
       results.push({ month, totalAmount: amounts.CAD, currency: "CAD" });
     }
@@ -86,25 +84,27 @@ export async function calculateMonthlyDividends(
 }
 
 /**
- * 심볼별 배당 합계
+ * Calculate dividend totals by symbol
  */
 export async function calculateDividendsBySymbol(
-  months: number = 12,
+  year?: number | null,
   accountId?: string | null
 ): Promise<DividendBySymbol[]> {
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
-
   const where: {
     action: string;
-    settlementDate: { gte: Date };
+    settlementDate?: { gte?: Date; lte?: Date };
     netAmount: { not: null };
     accountId?: string;
   } = {
     action: "DIV",
-    settlementDate: { gte: startDate },
     netAmount: { not: null },
   };
+
+  if (year) {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    where.settlementDate = { gte: startDate, lte: endDate };
+  }
 
   if (accountId) {
     where.accountId = accountId;
@@ -129,13 +129,17 @@ export async function calculateDividendsBySymbol(
 }
 
 /**
- * 배당금이 있는 심볼 목록 가져오기
+ * Get list of symbols with dividends
  */
-export async function getDividendSymbols(accountId?: string | null): Promise<string[]> {
+export async function getDividendSymbols(
+  accountId?: string | null,
+  year?: number | null
+): Promise<string[]> {
   const where: {
     action: string;
     symbolMapped: { not: null };
     accountId?: string;
+    settlementDate?: { gte?: Date; lte?: Date };
   } = {
     action: "DIV",
     symbolMapped: { not: null },
@@ -145,6 +149,12 @@ export async function getDividendSymbols(accountId?: string | null): Promise<str
     where.accountId = accountId;
   }
 
+  if (year) {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    where.settlementDate = { gte: startDate, lte: endDate };
+  }
+
   const results = await prisma.transaction.findMany({
     where,
     select: { symbolMapped: true },
@@ -152,4 +162,33 @@ export async function getDividendSymbols(accountId?: string | null): Promise<str
   });
 
   return results.map((r) => r.symbolMapped!).filter(Boolean).sort();
+}
+
+/**
+ * Get list of years with dividend data
+ */
+export async function getDividendYears(accountId?: string | null): Promise<number[]> {
+  const where: {
+    action: string;
+    accountId?: string;
+  } = {
+    action: "DIV",
+  };
+
+  if (accountId) {
+    where.accountId = accountId;
+  }
+
+  const results = await prisma.transaction.findMany({
+    where,
+    select: { settlementDate: true },
+    orderBy: { settlementDate: "asc" },
+  });
+
+  const years = new Set<number>();
+  for (const r of results) {
+    years.add(r.settlementDate.getFullYear());
+  }
+
+  return Array.from(years).sort((a, b) => b - a); // Descending order
 }

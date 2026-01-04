@@ -6,8 +6,8 @@ import { Navigation } from "@/components/layout/Navigation";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Questrade Portfolio Tracker",
-  description: "개인용 포트폴리오 트래커",
+  title: "Portfolio Tracker",
+  description: "Personal portfolio tracker for investments",
 };
 
 export default function RootLayout({
@@ -16,11 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="en">
       <body className={inter.className}>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-[#f5f6f8]">
           <Navigation />
-          <main className="container mx-auto px-4 py-6">
+          <main className="max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-6">
             {children}
           </main>
         </div>
