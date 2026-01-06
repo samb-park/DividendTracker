@@ -75,22 +75,33 @@ export default function TargetsPage() {
     }
   }
 
-  function loadSettings() {
-    const saved = localStorage.getItem("portfolioSettings");
-    if (saved) {
-      try {
-        setSettings(JSON.parse(saved));
-      } catch {
-        setSettings(DEFAULT_SETTINGS);
+  async function loadSettings() {
+    try {
+      const res = await fetch("/api/settings/portfolio");
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
       }
+    } catch (error) {
+      console.error("Failed to load settings:", error);
     }
   }
 
-  function saveSettings() {
-    localStorage.setItem("portfolioSettings", JSON.stringify(settings));
-    window.dispatchEvent(new CustomEvent("portfolioSettingsChange"));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  async function saveSettings() {
+    try {
+      const res = await fetch("/api/settings/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+    }
   }
 
   function addTarget() {
@@ -232,11 +243,10 @@ export default function TargetsPage() {
             Target Allocations
           </h3>
           <div
-            className={`text-xs font-medium px-2 py-1 rounded-full ${
-              isValidTotal
+            className={`text-xs font-medium px-2 py-1 rounded-full ${isValidTotal
                 ? "bg-green-50 text-green-700"
                 : "bg-red-50 text-red-600"
-            }`}
+              }`}
           >
             Total: {totalWeight.toFixed(1)}%
           </div>
@@ -269,11 +279,10 @@ export default function TargetsPage() {
                       {target.symbol}
                     </div>
                     <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                        target.currency === "CAD"
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${target.currency === "CAD"
                           ? "bg-red-50 text-red-600"
                           : "bg-blue-50 text-blue-600"
-                      }`}
+                        }`}
                     >
                       {target.currency}
                     </span>
@@ -319,9 +328,8 @@ export default function TargetsPage() {
                     <SelectItem key={s.symbolMapped} value={s.symbolMapped}>
                       <div className="flex items-center gap-2">
                         <span>{s.symbolMapped.replace(".TO", "")}</span>
-                        <span className={`text-[10px] px-1 py-0.5 rounded ${
-                          s.currency === "CAD" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
-                        }`}>
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${s.currency === "CAD" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                          }`}>
                           {s.currency}
                         </span>
                       </div>
@@ -385,11 +393,10 @@ export default function TargetsPage() {
       {/* Save Button */}
       <button
         onClick={saveSettings}
-        className={`w-full py-3 rounded-xl text-sm font-medium transition-colors ${
-          saved
+        className={`w-full py-3 rounded-xl text-sm font-medium transition-colors ${saved
             ? "bg-green-100 text-green-700"
             : "bg-green-600 text-white hover:bg-green-700"
-        }`}
+          }`}
       >
         {saved ? "Saved!" : "Save Changes"}
       </button>

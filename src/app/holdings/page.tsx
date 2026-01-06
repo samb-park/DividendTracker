@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import {
   calculateWeeklyAllocation,
-  loadPortfolioSettings,
   type PortfolioSettings,
   type AllocationSummary,
 } from "@/lib/calculations/allocation";
@@ -91,21 +90,23 @@ export default function HoldingsPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [portfolioSettings, setPortfolioSettings] = useState<PortfolioSettings | null>(null);
   const [allocationSummary, setAllocationSummary] = useState<AllocationSummary | null>(null);
-  const [showAllocation, setShowAllocation] = useState(true);
+  const [showAllocation, setShowAllocation] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
-    loadSettings();
-
-    // Listen for settings changes
-    const handleSettingsChange = () => loadSettings();
-    window.addEventListener("portfolioSettingsChange", handleSettingsChange);
-    return () => window.removeEventListener("portfolioSettingsChange", handleSettingsChange);
+    fetchPortfolioSettings();
   }, []);
 
-  function loadSettings() {
-    const settings = loadPortfolioSettings();
-    setPortfolioSettings(settings);
+  async function fetchPortfolioSettings() {
+    try {
+      const res = await fetch("/api/settings/portfolio");
+      if (res.ok) {
+        const data = await res.json();
+        setPortfolioSettings(data);
+      }
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+    }
   }
 
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function HoldingsPage() {
         // 모든 자산을 CAD로 환산
         return {
           totalEquity: (summary?.totalMarketValueCad || 0) + (summary?.totalMarketValueUsd || 0) * fxRate +
-                       (summary?.totalCashCad || 0) + (summary?.totalCashUsd || 0) * fxRate,
+            (summary?.totalCashCad || 0) + (summary?.totalCashUsd || 0) * fxRate,
           marketValue: (summary?.totalMarketValueCad || 0) + (summary?.totalMarketValueUsd || 0) * fxRate,
           cash: (summary?.totalCashCad || 0) + (summary?.totalCashUsd || 0) * fxRate,
           openPnL: summary?.totalOpenPnLCad || 0,
@@ -208,7 +209,7 @@ export default function HoldingsPage() {
         // 모든 자산을 USD로 환산
         return {
           totalEquity: (summary?.totalMarketValueCad || 0) / fxRate + (summary?.totalMarketValueUsd || 0) +
-                       (summary?.totalCashCad || 0) / fxRate + (summary?.totalCashUsd || 0),
+            (summary?.totalCashCad || 0) / fxRate + (summary?.totalCashUsd || 0),
           marketValue: (summary?.totalMarketValueCad || 0) / fxRate + (summary?.totalMarketValueUsd || 0),
           cash: (summary?.totalCashCad || 0) / fxRate + (summary?.totalCashUsd || 0),
           openPnL: (summary?.totalOpenPnLCad || 0) / fxRate,
@@ -322,32 +323,32 @@ export default function HoldingsPage() {
   // "All" 계좌일 때 같은 심볼 합산
   const aggregatedPositions = selectedAccount === "all"
     ? (() => {
-        const map = new Map<string, Position>();
-        for (const pos of filteredPositions) {
-          const key = pos.symbolMapped;
-          const existing = map.get(key);
-          if (existing) {
-            const totalQty = existing.quantity + pos.quantity;
-            const totalCost = existing.totalCost + pos.totalCost;
-            const totalMarketValue = existing.marketValue + pos.marketValue;
-            const totalOpenPnL = existing.openPnL + pos.openPnL;
-            const totalTodayPnL = existing.todayPnL + pos.todayPnL;
-            map.set(key, {
-              ...existing,
-              quantity: totalQty,
-              totalCost,
-              avgCost: totalCost / totalQty,
-              marketValue: totalMarketValue,
-              openPnL: totalOpenPnL,
-              openPnLPercent: totalCost > 0 ? (totalOpenPnL / totalCost) * 100 : 0,
-              todayPnL: totalTodayPnL,
-            });
-          } else {
-            map.set(key, { ...pos });
-          }
+      const map = new Map<string, Position>();
+      for (const pos of filteredPositions) {
+        const key = pos.symbolMapped;
+        const existing = map.get(key);
+        if (existing) {
+          const totalQty = existing.quantity + pos.quantity;
+          const totalCost = existing.totalCost + pos.totalCost;
+          const totalMarketValue = existing.marketValue + pos.marketValue;
+          const totalOpenPnL = existing.openPnL + pos.openPnL;
+          const totalTodayPnL = existing.todayPnL + pos.todayPnL;
+          map.set(key, {
+            ...existing,
+            quantity: totalQty,
+            totalCost,
+            avgCost: totalCost / totalQty,
+            marketValue: totalMarketValue,
+            openPnL: totalOpenPnL,
+            openPnLPercent: totalCost > 0 ? (totalOpenPnL / totalCost) * 100 : 0,
+            todayPnL: totalTodayPnL,
+          });
+        } else {
+          map.set(key, { ...pos });
         }
-        return Array.from(map.values());
-      })()
+      }
+      return Array.from(map.values());
+    })()
     : filteredPositions;
 
   const sortedPositions = aggregatedPositions.sort(
@@ -375,8 +376,8 @@ export default function HoldingsPage() {
             <div>
               <div className="text-xs md:text-sm text-gray-500 mb-1">
                 Total equity ({currencyView === "combined_cad" ? "CAD" :
-                             currencyView === "combined_usd" ? "USD" :
-                             currencyView === "cad" ? "CAD" : "USD"})
+                  currencyView === "combined_usd" ? "USD" :
+                    currencyView === "cad" ? "CAD" : "USD"})
               </div>
               <div className="text-3xl md:text-4xl font-bold text-gray-900">
                 {formatCurrency(displayValues.totalEquity)}
@@ -410,9 +411,8 @@ export default function HoldingsPage() {
                 {/* Net deposits 토글 */}
                 <button
                   onClick={() => setShowNetDeposits(!showNetDeposits)}
-                  className={`flex items-center gap-1.5 transition-opacity ${
-                    showNetDeposits ? "opacity-100" : "opacity-50"
-                  }`}
+                  className={`flex items-center gap-1.5 transition-opacity ${showNetDeposits ? "opacity-100" : "opacity-50"
+                    }`}
                 >
                   <div className={`w-3 h-0.5 rounded-full ${showNetDeposits ? "bg-blue-500" : "bg-gray-300"}`} style={{ backgroundImage: showNetDeposits ? "repeating-linear-gradient(90deg, #3b82f6, #3b82f6 3px, transparent 3px, transparent 6px)" : "none" }} />
                   <span className="text-[10px] md:text-xs text-gray-500 font-medium">Deposits</span>
@@ -535,11 +535,10 @@ export default function HoldingsPage() {
                     </div>
                   </div>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-medium ${
-                  totalPnL >= 0
-                    ? "bg-green-50 text-[#0a8043]"
-                    : "bg-red-50 text-red-500"
-                }`}>
+                <div className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-medium ${totalPnL >= 0
+                  ? "bg-green-50 text-[#0a8043]"
+                  : "bg-red-50 text-red-500"
+                  }`}>
                   {totalPnL >= 0 ? "+" : ""}{((totalPnL / (summary?.netDeposits || 1)) * 100).toFixed(1)}%
                 </div>
               </div>
@@ -590,27 +589,24 @@ export default function HoldingsPage() {
                       return (
                         <div
                           key={a.symbol}
-                          className={`rounded-xl border p-3 ${
-                            isUnderweight ? "border-green-200 bg-green-50/50" : "border-gray-100 bg-white"
-                          }`}
+                          className={`rounded-xl border p-3 ${isUnderweight ? "border-green-200 bg-green-50/50" : "border-gray-100 bg-white"
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-gray-900">{a.symbol}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                a.currency === "CAD"
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-blue-50 text-blue-600"
-                              }`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${a.currency === "CAD"
+                                ? "bg-red-50 text-red-600"
+                                : "bg-blue-50 text-blue-600"
+                                }`}>
                                 {a.currency}
                               </span>
                               {isUnderweight && (
                                 <span className="text-[10px] text-green-600 font-medium">BUY</span>
                               )}
                             </div>
-                            <div className={`text-xs font-medium ${
-                              a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
-                            }`}>
+                            <div className={`text-xs font-medium ${a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
+                              }`}>
                               {a.gap >= 0 ? "+" : ""}{a.gap.toFixed(1)}%
                             </div>
                           </div>
@@ -675,11 +671,10 @@ export default function HoldingsPage() {
                               <td className="py-2.5">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-gray-900">{a.symbol}</span>
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                    a.currency === "CAD"
-                                      ? "bg-red-50 text-red-600"
-                                      : "bg-blue-50 text-blue-600"
-                                  }`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${a.currency === "CAD"
+                                    ? "bg-red-50 text-red-600"
+                                    : "bg-blue-50 text-blue-600"
+                                    }`}>
                                     {a.currency}
                                   </span>
                                   {isUnderweight && (
@@ -689,9 +684,8 @@ export default function HoldingsPage() {
                               </td>
                               <td className="py-2.5 text-right text-gray-600">{a.targetWeight}%</td>
                               <td className="py-2.5 text-right text-gray-600">{a.currentWeight.toFixed(1)}%</td>
-                              <td className={`py-2.5 text-right font-medium ${
-                                a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
-                              }`}>
+                              <td className={`py-2.5 text-right font-medium ${a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
+                                }`}>
                                 {a.gap >= 0 ? "+" : ""}{a.gap.toFixed(1)}%
                               </td>
                               <td className="py-2.5 text-right font-medium text-gray-900">
@@ -739,9 +733,8 @@ export default function HoldingsPage() {
           {/* 요약 섹션 */}
           <div>
             {/* 요약 그리드 - 데스크탑 항상 표시, 모바일 토글 */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${
-              showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
-            }`}>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
+              }`}>
               <div className="grid grid-cols-2 gap-x-4 md:gap-x-16 gap-y-2 md:gap-y-4">
                 {/* 왼쪽 컬럼 */}
                 <div className="space-y-2 md:space-y-4">
@@ -808,21 +801,19 @@ export default function HoldingsPage() {
               <div className="flex gap-6">
                 <button
                   onClick={() => setActiveTab("positions")}
-                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-                    activeTab === "positions"
-                      ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                      : "text-[#5f6368] hover:text-[#3c4043]"
-                  }`}
+                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${activeTab === "positions"
+                    ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+                    : "text-[#5f6368] hover:text-[#3c4043]"
+                    }`}
                 >
                   POSITIONS
                 </button>
                 <button
                   onClick={() => setActiveTab("orders")}
-                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-                    activeTab === "orders"
-                      ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                      : "text-[#5f6368] hover:text-[#3c4043]"
-                  }`}
+                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${activeTab === "orders"
+                    ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+                    : "text-[#5f6368] hover:text-[#3c4043]"
+                    }`}
                 >
                   ORDERS
                 </button>
@@ -866,11 +857,10 @@ export default function HoldingsPage() {
                       return (
                         <div
                           key={idx}
-                          className={`bg-white rounded-xl border transition-all duration-200 ${
-                            isExpanded
-                              ? "border-gray-200 shadow-md"
-                              : "border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200"
-                          }`}
+                          className={`bg-white rounded-xl border transition-all duration-200 ${isExpanded
+                            ? "border-gray-200 shadow-md"
+                            : "border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200"
+                            }`}
                         >
                           {/* 메인 카드 */}
                           <div
@@ -883,11 +873,10 @@ export default function HoldingsPage() {
                                 <span className="text-sm font-bold text-gray-900 tracking-tight">
                                   {pos.symbolMapped.replace(".TO", "")}
                                 </span>
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${
-                                  pos.currency === "CAD"
-                                    ? "bg-red-50 text-red-600 border border-red-100"
-                                    : "bg-blue-50 text-blue-600 border border-blue-100"
-                                }`}>
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${pos.currency === "CAD"
+                                  ? "bg-red-50 text-red-600 border border-red-100"
+                                  : "bg-blue-50 text-blue-600 border border-blue-100"
+                                  }`}>
                                   {pos.currency === "CAD" ? "CAD" : "USD"}
                                 </span>
                                 <span className="text-[9px] text-gray-400 font-medium">
@@ -895,11 +884,10 @@ export default function HoldingsPage() {
                                 </span>
                               </div>
                               {/* P&L 배지 */}
-                              <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                                isPositive
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-red-50 text-red-600"
-                              }`}>
+                              <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPositive
+                                ? "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-600"
+                                }`}>
                                 {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
                               </div>
                             </div>
@@ -929,9 +917,8 @@ export default function HoldingsPage() {
 
                           {/* 확장 영역 */}
                           <div
-                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                              isExpanded ? "max-h-[400px]" : "max-h-0"
-                            }`}
+                            className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? "max-h-[400px]" : "max-h-0"
+                              }`}
                           >
                             <div className="px-4 pb-4 border-t border-gray-100">
                               {/* 상세 그리드 */}
@@ -1021,67 +1008,65 @@ export default function HoldingsPage() {
                           const posValueCad = pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue;
                           const weight = totalMarketValueForWeight > 0 ? (posValueCad / totalMarketValueForWeight) * 100 : 0;
                           return (
-                          <tr
-                            key={idx}
-                            className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
-                          >
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-[#202124] text-sm">
-                                {pos.symbolMapped}
-                              </div>
-                              <div className="text-xs text-[#5f6368] truncate max-w-[200px]">
-                                {pos.symbol !== pos.symbolMapped ? pos.symbol : ""}
-                              </div>
-                            </td>
+                            <tr
+                              key={idx}
+                              className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
+                            >
+                              <td className="py-3 px-4">
+                                <div className="font-medium text-[#202124] text-sm">
+                                  {pos.symbolMapped}
+                                </div>
+                                <div className="text-xs text-[#5f6368] truncate max-w-[200px]">
+                                  {pos.symbol !== pos.symbolMapped ? pos.symbol : ""}
+                                </div>
+                              </td>
 
-                            <td className="py-3 px-4 text-right">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${
-                                pos.todayPnL >= 0
+                              <td className="py-3 px-4 text-right">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${pos.todayPnL >= 0
                                   ? "bg-[#e8f5e9] text-[#137333]"
                                   : "bg-[#fce8e6] text-[#c5221f]"
-                              }`}>
-                                {pos.todayPnL >= 0 ? "+" : ""}
-                                {formatCurrency(pos.todayPnL)}
-                              </span>
-                            </td>
+                                  }`}>
+                                  {pos.todayPnL >= 0 ? "+" : ""}
+                                  {formatCurrency(pos.todayPnL)}
+                                </span>
+                              </td>
 
-                            <td className="py-3 px-4 text-right">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${
-                                  pos.openPnL >= 0
+                              <td className="py-3 px-4 text-right">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${pos.openPnL >= 0
                                     ? "bg-[#e8f5e9] text-[#137333]"
                                     : "bg-[#fce8e6] text-[#c5221f]"
-                                }`}
-                              >
-                                {pos.openPnL >= 0 ? "+" : ""}
-                                {formatCurrency(pos.openPnL)}
-                              </span>
-                            </td>
+                                    }`}
+                                >
+                                  {pos.openPnL >= 0 ? "+" : ""}
+                                  {formatCurrency(pos.openPnL)}
+                                </span>
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {formatNumberTrim(pos.quantity)}
-                            </td>
+                              <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                                {formatNumberTrim(pos.quantity)}
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {formatCurrency(pos.avgCost)}
-                            </td>
+                              <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                                {formatCurrency(pos.avgCost)}
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {formatCurrency(pos.currentPrice)}
-                            </td>
+                              <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                                {formatCurrency(pos.currentPrice)}
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {formatCurrency(pos.marketValue)}
-                            </td>
+                              <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                                {formatCurrency(pos.marketValue)}
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {weight.toFixed(1)}%
-                            </td>
+                              <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                                {weight.toFixed(1)}%
+                              </td>
 
-                            <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
-                              {pos.currency}
-                            </td>
-                          </tr>
+                              <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
+                                {pos.currency}
+                              </td>
+                            </tr>
                           );
                         })}
                       </tbody>

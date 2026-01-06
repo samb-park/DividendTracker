@@ -1,7 +1,7 @@
 export interface TargetAllocation {
   symbol: string;
   targetWeight: number;
-  currency: "CAD" | "USD";
+  currency: 'CAD' | 'USD';
 }
 
 export interface PortfolioSettings {
@@ -28,7 +28,7 @@ export interface AllocationResult {
   weeklyBuyCad: number;
   fxFee: number;
   weeklyBuyActual: number; // CAD for CAD symbols, USD for USD symbols
-  currency: "CAD" | "USD";
+  currency: 'CAD' | 'USD';
 }
 
 export interface AllocationSummary {
@@ -51,14 +51,14 @@ export function calculateWeeklyAllocation(
 
   // 1. Calculate current total portfolio value in CAD
   let totalMarketValueCad = positions.reduce((sum, pos) => {
-    if (pos.currency === "USD") {
+    if (pos.currency === 'USD') {
       return sum + pos.marketValue * fxRate;
     }
     return sum + pos.marketValue;
   }, 0);
 
   // Add cash balance if CASH is in targets
-  const hasCashTarget = targets.some((t) => t.symbol === "CASH");
+  const hasCashTarget = targets.some((t) => t.symbol === 'CASH');
   if (hasCashTarget) {
     totalMarketValueCad += cashBalanceCad;
   }
@@ -70,7 +70,7 @@ export function calculateWeeklyAllocation(
   const allocations: AllocationResult[] = targets.map((target) => {
     // Find ALL matching positions (same symbol across multiple accounts)
     const matchingPositions = positions.filter((p) => {
-      const normalizedSymbol = p.symbolMapped.replace(".TO", "");
+      const normalizedSymbol = p.symbolMapped.replace('.TO', '');
       return (
         normalizedSymbol === target.symbol ||
         p.symbolMapped === target.symbol ||
@@ -80,14 +80,12 @@ export function calculateWeeklyAllocation(
 
     // Calculate current value in CAD (sum all matching positions)
     let currentValueCad = 0;
-    if (target.symbol === "CASH") {
+    if (target.symbol === 'CASH') {
       currentValueCad = cashBalanceCad;
     } else {
       for (const pos of matchingPositions) {
         currentValueCad +=
-          pos.currency === "USD"
-            ? pos.marketValue * fxRate
-            : pos.marketValue;
+          pos.currency === 'USD' ? pos.marketValue * fxRate : pos.marketValue;
       }
     }
 
@@ -122,7 +120,10 @@ export function calculateWeeklyAllocation(
   // Bonus: extra allocation for underweight positions
   // Note: gap > 0 means underweight (target > current), gap < 0 means overweight
 
-  const totalTargetWeight = allocations.reduce((sum, a) => sum + a.targetWeight, 0);
+  const totalTargetWeight = allocations.reduce(
+    (sum, a) => sum + a.targetWeight,
+    0
+  );
   const underweightAllocations = allocations.filter((a) => a.gap > 0); // gap > 0 = underweight
   const totalGapDeficit = underweightAllocations.reduce(
     (sum, a) => sum + a.gap, // positive gaps only
@@ -139,20 +140,24 @@ export function calculateWeeklyAllocation(
     // Base allocation: proportional to target weight
     const baseAmount =
       totalTargetWeight > 0
-        ? (allocation.targetWeight / totalTargetWeight) * weeklyAmount * baseRatio
+        ? (allocation.targetWeight / totalTargetWeight) *
+          weeklyAmount *
+          baseRatio
         : 0;
 
     // Bonus allocation: proportional to how underweight (only for underweight positions)
     let bonusAmount = 0;
-    if (allocation.gap > 0 && totalGapDeficit > 0) { // gap > 0 = underweight
-      bonusAmount = (allocation.gap / totalGapDeficit) * weeklyAmount * bonusRatio;
+    if (allocation.gap > 0 && totalGapDeficit > 0) {
+      // gap > 0 = underweight
+      bonusAmount =
+        (allocation.gap / totalGapDeficit) * weeklyAmount * bonusRatio;
     }
 
     const rawAmount = baseAmount + bonusAmount;
     allocation.weeklyBuyCad = rawAmount;
 
     // Apply FX fee for USD symbols
-    if (allocation.currency === "USD" && allocation.symbol !== "CASH") {
+    if (allocation.currency === 'USD' && allocation.symbol !== 'CASH') {
       const fxFee = rawAmount * (fxFeePercent / 100);
       allocation.fxFee = fxFee;
       totalFxFee += fxFee;
@@ -169,20 +174,4 @@ export function calculateWeeklyAllocation(
     totalWeeklyAmount: weeklyAmount,
     totalMarketValueCad,
   };
-}
-
-/**
- * Load portfolio settings from localStorage
- */
-export function loadPortfolioSettings(): PortfolioSettings | null {
-  if (typeof window === "undefined") return null;
-
-  const saved = localStorage.getItem("portfolioSettings");
-  if (!saved) return null;
-
-  try {
-    return JSON.parse(saved);
-  } catch {
-    return null;
-  }
 }

@@ -96,3 +96,25 @@ model SymbolMapping {
 
   @@map("symbol_mappings")
 }
+
+model PortfolioSettings {
+  id           String             @id @default(uuid())
+  weeklyAmount Float              @default(0) @map("weekly_amount")
+  fxFeePercent Float              @default(1.5) @map("fx_fee_percent")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  targets      AllocationTarget[]
+
+  @@map("portfolio_settings")
+}
+
+model AllocationTarget {
+  id                  String            @id @default(uuid())
+  portfolioSettingsId String            @map("portfolio_settings_id")
+  symbol              String
+  targetWeight        Float             @map("target_weight")
+  currency            String
+  settings            PortfolioSettings @relation(fields: [portfolioSettingsId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioSettingsId, symbol])
+  @@map("allocation_targets")
+}
