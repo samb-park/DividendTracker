@@ -5,6 +5,7 @@ import {
   getDividendSymbols,
   getDividendYears,
 } from "@/lib/calculations/dividends";
+import { calculateProjectedDividends, calculateMonthlyProjectedDividends } from "@/lib/calculations/projectedDividends";
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +32,22 @@ export async function GET(request: NextRequest) {
       // Dividends by symbol
       const dividends = await calculateDividendsBySymbol(year, accountId);
       return NextResponse.json(dividends);
+    }
+
+    if (type === "projected") {
+      // Projected dividends summary
+      const projections = await calculateProjectedDividends(accountId || undefined, year || undefined);
+      return NextResponse.json(projections);
+    }
+
+    if (type === "projectedMonthly") {
+      // Monthly projected dividends (same format as regular monthly dividends)
+      const projections = await calculateMonthlyProjectedDividends(
+        accountId || undefined,
+        year || undefined,
+        symbol || undefined
+      );
+      return NextResponse.json(projections);
     }
 
     // Monthly dividends
