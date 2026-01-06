@@ -19,7 +19,7 @@ RUN npx prisma generate
 COPY . .
 
 # Create initial database with schema
-RUN mkdir -p /app/data && DATABASE_URL="file:/app/data/init.db" npx prisma db push --skip-generate
+RUN mkdir -p /app/data && DATABASE_URL="file:/app/data/init.db" npx prisma db push
 
 # Build Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -46,6 +46,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/data/init.db ./init.db
 
 # Create data directory and npm cache directory
