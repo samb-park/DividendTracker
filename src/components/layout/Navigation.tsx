@@ -59,8 +59,8 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Navigation - Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100 pb-safe">
-        <div className="flex items-center justify-around h-16 px-1">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100">
+        <div className="flex items-center justify-around h-14 px-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -70,44 +70,25 @@ export function Navigation() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex flex-col items-center justify-center flex-1 h-full py-1 transition-all duration-300 ease-out",
+                  "relative flex flex-col items-center justify-center flex-1 h-full transition-all duration-300 ease-out",
                   isActive
                     ? "text-[#0a8043]"
                     : "text-gray-400 active:scale-95"
                 )}
               >
-                {/* Active indicator pill */}
-                <div
+                {/* Icon */}
+                <Icon
                   className={cn(
-                    "absolute top-0.5 w-10 h-[2px] rounded-full transition-all duration-300 ease-out",
-                    isActive
-                      ? "bg-[#0a8043] opacity-100"
-                      : "bg-transparent opacity-0"
+                    "transition-all duration-300 ease-out",
+                    isActive ? "w-5 h-5" : "w-[18px] h-[18px]"
                   )}
+                  strokeWidth={isActive ? 2.2 : 1.8}
                 />
-
-                {/* Icon container with subtle background on active */}
-                <div
-                  className={cn(
-                    "flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-300 ease-out",
-                    isActive
-                      ? "bg-[#0a8043]/10"
-                      : "bg-transparent"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "transition-all duration-300 ease-out",
-                      isActive ? "w-5 h-5" : "w-[18px] h-[18px]"
-                    )}
-                    strokeWidth={isActive ? 2.2 : 1.8}
-                  />
-                </div>
 
                 {/* Label */}
                 <span
                   className={cn(
-                    "text-[9px] font-medium transition-all duration-300 ease-out",
+                    "text-[9px] font-medium mt-0.5 transition-all duration-300 ease-out",
                     isActive
                       ? "opacity-100"
                       : "opacity-60"
@@ -119,6 +100,8 @@ export function Navigation() {
             );
           })}
         </div>
+        {/* Safe area spacer */}
+        <div className="pb-safe" />
       </nav>
 
       {/* Mobile Header - Simple logo only */}

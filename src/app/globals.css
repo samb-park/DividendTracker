@@ -69,14 +69,12 @@
 }
 
 /* Safe area for notched phones */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .h-safe-area-bottom {
-    height: env(safe-area-inset-bottom);
-  }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.h-safe-area-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
 }
