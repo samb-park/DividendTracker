@@ -35,9 +35,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
+# Create non-root user with proper home directory
 RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN adduser --system --uid 1001 --home /app/data nextjs
 
 # Copy built application
 COPY --from=builder /app/public ./public
@@ -48,8 +48,11 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/data/init.db ./init.db
 
-# Create data directory
-RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
+# Create data directory and npm cache directory
+RUN mkdir -p /app/data /app/data/.npm && chown -R nextjs:nodejs /app/data
+
+# Set HOME environment variable
+ENV HOME=/app/data
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./
