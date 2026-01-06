@@ -413,12 +413,6 @@ export default function HomePage() {
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">Capital Return</div>
-            <div className="text-base font-bold mt-0.5">
-              {capitalReturnPercent >= 0 ? "+" : ""}{capitalReturnPercent.toFixed(2)}%
-            </div>
-          </div>
-          <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Net Deposits</div>
             <div className="text-base font-bold mt-0.5">{formatCurrency(summary?.netDeposits || 0)}</div>
           </div>
@@ -426,6 +420,12 @@ export default function HomePage() {
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Dividend Yield</div>
             <div className="text-base font-bold mt-0.5">
               {weightedDividendYield.toFixed(2)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total Return</div>
+            <div className="text-base font-bold mt-0.5">
+              {totalNetReturnPercent >= 0 ? "+" : ""}{totalNetReturnPercent.toFixed(2)}%
             </div>
           </div>
         </div>
@@ -452,12 +452,6 @@ export default function HomePage() {
             <div className="text-[10px] text-white/60 uppercase tracking-wide">CAGR (All Time)</div>
             <div className="text-base font-bold mt-0.5">
               {cagr !== 0 ? (cagr >= 0 ? "+" + cagr.toFixed(2) + "%" : cagr.toFixed(2) + "%") : "N/A"}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total Return</div>
-            <div className="text-base font-bold mt-0.5">
-              {totalNetReturnPercent >= 0 ? "+" : ""}{totalNetReturnPercent.toFixed(2)}%
             </div>
           </div>
         </div>
