@@ -12,6 +12,6 @@ fi
 
 echo "Starting application..."
 # Ensure database schema is up to date
-npx prisma db push --skip-generate
+npx prisma db push
 
 exec "$@"
