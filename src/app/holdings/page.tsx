@@ -115,24 +115,41 @@ export default function HoldingsPage() {
   // Calculate allocation when portfolio or settings change
   useEffect(() => {
     if (portfolio && portfolioSettings && portfolioSettings.targets.length > 0) {
-      const fxRate = portfolio.summary.fxRate || 1.38;
-      const cashBalanceCad = (portfolio.summary.totalCashCad || 0) +
-        (portfolio.summary.totalCashUsd || 0) * fxRate;
+      try {
+        const fxRate = portfolio.summary.fxRate || 1.38;
+        const cashBalanceCad = (portfolio.summary.totalCashCad || 0) +
+          (portfolio.summary.totalCashUsd || 0) * fxRate;
 
-      const allocation = calculateWeeklyAllocation(
-        portfolio.positions.map((p) => ({
-          symbol: p.symbol,
-          symbolMapped: p.symbolMapped,
-          marketValue: p.marketValue,
-          currency: p.currency,
-        })),
-        portfolioSettings,
-        fxRate,
-        cashBalanceCad
-      );
+        console.log("Calculating allocation with:", {
+          positions: portfolio.positions.length,
+          targets: portfolioSettings.targets.length,
+          fxRate,
+        });
 
-      setAllocationSummary(allocation);
+        const allocation = calculateWeeklyAllocation(
+          portfolio.positions.map((p) => ({
+            symbol: p.symbol,
+            symbolMapped: p.symbolMapped,
+            marketValue: p.marketValue,
+            currency: p.currency,
+          })),
+          portfolioSettings,
+          fxRate,
+          cashBalanceCad
+        );
+
+        console.log("Allocation result:", allocation);
+        setAllocationSummary(allocation);
+      } catch (error) {
+        console.error("Allocation calculation error:", error);
+        setAllocationSummary(null);
+      }
     } else {
+      console.log("Skipping allocation - missing data:", {
+        hasPortfolio: !!portfolio,
+        hasSettings: !!portfolioSettings,
+        targetsLength: portfolioSettings?.targets?.length,
+      });
       setAllocationSummary(null);
     }
   }, [portfolio, portfolioSettings]);
@@ -576,7 +593,7 @@ export default function HoldingsPage() {
               </button>
 
               {/* Content */}
-              <div className={`overflow-hidden transition-all duration-300 ${showAllocation ? "max-h-[600px]" : "max-h-0"}`}>
+              <div className={`overflow-hidden transition-all duration-300 ${showAllocation ? "" : "max-h-0"}`}>
                 <div className="px-4 pb-4">
                   {/* Mobile Card View */}
                   <div className="md:hidden space-y-2">
