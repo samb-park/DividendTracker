@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, BarChart3, Settings, DollarSign, Star, Search, X } from "lucide-react";
+import { Home, BarChart3, Settings, DollarSign, Star, Search, X, Sprout } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const navItems = [
@@ -70,8 +70,8 @@ export function Navigation() {
               {/* Logo / Search */}
               <div className="flex items-center gap-2">
                 <Link href="/" className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0a8043] to-[#16a34a] flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#15803d] to-[#84cc16] flex items-center justify-center">
+                    <Sprout className="w-5 h-5 text-white fill-white/20" />
                   </div>
                 </Link>
                 {/* Desktop Search */}
@@ -175,11 +175,11 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Header - Search */}
-      <header className="md:hidden bg-white border-b border-gray-100 sticky top-0 z-40">
+      <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40">
         <div className="flex items-center justify-between h-14 px-4">
           {searchOpen ? (
             <div className="flex-1 flex items-center gap-2">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-full">
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-100/50 rounded-full border border-gray-200/50">
                 <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <input
                   ref={inputRef}
@@ -203,17 +203,17 @@ export function Navigation() {
             </div>
           ) : (
             <>
-              <Link href="/" className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0a8043] to-[#16a34a] flex items-center justify-center">
-                  <BarChart3 className="w-4 h-4 text-white" />
+              <Link href="/" className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#15803d] to-[#84cc16] flex items-center justify-center shadow-lg shadow-lime-900/20">
+                  <Sprout className="w-5 h-5 text-white fill-white/20" />
                 </div>
-                <span className="text-base font-semibold text-gray-900 tracking-tight">
-                  Portfolio
+                <span className="text-xl font-bold text-gray-900 tracking-tight">
+                  Spark
                 </span>
               </Link>
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-2 rounded-full hover:bg-gray-100/50 transition-colors"
               >
                 <Search className="w-5 h-5 text-gray-600" />
               </button>

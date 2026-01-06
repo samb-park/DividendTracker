@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { calculatePositions } from "@/lib/calculations/positions";
-import { calculateCashBalances } from "@/lib/calculations/cash";
-import { calculateNetDeposits } from "@/lib/calculations/netDeposits";
-import { getCachedQuotes, getCachedFxRate } from "@/lib/market/cache";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { calculatePositions } from '@/lib/calculations/positions';
+import { calculateCashBalances } from '@/lib/calculations/cash';
+import { calculateNetDeposits } from '@/lib/calculations/netDeposits';
+import { getCachedQuotes, getCachedFxRate } from '@/lib/market/cache';
 
 export interface PositionWithMarket {
   symbol: string;
@@ -41,13 +41,14 @@ export interface PortfolioSummary {
     totalTodayPnLCad: number;
     netDeposits: number;
     fxRate: number;
+    firstTransactionDate: string | null;
   };
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const accountId = searchParams.get("accountId");
+    const accountId = searchParams.get('accountId');
 
     // 계좌 정보
     let account = null;
@@ -57,8 +58,41 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // First Transaction Date (for CAGR)
+    const firstTx = await prisma.transaction.findFirst({
+      where: accountId ? { accountId } : {},
+      orderBy: { settlementDate: 'asc' },
+      select: { settlementDate: true },
+    });
+    const firstTransactionDate = firstTx
+      ? firstTx.settlementDate.toISOString()
+      : null;
+
     // 포지션 계산
     const positions = await calculatePositions(accountId);
+
+    // ... existing code ...
+
+    const response: PortfolioSummary = {
+      account,
+      positions: positionsWithMarket,
+      cashBalances: cashBalances.map((c) => ({
+        currency: c.currency,
+        balance: c.balance,
+      })),
+      summary: {
+        totalMarketValueCad,
+        totalMarketValueUsd,
+        totalCashCad,
+        totalCashUsd,
+        totalEquityCad,
+        totalOpenPnLCad,
+        totalTodayPnLCad,
+        netDeposits: netDepositsResult.totalNetDeposits,
+        fxRate,
+        firstTransactionDate,
+      },
+    };
 
     // 시세 조회에 필요한 심볼 목록
     const symbols = [...new Set(positions.map((p) => p.symbolMapped))];
@@ -79,13 +113,17 @@ export async function GET(request: NextRequest) {
 
       const marketValue = pos.quantity * currentPrice;
       const openPnL = marketValue - pos.totalCost;
-      const openPnLPercent = pos.totalCost > 0 ? (openPnL / pos.totalCost) * 100 : 0;
+      const openPnLPercent =
+        pos.totalCost > 0 ? (openPnL / pos.totalCost) * 100 : 0;
 
       const todayPnL = pos.quantity * (currentPrice - previousClose);
-      const todayPnLPercent = previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0;
+      const todayPnLPercent =
+        previousClose > 0
+          ? ((currentPrice - previousClose) / previousClose) * 100
+          : 0;
 
       // CAD 환산
-      const isCad = pos.currency === "CAD" || pos.symbolMapped.endsWith(".TO");
+      const isCad = pos.currency === 'CAD' || pos.symbolMapped.endsWith('.TO');
       if (isCad) {
         totalMarketValueCad += marketValue;
         totalCostCad += pos.totalCost;
@@ -114,7 +152,7 @@ export async function GET(request: NextRequest) {
     let totalCashUsd = 0;
 
     for (const cash of cashBalances) {
-      if (cash.currency === "CAD") {
+      if (cash.currency === 'CAD') {
         totalCashCad += cash.balance;
       } else {
         totalCashUsd += cash.balance;
@@ -132,7 +170,9 @@ export async function GET(request: NextRequest) {
       totalCashUsd * fxRate;
 
     const totalOpenPnLCad =
-      totalMarketValueCad - totalCostCad + (totalMarketValueUsd - totalCostUsd) * fxRate;
+      totalMarketValueCad -
+      totalCostCad +
+      (totalMarketValueUsd - totalCostUsd) * fxRate;
 
     const response: PortfolioSummary = {
       account,
@@ -156,9 +196,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Portfolio API error:", error);
+    console.error('Portfolio API error:', error);
     return NextResponse.json(
-      { error: "포트폴리오 조회 실패" },
+      { error: '포트폴리오 조회 실패' },
       { status: 500 }
     );
   }

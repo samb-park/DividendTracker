@@ -14,7 +14,7 @@ import {
   Cell,
 } from "recharts";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -102,6 +102,7 @@ export default function HomePage() {
   const [totalReceivedDividends, setTotalReceivedDividends] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("1y");
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -128,7 +129,7 @@ export default function HomePage() {
       const [portfolioRes, equityRes, transactionsRes, yahooRes] = await Promise.all([
         fetch(`/api/portfolio${accountParam ? `?${accountParam}` : ""}`),
         fetch(`/api/equity-history?period=${selectedPeriod}${accountParam ? `&${accountParam}` : ""}`),
-        fetch(`/api/transactions?type=DIV${accountParam ? `&${accountParam}` : ""}`),
+        fetch(`/api/transactions?type=DIV&limit=10000${accountParam ? `&${accountParam}` : ""}`),
         fetch(`/api/dividends?type=yahooProjected${accountParam ? `&${accountParam}` : ""}`),
       ]);
 
@@ -142,23 +143,30 @@ export default function HomePage() {
       setEquityHistory(equityData);
       setYahooProjections(yahooData);
 
+      // Define fxRate early for use in calculations
+      const currentFxRate = portfolioData.summary?.fxRate || 1.44;
+
       // 배당금 요약 (DIV 트랜잭션에서 추출)
       const divMap = new Map<string, DividendSummary>();
       const divTransactions = transactionsData.transactions || [];
       let totalDivReceived = 0;
       for (const tx of divTransactions) {
         if (tx.action !== "DIV" || !tx.symbolMapped || tx.netAmount <= 0) continue;
+
+        // Calculate CAD value for total
+        const amountCad = tx.currency === "USD" ? tx.netAmount * currentFxRate : tx.netAmount;
+        totalDivReceived += amountCad;
+
         const key = tx.symbolMapped;
-        totalDivReceived += tx.netAmount;
         const existing = divMap.get(key);
         if (existing) {
-          existing.totalAmount += tx.netAmount;
+          existing.totalAmount += amountCad; // Accumulate in CAD for consistent sorting
           existing.paymentCount++;
         } else {
           divMap.set(key, {
             symbol: tx.symbolMapped,
-            totalAmount: tx.netAmount,
-            currency: tx.currency,
+            totalAmount: amountCad, // Store in CAD
+            currency: "CAD", // Normalized to CAD
             paymentCount: 1,
           });
         }
@@ -182,11 +190,7 @@ export default function HomePage() {
 
   const fxRate = summary?.fxRate || 1.44;
 
-  // 총 수익률 계산
   const totalPnL = (summary?.totalEquityCad || 0) - (summary?.netDeposits || 0);
-  const totalReturnPercent = (summary?.netDeposits || 0) > 0
-    ? (totalPnL / (summary?.netDeposits || 1)) * 100
-    : 0;
 
   // 포트폴리오 가중 평균 배당 수익률 계산
   const weightedDividendYield = (() => {
@@ -222,34 +226,55 @@ export default function HomePage() {
     return total;
   })();
 
-  // CAGR 계산 (투자 기간 기반)
+  // CAGR Calculation (Lifetime)
   const cagr = (() => {
-    if (equityHistory.length < 2) return 0;
+    // Only calculate CAGR if we are viewing 'all time' to ensure accurate lifetime duration
+    if (selectedPeriod !== "inception" || equityHistory.length < 2) {
+      console.log("CAGR Debug: Not inception or insufficient history", selectedPeriod, equityHistory.length);
+      return 0;
+    }
 
     const firstDate = new Date(equityHistory[0].date);
     const lastDate = new Date(equityHistory[equityHistory.length - 1].date);
     const years = (lastDate.getTime() - firstDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
-    if (years < 0.1) return 0; // 너무 짧은 기간
+    console.log("CAGR Debug:", {
+      firstDate: equityHistory[0].date,
+      lastDate: equityHistory[equityHistory.length - 1].date,
+      years
+    });
+
+    if (years < 0.1) return 0;
 
     const startValue = summary?.netDeposits || 1;
     const endValue = summary?.totalEquityCad || 0;
 
+    console.log("CAGR Debug:", { startValue, endValue, years });
+
     if (startValue <= 0 || endValue <= 0) return 0;
 
-    // CAGR = (EndValue / StartValue)^(1/years) - 1
     return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
   })();
 
-  // 배당 포함 총 수익률 (배당금 + 자본이득)
-  const totalReturnWithDividends = (() => {
-    const netDeposits = summary?.netDeposits || 0;
-    if (netDeposits <= 0) return 0;
+  // 1. Capital Return (Price Appreciation Only)
+  // Capital Gain % = Total Open PnL / Total Cost
+  // Total Cost = Market Value - Open PnL
+  const capitalReturnPercent = (() => {
+    const marketVal = summary?.totalMarketValueCad || 0;
+    const openPnl = summary?.totalOpenPnLCad || 0;
+    const cost = marketVal - openPnl;
+    if (cost <= 0) return 0;
+    return (openPnl / cost) * 100;
+  })();
 
-    const capitalGain = (summary?.totalEquityCad || 0) - netDeposits;
-    const totalReturn = capitalGain + totalReceivedDividends;
-
-    return (totalReturn / netDeposits) * 100;
+  // 2. Total Net Return (Real Total Return)
+  // (Total Equity - Net Deposits) / Net Deposits
+  // This includes Dividends (Cash) + Capital Gains
+  const totalNetReturnPercent = (() => {
+    const equity = summary?.totalEquityCad || 0;
+    const deposits = summary?.netDeposits || 0;
+    if (deposits <= 0) return 0;
+    return ((equity - deposits) / deposits) * 100;
   })();
 
   // 포지션 합산 (같은 심볼)
@@ -331,10 +356,15 @@ export default function HomePage() {
     );
   }
 
+
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* 상단 그린 배너 - 핵심 메트릭 포함 */}
-      <div className="bg-gradient-to-r from-[#0a8043] to-[#16a34a] rounded-xl p-4 md:p-5 text-white">
+      <div
+        className="bg-gradient-to-r from-[#0a8043] to-[#16a34a] rounded-xl p-4 md:p-5 text-white cursor-pointer transition-all hover:shadow-lg"
+        onClick={() => setShowDetails(!showDetails)}
+      >
         {/* 메인 메트릭 - Total Equity + Account Select */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -343,22 +373,29 @@ export default function HomePage() {
               {formatCurrency(summary?.totalEquityCad || 0)}
             </div>
           </div>
-          <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-            <SelectTrigger className="w-[100px] md:w-[120px] bg-white/20 border-white/30 text-white hover:bg-white/30">
-              <SelectValue placeholder="Account" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {accounts.map((acc) => (
-                <SelectItem key={acc.id} value={acc.id}>
-                  {acc.accountType}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={selectedAccount} onValueChange={(v) => {
+              if (v) setSelectedAccount(v);
+            }}>
+              <SelectTrigger
+                className="w-[100px] md:w-[120px] bg-white/20 border-white/30 text-white hover:bg-white/30"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <SelectValue placeholder="Account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {accounts.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id}>
+                    {acc.accountType}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* 서브 메트릭 그리드 - 1행 */}
+        {/* 서브 메트릭 그리드 - 1행 (Always Visible) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-white/20">
           <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Today&apos;s P&amp;L</div>
@@ -367,9 +404,9 @@ export default function HomePage() {
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total Return</div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Capital Return</div>
             <div className="text-base font-bold mt-0.5">
-              {totalPnL >= 0 ? "+" : ""}{totalReturnPercent.toFixed(2)}%
+              {capitalReturnPercent >= 0 ? "+" : ""}{capitalReturnPercent.toFixed(2)}%
             </div>
           </div>
           <div>
@@ -377,18 +414,18 @@ export default function HomePage() {
             <div className="text-base font-bold mt-0.5">{formatCurrency(summary?.netDeposits || 0)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">FX Rate</div>
-            <div className="text-base font-bold mt-0.5">1 USD = {fxRate.toFixed(4)} CAD</div>
-          </div>
-        </div>
-
-        {/* 서브 메트릭 그리드 - 2행 (배당 & 성과) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 mt-3 border-t border-white/20">
-          <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Dividend Yield</div>
             <div className="text-base font-bold mt-0.5">
               {weightedDividendYield.toFixed(2)}%
             </div>
+          </div>
+        </div>
+
+        {/* 서브 메트릭 그리드 - 2행 (Collapsible Details) */}
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 transition-all duration-300 overflow-hidden ${showDetails ? "pt-3 mt-3 border-t border-white/20 opacity-100 max-h-[500px]" : "max-h-0 opacity-0"}`}>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">FX Rate</div>
+            <div className="text-base font-bold mt-0.5">1 USD = {fxRate.toFixed(4)} CAD</div>
           </div>
           <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Est. Annual Div</div>
@@ -397,17 +434,28 @@ export default function HomePage() {
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">CAGR</div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total Dividends</div>
             <div className="text-base font-bold mt-0.5">
-              {cagr >= 0 ? "+" : ""}{cagr.toFixed(2)}%
+              {formatCurrency(totalReceivedDividends)}
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total w/ Div</div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">CAGR (All Time)</div>
             <div className="text-base font-bold mt-0.5">
-              {totalReturnWithDividends >= 0 ? "+" : ""}{totalReturnWithDividends.toFixed(2)}%
+              {cagr !== 0 ? (cagr >= 0 ? "+" + cagr.toFixed(2) + "%" : cagr.toFixed(2) + "%") : "N/A"}
             </div>
           </div>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total Return</div>
+            <div className="text-base font-bold mt-0.5">
+              {totalNetReturnPercent >= 0 ? "+" : ""}{totalNetReturnPercent.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle Indicator */}
+        <div className="flex justify-center mt-2 opacity-50">
+          {showDetails ? <ChevronUp className="w-4 h-4 text-white" /> : <ChevronDown className="w-4 h-4 text-white" />}
         </div>
       </div>
 
@@ -529,11 +577,10 @@ export default function HomePage() {
                     <span className="text-sm font-semibold text-gray-900">
                       {pos.symbolMapped.replace(".TO", "")}
                     </span>
-                    <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
-                      pos.currency === "CAD"
-                        ? "bg-red-50 text-red-600"
-                        : "bg-blue-50 text-blue-600"
-                    }`}>
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${pos.currency === "CAD"
+                      ? "bg-red-50 text-red-600"
+                      : "bg-blue-50 text-blue-600"
+                      }`}>
                       {pos.currency}
                     </span>
                   </div>
