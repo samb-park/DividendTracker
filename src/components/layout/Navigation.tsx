@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, BarChart3, Receipt, User, DollarSign } from "lucide-react";
+import { Home, BarChart3, Receipt, Settings, DollarSign } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "HOME", icon: Home },
   { href: "/holdings", label: "HOLDINGS", icon: BarChart3 },
-  { href: "/transactions", label: "TRANSACTIONS", icon: Receipt },
-  { href: "/accounts", label: "ACCOUNTS", icon: User },
   { href: "/dividends", label: "DIVIDENDS", icon: DollarSign },
+  { href: "/transactions", label: "TRANS", icon: Receipt },
+  { href: "/settings", label: "SETTINGS", icon: Settings },
 ];
 
 export function Navigation() {
