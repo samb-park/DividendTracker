@@ -30,7 +30,30 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { weeklyAmount, fxFeePercent, targets } = body;
+    console.log(
+      '[API] Portfolio Settings POST:',
+      JSON.stringify(body, null, 2)
+    );
+
+    const { weeklyAmount, fxFeePercent, targets = [] } = body;
+
+    // Validate inputs
+    if (!Array.isArray(targets)) {
+      throw new Error('Targets must be an array');
+    }
+
+    // Deduplicate targets by symbol to prevent unique constraint violations
+    const uniqueTargetsMap = new Map();
+    targets.forEach((t: any) => {
+      if (t.symbol) {
+        uniqueTargetsMap.set(t.symbol, t);
+      }
+    });
+    const uniqueTargets = Array.from(uniqueTargetsMap.values());
+
+    console.log(
+      `[API] Processing ${uniqueTargets.length} unique targets (original: ${targets.length})`
+    );
 
     // Use transaction to ensure consistency
     const settings = await prisma.$transaction(async (tx) => {
@@ -39,20 +62,22 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         // Update existing
+        // First, remove old targets
         await tx.allocationTarget.deleteMany({
           where: { portfolioSettingsId: existing.id },
         });
 
+        // Then update settings and re-create targets
         return await tx.portfolioSettings.update({
           where: { id: existing.id },
           data: {
             weeklyAmount,
             fxFeePercent,
             targets: {
-              create: targets.map((t: any) => ({
+              create: uniqueTargets.map((t: any) => ({
                 symbol: t.symbol,
-                targetWeight: t.targetWeight,
-                currency: t.currency,
+                targetWeight: parseFloat(t.targetWeight),
+                currency: t.currency || 'CAD', // Default to CAD if missing
               })),
             },
           },
@@ -65,10 +90,10 @@ export async function POST(request: NextRequest) {
             weeklyAmount,
             fxFeePercent,
             targets: {
-              create: targets.map((t: any) => ({
+              create: uniqueTargets.map((t: any) => ({
                 symbol: t.symbol,
-                targetWeight: t.targetWeight,
-                currency: t.currency,
+                targetWeight: parseFloat(t.targetWeight),
+                currency: t.currency || 'CAD',
               })),
             },
           },
@@ -81,7 +106,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Failed to save settings:', error);
     return NextResponse.json(
-      { error: 'Failed to save settings' },
+      {
+        error: 'Failed to save settings',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
