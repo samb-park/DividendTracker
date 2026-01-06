@@ -228,31 +228,40 @@ export default function HomePage() {
 
   // CAGR Calculation (Lifetime)
   const cagr = (() => {
-    // Only calculate CAGR if we are viewing 'all time' to ensure accurate lifetime duration
-    if (selectedPeriod !== "inception" || equityHistory.length < 2) {
-      console.log("CAGR Debug: Not inception or insufficient history", selectedPeriod, equityHistory.length);
-      return 0;
+    // 1. Determine Start Date (First Transaction Date)
+    // We prefer the true first transaction date from the API summary.
+    let startDate: Date | null = null;
+    const firstTxDateStr = (summary as any)?.firstTransactionDate;
+
+    if (firstTxDateStr) {
+      startDate = new Date(firstTxDateStr);
+    } else if (equityHistory.length > 0) {
+      // Fallback: use oldest equity history point (risky if period is not ALL, but better than 0)
+      startDate = new Date(equityHistory[0].date);
     }
 
-    const firstDate = new Date(equityHistory[0].date);
-    const lastDate = new Date(equityHistory[equityHistory.length - 1].date);
-    const years = (lastDate.getTime() - firstDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (!startDate) return 0;
 
-    console.log("CAGR Debug:", {
-      firstDate: equityHistory[0].date,
-      lastDate: equityHistory[equityHistory.length - 1].date,
-      years
-    });
+    // 2. Determine End Date (Now)
+    const endDate = new Date();
 
+    // 3. Calculate Years Active
+    // Avoid division by zero or very short periods
+    const years = (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
     if (years < 0.1) return 0;
 
-    const startValue = summary?.netDeposits || 1;
+    // 4. Get Start and End Values
+    // Start Value: Net Deposits (Total Capital Invested)
+    // End Value: Total Equity (Current Portfolio Value)
+    const startValue = summary?.netDeposits || 0;
     const endValue = summary?.totalEquityCad || 0;
 
-    console.log("CAGR Debug:", { startValue, endValue, years });
-
+    // 5. Validate Values
+    // If Net Deposits is 0 or negative (e.g. huge withdrawals), CAGR is undefined.
     if (startValue <= 0 || endValue <= 0) return 0;
 
+    // 6. Calculate CAGR
+    // Formula: (End / Start) ^ (1 / n) - 1
     return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
   })();
 

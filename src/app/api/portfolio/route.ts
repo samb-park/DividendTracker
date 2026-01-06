@@ -71,35 +71,12 @@ export async function GET(request: NextRequest) {
     // 포지션 계산
     const positions = await calculatePositions(accountId);
 
-    // ... existing code ...
-
-    const response: PortfolioSummary = {
-      account,
-      positions: positionsWithMarket,
-      cashBalances: cashBalances.map((c) => ({
-        currency: c.currency,
-        balance: c.balance,
-      })),
-      summary: {
-        totalMarketValueCad,
-        totalMarketValueUsd,
-        totalCashCad,
-        totalCashUsd,
-        totalEquityCad,
-        totalOpenPnLCad,
-        totalTodayPnLCad,
-        netDeposits: netDepositsResult.totalNetDeposits,
-        fxRate,
-        firstTransactionDate,
-      },
-    };
-
     // 시세 조회에 필요한 심볼 목록
     const symbols = [...new Set(positions.map((p) => p.symbolMapped))];
     const quotes = await getCachedQuotes(symbols);
     const fxRate = await getCachedFxRate();
 
-    // 포지션에 시세 정보 추가
+    // 포지션에 시세 정보 추가 및 총계 계산
     let totalMarketValueCad = 0;
     let totalMarketValueUsd = 0;
     let totalCostCad = 0;
@@ -191,6 +168,7 @@ export async function GET(request: NextRequest) {
         totalTodayPnLCad,
         netDeposits: netDepositsResult.totalNetDeposits,
         fxRate,
+        firstTransactionDate,
       },
     };
 
