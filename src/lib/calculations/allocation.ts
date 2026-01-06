@@ -115,26 +115,45 @@ export function calculateWeeklyAllocation(
     };
   });
 
-  // 4. Distribute weekly amount ONLY to underweight positions
-  // Overweight positions (gap <= 0) get nothing
-  // Underweight positions get allocated proportionally to their gap (how much they need)
+  // 4. Distribute weekly amount: base allocation + bonus for underweight
+  // Base: proportional to target weight (everyone gets their fair share)
+  // Bonus: extra allocation for underweight positions
+  // Note: gap > 0 means underweight (target > current), gap < 0 means overweight
 
-  const underweightAllocations = allocations.filter((a) => a.gap > 0); // gap > 0 = underweight
-  const totalGapDeficit = underweightAllocations.reduce(
-    (sum, a) => sum + a.gap,
+  const totalTargetWeight = allocations.reduce(
+    (sum, a) => sum + a.targetWeight,
     0
   );
+  const underweightAllocations = allocations.filter((a) => a.gap > 0); // gap > 0 = underweight
+  const totalGapDeficit = underweightAllocations.reduce(
+    (sum, a) => sum + a.gap, // positive gaps only
+    0
+  );
+
+  // Split: 50% base allocation, 50% gap-based bonus (adjustable)
+  const baseRatio = totalGapDeficit > 0 ? 0.5 : 1.0; // If no underweight, 100% base
+  const bonusRatio = 1 - baseRatio;
 
   let totalFxFee = 0;
 
   allocations.forEach((allocation) => {
-    // Only allocate to underweight positions
-    let rawAmount = 0;
+    // Base allocation: proportional to target weight
+    const baseAmount =
+      totalTargetWeight > 0
+        ? (allocation.targetWeight / totalTargetWeight) *
+          weeklyAmount *
+          baseRatio
+        : 0;
+
+    // Bonus allocation: proportional to how underweight (only for underweight positions)
+    let bonusAmount = 0;
     if (allocation.gap > 0 && totalGapDeficit > 0) {
-      // Distribute proportionally to gap (how underweight each position is)
-      rawAmount = (allocation.gap / totalGapDeficit) * weeklyAmount;
+      // gap > 0 = underweight
+      bonusAmount =
+        (allocation.gap / totalGapDeficit) * weeklyAmount * bonusRatio;
     }
 
+    const rawAmount = baseAmount + bonusAmount;
     allocation.weeklyBuyCad = rawAmount;
 
     // Apply FX fee for USD symbols
