@@ -683,8 +683,13 @@ export default function HoldingsPage() {
                       const posValueCad = pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue;
                       const weight = totalMarketValueForWeight > 0 ? (posValueCad / totalMarketValueForWeight) * 100 : 0;
 
-                      // Allocation Data
-                      const allocation = allocationSummary?.allocations.find(a => a.symbol === pos.symbol);
+                      // Allocation Data - match by normalized symbol
+                      const normalizedSymbol = pos.symbolMapped.replace('.TO', '');
+                      const allocation = allocationSummary?.allocations.find(a =>
+                        a.symbol === normalizedSymbol ||
+                        a.symbol === pos.symbolMapped ||
+                        a.symbol === pos.symbol
+                      );
                       const hasAllocationTarget = allocation && allocation.targetWeight > 0;
                       const shouldBuy = allocation && allocation.weeklyBuyActual > 0;
 
