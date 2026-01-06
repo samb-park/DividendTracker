@@ -645,27 +645,27 @@ export default function HoldingsPage() {
                           {/* 메인 카드 */}
                           <div
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
-                            className="p-4 cursor-pointer"
+                            className="px-3 py-2.5 cursor-pointer"
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-1.5">
                               {/* 심볼 + 통화 배지 + 비중 */}
-                              <div className="flex items-center gap-2">
-                                <span className="text-base font-bold text-gray-900 tracking-tight">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-gray-900 tracking-tight">
                                   {pos.symbolMapped.replace(".TO", "")}
                                 </span>
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${
                                   pos.currency === "CAD"
                                     ? "bg-red-50 text-red-600 border border-red-100"
                                     : "bg-blue-50 text-blue-600 border border-blue-100"
                                 }`}>
                                   {pos.currency === "CAD" ? "CAD" : "USD"}
                                 </span>
-                                <span className="text-[10px] text-gray-400 font-medium">
+                                <span className="text-[9px] text-gray-400 font-medium">
                                   {weight.toFixed(1)}%
                                 </span>
                               </div>
                               {/* P&L 배지 */}
-                              <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                                 isPositive
                                   ? "bg-green-50 text-green-700"
                                   : "bg-red-50 text-red-600"
@@ -677,37 +677,23 @@ export default function HoldingsPage() {
                             {/* 수량 & 평균가 / 현재가 */}
                             <div className="flex items-end justify-between">
                               <div>
-                                <div className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">
-                                  {formatNumber(pos.quantity, 2)} shares
+                                <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
+                                  {formatNumber(pos.quantity, 4)} shares
                                 </div>
-                                <div className="text-sm text-gray-600">
+                                <div className="text-xs text-gray-600">
                                   <span className="text-gray-400">@</span> ${formatNumber(pos.avgCost, 2)}
-                                  <span className="mx-1.5 text-gray-300">→</span>
+                                  <span className="mx-1 text-gray-300">→</span>
                                   <span className="font-medium text-gray-900">${formatNumber(pos.currentPrice, 2)}</span>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-lg font-bold text-gray-900">
+                                <div className="text-base font-bold text-gray-900">
                                   ${formatNumber(pos.marketValue, 0)}
                                 </div>
-                                <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                <div className={`text-[11px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
                                   {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 0)}
                                 </div>
                               </div>
-                            </div>
-
-                            {/* 확장 표시 */}
-                            <div className="flex justify-center mt-2">
-                              <svg
-                                className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${
-                                  isExpanded ? "rotate-180" : ""
-                                }`}
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
                             </div>
                           </div>
 
