@@ -559,191 +559,6 @@ export default function HoldingsPage() {
             )}
           </div>
 
-          {/* Weekly Allocation Plan */}
-          {allocationSummary && portfolioSettings && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              {/* Header */}
-              <button
-                onClick={() => setShowAllocation(!showAllocation)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-xs font-semibold tracking-wider text-[#0a8043] uppercase">
-                    Weekly Allocation
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="font-medium">C${portfolioSettings.weeklyAmount}/week</span>
-                    <span className="text-gray-300">|</span>
-                    <span>FX {portfolioSettings.fxFeePercent}%</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/settings/targets"
-                    onClick={(e) => e.stopPropagation()}
-                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    <Settings2 className="w-4 h-4 text-gray-400" />
-                  </Link>
-                  {showAllocation ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  )}
-                </div>
-              </button>
-
-              {/* Content */}
-              <div className={`overflow-hidden transition-all duration-300 ${showAllocation ? "" : "max-h-0"}`}>
-                <div className="px-4 pb-4">
-                  {/* Mobile Card View */}
-                  <div className="md:hidden space-y-2">
-                    {allocationSummary.allocations.map((a) => {
-                      const isUnderweight = a.gap > 1; // gap > 0 means underweight (target > current)
-                      return (
-                        <div
-                          key={a.symbol}
-                          className={`rounded-xl border p-3 ${isUnderweight ? "border-green-200 bg-green-50/50" : "border-gray-100 bg-white"
-                            }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-gray-900">{a.symbol}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${a.currency === "CAD"
-                                ? "bg-red-50 text-red-600"
-                                : "bg-blue-50 text-blue-600"
-                                }`}>
-                                {a.currency}
-                              </span>
-                              {isUnderweight && (
-                                <span className="text-[10px] text-green-600 font-medium">BUY</span>
-                              )}
-                            </div>
-                            <div className={`text-xs font-medium ${a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
-                              }`}>
-                              {a.gap >= 0 ? "+" : ""}{a.gap.toFixed(1)}%
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                            <span>Target: {a.targetWeight}%</span>
-                            <span>Current: {a.currentWeight.toFixed(1)}%</span>
-                          </div>
-                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                            <div>
-                              <div className="text-[10px] text-gray-400">Invest</div>
-                              <div className="text-sm font-semibold text-gray-900">
-                                C${a.weeklyBuyCad.toFixed(2)}
-                              </div>
-                            </div>
-                            {a.currency === "USD" && a.symbol !== "CASH" ? (
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-400">Buy (after FX fee)</div>
-                                <div className="text-sm font-semibold text-[#0a8043]">
-                                  ${a.weeklyBuyActual.toFixed(2)} USD
-                                </div>
-                                <div className="text-[10px] text-gray-400">
-                                  Fee: C${a.fxFee.toFixed(2)}
-                                </div>
-                              </div>
-                            ) : a.symbol === "CASH" ? (
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-400">Keep as cash</div>
-                                <div className="text-sm font-medium text-gray-500">-</div>
-                              </div>
-                            ) : (
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-400">Buy</div>
-                                <div className="text-sm font-semibold text-[#0a8043]">
-                                  C${a.weeklyBuyActual.toFixed(2)}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 text-xs font-normal text-gray-500">Symbol</th>
-                          <th className="text-right py-2 text-xs font-normal text-gray-500">Target</th>
-                          <th className="text-right py-2 text-xs font-normal text-gray-500">Current</th>
-                          <th className="text-right py-2 text-xs font-normal text-gray-500">Gap</th>
-                          <th className="text-right py-2 text-xs font-normal text-gray-500">Invest (CAD)</th>
-                          <th className="text-right py-2 text-xs font-normal text-gray-500">Buy (Actual)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allocationSummary.allocations.map((a) => {
-                          const isUnderweight = a.gap > 1; // gap > 0 means underweight (target > current)
-                          return (
-                            <tr key={a.symbol} className={isUnderweight ? "bg-green-50/50" : ""}>
-                              <td className="py-2.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-gray-900">{a.symbol}</span>
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${a.currency === "CAD"
-                                    ? "bg-red-50 text-red-600"
-                                    : "bg-blue-50 text-blue-600"
-                                    }`}>
-                                    {a.currency}
-                                  </span>
-                                  {isUnderweight && (
-                                    <span className="text-[10px] text-green-600 font-medium">BUY</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-2.5 text-right text-gray-600">{a.targetWeight}%</td>
-                              <td className="py-2.5 text-right text-gray-600">{a.currentWeight.toFixed(1)}%</td>
-                              <td className={`py-2.5 text-right font-medium ${a.gap < 0 ? "text-red-500" : a.gap > 0 ? "text-green-600" : "text-gray-500"
-                                }`}>
-                                {a.gap >= 0 ? "+" : ""}{a.gap.toFixed(1)}%
-                              </td>
-                              <td className="py-2.5 text-right font-medium text-gray-900">
-                                C${a.weeklyBuyCad.toFixed(2)}
-                              </td>
-                              <td className="py-2.5 text-right">
-                                {a.currency === "USD" && a.symbol !== "CASH" ? (
-                                  <div>
-                                    <span className="font-medium text-[#0a8043]">
-                                      ${a.weeklyBuyActual.toFixed(2)} USD
-                                    </span>
-                                    <div className="text-[10px] text-gray-400">
-                                      Fee: C${a.fxFee.toFixed(2)}
-                                    </div>
-                                  </div>
-                                ) : a.symbol === "CASH" ? (
-                                  <span className="text-gray-400">-</span>
-                                ) : (
-                                  <span className="font-medium text-[#0a8043]">
-                                    C${a.weeklyBuyActual.toFixed(2)}
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Summary Footer */}
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                    <div className="text-gray-500">
-                      Total FX Fee: <span className="font-medium text-gray-700">C${allocationSummary.totalFxFee.toFixed(2)}</span>
-                    </div>
-                    <div className="text-gray-400">
-                      Portfolio: C${formatNumber(allocationSummary.totalMarketValueCad, 0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* 요약 섹션 */}
           <div>
             {/* 요약 그리드 - 데스크탑 항상 표시, 모바일 토글 */}
@@ -868,6 +683,11 @@ export default function HoldingsPage() {
                       const posValueCad = pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue;
                       const weight = totalMarketValueForWeight > 0 ? (posValueCad / totalMarketValueForWeight) * 100 : 0;
 
+                      // Allocation Data
+                      const allocation = allocationSummary?.allocations.find(a => a.symbol === pos.symbol);
+                      const isUnderweight = allocation ? allocation.gap > 1 : false;
+                      const showAllocationInfo = allocation && allocation.weeklyBuyActual > 0;
+
                       return (
                         <div
                           key={idx}
@@ -896,6 +716,11 @@ export default function HoldingsPage() {
                                 <span className="text-[9px] text-gray-400 font-medium">
                                   {weight.toFixed(1)}%
                                 </span>
+                                {showAllocationInfo && (
+                                  <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                                    BUY
+                                  </span>
+                                )}
                               </div>
                               {/* P&L 배지 */}
                               <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPositive
@@ -927,6 +752,25 @@ export default function HoldingsPage() {
                                 </div>
                               </div>
                             </div>
+
+                            {/* Allocation Inline Info */}
+                            {showAllocationInfo && allocation && (
+                              <div className="mt-2 pt-2 border-t border-dashed border-gray-100">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500">Target</span>
+                                    <span className="font-medium">{allocation.targetWeight}%</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500">Gap</span>
+                                    <span className="text-green-600 font-medium">+{allocation.gap.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="font-bold text-[#0a8043]">
+                                    +${allocation.weeklyBuyActual.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           {/* 확장 영역 */}

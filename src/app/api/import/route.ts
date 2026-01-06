@@ -1,17 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { parseExcelBuffer } from "@/lib/excel/parser";
-import { computeRowHash, computeFileHash } from "@/lib/excel/hasher";
-import { extractCadEquivalent, normalizeAccountType } from "@/lib/excel/normalizer";
-import { resolveSymbol } from "@/lib/mappings/symbolMap";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { parseExcelBuffer } from '@/lib/excel/parser';
+import { computeRowHash, computeFileHash } from '@/lib/excel/hasher';
+import {
+  extractCadEquivalent,
+  normalizeAccountType,
+} from '@/lib/excel/normalizer';
+import { resolveSymbol } from '@/lib/mappings/symbolMap';
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json({ error: "파일이 제공되지 않았습니다" }, { status: 400 });
+      return NextResponse.json(
+        { error: '파일이 제공되지 않았습니다' },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -23,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (rows.length === 0) {
       return NextResponse.json(
         {
-          error: "파싱된 데이터가 없습니다",
+          error: '파싱된 데이터가 없습니다',
           parseErrors: errors.slice(0, 10),
         },
         { status: 400 }
@@ -42,6 +48,56 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 1. 기존 데이터 로드를 위한 날짜 범위 계산
+    const dates = rows.map((r) => r.transactionDate.getTime());
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+
+    // 2. 해당 범위의 기존 트랜잭션 조회
+    const existingTransactions = await prisma.transaction.findMany({
+      where: {
+        transactionDate: {
+          gte: minDate,
+          lte: maxDate,
+        },
+      },
+      select: {
+        transactionDate: true,
+        action: true,
+        symbol: true,
+        netAmount: true,
+        currency: true,
+        account: {
+          select: { accountNumber: true },
+        },
+      },
+    });
+
+    // 3. 서명 맵 생성 (Signature -> Count)
+    const generateSignature = (r: {
+      transactionDate: Date;
+      action: string;
+      symbol: string | null;
+      netAmount: number | null;
+      currency: string;
+      accountNumber: string;
+    }) => {
+      const dateStr = r.transactionDate.toISOString().split('T')[0];
+      const amountStr = r.netAmount?.toFixed(2) || '0.00';
+      return `${dateStr}|${r.action}|${r.symbol || ''}|${amountStr}|${
+        r.currency
+      }|${r.accountNumber}`;
+    };
+
+    const signatureMap = new Map<string, number>();
+    existingTransactions.forEach((tx) => {
+      const sig = generateSignature({
+        ...tx,
+        accountNumber: tx.account.accountNumber,
+      });
+      signatureMap.set(sig, (signatureMap.get(sig) || 0) + 1);
+    });
+
     let insertedCount = 0;
     let skippedCount = 0;
     const failedRows: Array<{ row: number; message: string }> = [...errors];
@@ -53,12 +109,25 @@ export async function POST(request: NextRequest) {
       try {
         const rowHash = computeRowHash(row, i, fileHash);
 
-        // 중복 체크 (같은 파일 재업로드 시 스킵)
-        const existing = await prisma.transaction.findUnique({
+        // 4. 중복 체크: FileHash 기반이 아닌 컨텐츠 기반 체크
+        const currentSig = generateSignature(row);
+        const existingCount = signatureMap.get(currentSig) || 0;
+
+        if (existingCount > 0) {
+          // 동일한 내용의 트랜잭션이 이미 존재하면 스킵
+          signatureMap.set(currentSig, existingCount - 1); // 카운트 차감 (1:1 매칭)
+          skippedCount++;
+          continue;
+        }
+
+        // 혹시 같은 파일을 재업로드하는 경우를 대비해 sourceRowHash 체크도 유지 (DB constraint 에러 방지)
+        // 하지만 위에서 내용 기반으로 걸러지므로, 내용이 같은데 Hash가 다른 경우(다른 파일)는 위에서 걸러짐.
+        // 내용이 같은데 Hash가 같은 경우(같은 파일 재업로드)도 위에서 걸러짐.
+        // 단, Hash가 이미 존재하면 무조건 스킵 (Unique constraint)
+        const hashExists = await prisma.transaction.findUnique({
           where: { sourceRowHash: rowHash },
         });
-
-        if (existing) {
+        if (hashExists) {
           skippedCount++;
           continue;
         }
@@ -78,7 +147,7 @@ export async function POST(request: NextRequest) {
 
         // CON/WDR의 경우 CAD Equivalent 추출
         let cadEquivalent: number | null = null;
-        if (row.action === "CON" || row.action === "WDR") {
+        if (row.action === 'CON' || row.action === 'WDR') {
           cadEquivalent = extractCadEquivalent(row.description);
         }
 
@@ -109,7 +178,7 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         failedRows.push({
           row: rowNumber,
-          message: e instanceof Error ? e.message : "Unknown error",
+          message: e instanceof Error ? e.message : 'Unknown error',
         });
       }
     }
@@ -135,11 +204,11 @@ export async function POST(request: NextRequest) {
       errors: failedRows.slice(0, 20), // 처음 20개 에러만 반환
     });
   } catch (error) {
-    console.error("Import error:", error);
+    console.error('Import error:', error);
     return NextResponse.json(
       {
-        error: "Import 실패",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: 'Import 실패',
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
@@ -150,13 +219,16 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const imports = await prisma.importFile.findMany({
-      orderBy: { importedAt: "desc" },
+      orderBy: { importedAt: 'desc' },
       take: 20,
     });
 
     return NextResponse.json(imports);
   } catch (error) {
-    console.error("Error fetching imports:", error);
-    return NextResponse.json({ error: "Failed to fetch imports" }, { status: 500 });
+    console.error('Error fetching imports:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch imports' },
+      { status: 500 }
+    );
   }
 }
