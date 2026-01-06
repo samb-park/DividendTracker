@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatNumberTrim } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -281,7 +281,7 @@ export default function DividendsPage() {
           <div className="text-right">
             <div className="text-[10px] text-gray-400">Avg/month</div>
             <div className="text-xs md:text-sm font-semibold text-[#0a8043]">
-              ${monthlyAverage.toFixed(0)}
+              ${formatNumberTrim(monthlyAverage)}
             </div>
           </div>
         </div>
@@ -369,7 +369,7 @@ export default function DividendsPage() {
             <div>
               <div className="text-[10px] text-gray-400">YTD Total</div>
               <div className="text-xs md:text-sm font-medium text-gray-700">
-                ${totalAmount.toFixed(0)}
+                ${formatNumberTrim(totalAmount)}
               </div>
             </div>
             <div>
@@ -417,12 +417,12 @@ export default function DividendsPage() {
                       </span>
                     </div>
                     <div className="text-lg font-bold text-[#0a8043]">
-                      ${div.totalAmount.toFixed(0)}
+                      ${formatNumberTrim(div.totalAmount)}
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>{div.count} payments</span>
-                    <span>~${(div.totalAmount / div.count).toFixed(2)}/payment</span>
+                    <span>~${formatNumberTrim(div.totalAmount / div.count)}/payment</span>
                   </div>
                 </div>
               ))}

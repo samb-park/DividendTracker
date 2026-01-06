@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber, formatNumberTrim } from "@/lib/utils";
 import {
   AreaChart,
   Area,
@@ -666,7 +666,7 @@ export default function HoldingsPage() {
                             <div className="flex items-end justify-between">
                               <div>
                                 <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
-                                  {formatNumber(pos.quantity, 4)} shares
+                                  {formatNumberTrim(pos.quantity)} shares
                                 </div>
                                 <div className="text-xs text-gray-600">
                                   <span className="text-gray-400">@</span> ${formatNumber(pos.avgCost, 2)}
@@ -679,7 +679,7 @@ export default function HoldingsPage() {
                                   ${formatNumber(pos.marketValue, 0)}
                                 </div>
                                 <div className={`text-[11px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                  {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 0)}
+                                  {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)}
                                 </div>
                               </div>
                             </div>
@@ -696,7 +696,7 @@ export default function HoldingsPage() {
                               <div className="grid grid-cols-2 gap-3 pt-4">
                                 <div className="bg-gray-50 rounded-lg p-3">
                                   <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
-                                  <div className="text-sm font-semibold text-gray-900">{formatNumber(pos.quantity, 4)}</div>
+                                  <div className="text-sm font-semibold text-gray-900">{formatNumberTrim(pos.quantity)}</div>
                                 </div>
                                 <div className="bg-gray-50 rounded-lg p-3">
                                   <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Avg Cost</div>
@@ -817,7 +817,7 @@ export default function HoldingsPage() {
                             </td>
 
                             <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                              {formatNumber(pos.quantity, 4)}
+                              {formatNumberTrim(pos.quantity)}
                             </td>
 
                             <td className="py-3 px-4 text-right text-sm text-[#202124]">

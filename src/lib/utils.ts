@@ -22,6 +22,25 @@ export function formatNumber(value: number, decimals: number = 4): string {
   }).format(value);
 }
 
+// Format with up to maxDecimals but remove trailing zeros
+export function formatNumberTrim(value: number, maxDecimals: number = 4): string {
+  const formatted = value.toFixed(maxDecimals);
+  // Remove trailing zeros but keep at least 2 decimal places
+  const trimmed = parseFloat(formatted).toString();
+  const parts = trimmed.split(".");
+  if (parts.length === 1) {
+    return new Intl.NumberFormat("en-CA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+  const decimals = Math.max(2, parts[1].length);
+  return new Intl.NumberFormat("en-CA", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
 export function formatPercent(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;

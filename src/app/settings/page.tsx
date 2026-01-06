@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, User, Info, Palette } from "lucide-react";
+import { ChevronRight, User, Info, Palette, Receipt } from "lucide-react";
 
 const settingsItems = [
   {
@@ -9,6 +9,12 @@ const settingsItems = [
     label: "Accounts",
     description: "Manage accounts and import transactions",
     icon: User,
+  },
+  {
+    href: "/settings/transactions",
+    label: "Transactions",
+    description: "View all transaction history",
+    icon: Receipt,
   },
   {
     href: "/settings/display",
