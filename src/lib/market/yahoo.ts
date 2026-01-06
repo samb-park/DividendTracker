@@ -1,8 +1,8 @@
-import YahooFinance from "yahoo-finance2";
+import YahooFinance from 'yahoo-finance2';
 
 // v3: 클래스 인스턴스 생성
 const yahooFinance = new YahooFinance({
-  suppressNotices: ["yahooSurvey"],
+  suppressNotices: ['yahooSurvey'],
 });
 
 export interface QuoteResult {
@@ -36,7 +36,10 @@ async function waitForRateLimit() {
 /**
  * 단일 종목 시세 조회 (재시도 로직 포함)
  */
-export async function getQuote(symbol: string, retries = 3): Promise<QuoteResult | null> {
+export async function getQuote(
+  symbol: string,
+  retries = 3
+): Promise<QuoteResult | null> {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       // 글로벌 rate limit 대기
@@ -53,17 +56,20 @@ export async function getQuote(symbol: string, retries = 3): Promise<QuoteResult
         symbol: quote.symbol,
         regularMarketPrice: quote.regularMarketPrice || 0,
         regularMarketPreviousClose: quote.regularMarketPreviousClose || 0,
-        currency: quote.currency || "USD",
+        currency: quote.currency || 'USD',
         regularMarketTime: quote.regularMarketTime
           ? new Date(quote.regularMarketTime)
           : new Date(),
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
 
       // Rate limit 에러인 경우 재시도
-      if (errorMessage.includes("Too Many Requests") && attempt < retries - 1) {
-        console.log(`Rate limited for ${symbol}, retrying in ${2000 * (attempt + 1)}ms...`);
+      if (errorMessage.includes('Too Many Requests') && attempt < retries - 1) {
+        console.log(
+          `Rate limited for ${symbol}, retrying in ${2000 * (attempt + 1)}ms...`
+        );
         continue;
       }
 
@@ -102,10 +108,10 @@ export async function getUsdCadRate(): Promise<number> {
     await waitForRateLimit();
 
     // CAD=X는 1 USD = X CAD를 의미
-    const quote = await yahooFinance.quote("CAD=X");
+    const quote = await yahooFinance.quote('CAD=X');
     return quote.regularMarketPrice || 1.35;
   } catch (error) {
-    console.error("Failed to fetch USD/CAD rate:", error);
+    console.error('Failed to fetch USD/CAD rate:', error);
     return 1.35; // 기본값
   }
 }
@@ -122,7 +128,9 @@ export interface DividendInfo {
 /**
  * 종목 배당 정보 조회
  */
-export async function getDividendInfo(symbol: string): Promise<DividendInfo | null> {
+export async function getDividendInfo(
+  symbol: string
+): Promise<DividendInfo | null> {
   try {
     await waitForRateLimit();
 
@@ -131,7 +139,7 @@ export async function getDividendInfo(symbol: string): Promise<DividendInfo | nu
     return {
       symbol: quote.symbol,
       price: quote.regularMarketPrice || 0,
-      currency: quote.currency || "USD",
+      currency: quote.currency || 'USD',
       dividendYield: quote.dividendYield || null,
       trailingAnnualDividendRate: quote.trailingAnnualDividendRate || null,
       dividendDate: quote.dividendDate ? new Date(quote.dividendDate) : null,
@@ -158,4 +166,32 @@ export async function getDividendInfoBatch(
   }
 
   return results;
+}
+/**
+ * 종목 배당 히스토리 조회 (최근 1년)
+ */
+export async function getDividendHistory(
+  symbol: string
+): Promise<{ date: Date; amount: number }[]> {
+  try {
+    await waitForRateLimit();
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setFullYear(endDate.getFullYear() - 1);
+
+    const result = await yahooFinance.historical(symbol, {
+      period1: startDate.toISOString().split('T')[0],
+      period2: endDate.toISOString().split('T')[0],
+      events: 'dividends',
+    });
+
+    return result.map((item: any) => ({
+      date: new Date(item.date),
+      amount: item.dividends || 0,
+    }));
+  } catch (error) {
+    console.error(`Failed to fetch dividend history for ${symbol}:`, error);
+    return [];
+  }
 }

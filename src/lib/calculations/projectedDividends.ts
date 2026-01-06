@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/db";
-import { getDividendInfoBatch } from "@/lib/market/yahoo";
+import { prisma } from '@/lib/db';
+import { getDividendInfoBatch, getDividendHistory } from '@/lib/market/yahoo';
 
 export interface YahooProjection {
   symbol: string;
@@ -34,9 +34,12 @@ export interface MonthlyYahooProjection {
 async function getPaymentSchedule(
   symbol: string,
   accountId?: string
-): Promise<{ frequency: "monthly" | "quarterly" | "annual" | "irregular"; months: number[] }> {
+): Promise<{
+  frequency: 'monthly' | 'quarterly' | 'annual' | 'irregular';
+  months: number[];
+}> {
   const whereClause: Record<string, unknown> = {
-    action: "DIV",
+    action: 'DIV',
     symbolMapped: symbol,
   };
   if (accountId) {
@@ -49,37 +52,38 @@ async function getPaymentSchedule(
       settlementDate: true,
     },
     orderBy: {
-      settlementDate: "desc",
+      settlementDate: 'desc',
     },
   });
 
   if (dividends.length === 0) {
-    return { frequency: "irregular", months: [] };
+    return { frequency: 'irregular', months: [] };
   }
 
   // Aggregate by date to handle multiple accounts
   const dateSet = new Set<string>();
   for (const div of dividends) {
-    const dateStr = new Date(div.settlementDate).toISOString().split("T")[0];
+    const dateStr = new Date(div.settlementDate).toISOString().split('T')[0];
     dateSet.add(dateStr);
   }
   const uniqueDates = Array.from(dateSet).sort();
 
   // Detect frequency
-  let frequency: "monthly" | "quarterly" | "annual" | "irregular" = "irregular";
+  let frequency: 'monthly' | 'quarterly' | 'annual' | 'irregular' = 'irregular';
   if (uniqueDates.length >= 2) {
     let totalGap = 0;
     for (let i = 1; i < uniqueDates.length; i++) {
       const gap =
-        (new Date(uniqueDates[i]).getTime() - new Date(uniqueDates[i - 1]).getTime()) /
+        (new Date(uniqueDates[i]).getTime() -
+          new Date(uniqueDates[i - 1]).getTime()) /
         (1000 * 60 * 60 * 24);
       totalGap += gap;
     }
     const avgGap = totalGap / (uniqueDates.length - 1);
 
-    if (avgGap >= 300 && avgGap <= 400) frequency = "annual";
-    else if (avgGap >= 75 && avgGap <= 120) frequency = "quarterly";
-    else if (avgGap >= 20 && avgGap <= 45) frequency = "monthly";
+    if (avgGap >= 300 && avgGap <= 400) frequency = 'annual';
+    else if (avgGap >= 75 && avgGap <= 120) frequency = 'quarterly';
+    else if (avgGap >= 20 && avgGap <= 45) frequency = 'monthly';
   }
 
   // Get unique months from historical data
@@ -91,9 +95,9 @@ async function getPaymentSchedule(
 
   // Determine payment months based on frequency
   let months: number[] = [];
-  if (frequency === "monthly") {
+  if (frequency === 'monthly') {
     months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  } else if (frequency === "quarterly") {
+  } else if (frequency === 'quarterly') {
     // Get the most common 4 months (or derive from pattern)
     const sortedMonths = Array.from(monthCounts.keys()).sort((a, b) => a - b);
     if (sortedMonths.length >= 2) {
@@ -107,7 +111,7 @@ async function getPaymentSchedule(
     } else {
       months = [3, 6, 9, 12]; // Default quarterly
     }
-  } else if (frequency === "annual") {
+  } else if (frequency === 'annual') {
     // Use most common month
     const sortedMonths = Array.from(monthCounts.keys());
     months = sortedMonths.length > 0 ? [sortedMonths[0]] : [12];
@@ -148,7 +152,7 @@ export async function calculateYahooMonthlyProjections(
   // Build monthly data
   const monthlyData: { [key: string]: { cad: number; usd: number } } = {};
   for (let m = 1; m <= 12; m++) {
-    const monthKey = `${currentYear}-${String(m).padStart(2, "0")}`;
+    const monthKey = `${currentYear}-${String(m).padStart(2, '0')}`;
     monthlyData[monthKey] = { cad: 0, usd: 0 };
   }
 
@@ -159,26 +163,79 @@ export async function calculateYahooMonthlyProjections(
 
     // Calculate annual dividend
     let annualDividend = 0;
-    if (info.trailingAnnualDividendRate && info.trailingAnnualDividendRate > 0) {
+    if (
+      info.trailingAnnualDividendRate &&
+      info.trailingAnnualDividendRate > 0
+    ) {
       annualDividend = info.trailingAnnualDividendRate * holding.quantity;
     } else if (info.dividendYield && info.dividendYield > 0 && info.price > 0) {
-      annualDividend = (info.dividendYield / 100) * info.price * holding.quantity;
+      annualDividend =
+        (info.dividendYield / 100) * info.price * holding.quantity;
     }
 
     if (annualDividend <= 0) continue;
 
-    // Get payment schedule from historical data
-    const schedule = await getPaymentSchedule(holding.symbol, accountId);
+    // Get payment schedule from Yahoo Finance history (external source of truth)
+    const yahooHistory = await getDividendHistory(holding.symbol);
+
+    let paymentMonths: number[] = [];
+
+    if (yahooHistory.length > 0) {
+      // Detect frequency from Yahoo history
+      const frequency = detectFrequency(yahooHistory);
+
+      // Get unique months from history
+      const uniqueMonths = new Set(
+        yahooHistory.map((h: { date: Date }) => h.date.getMonth() + 1)
+      );
+      const historicalMonths = Array.from(uniqueMonths).sort(
+        (a: number, b: number) => a - b
+      );
+
+      // Determine projected months based on frequency
+      if (frequency === 'monthly') {
+        paymentMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      } else if (frequency === 'quarterly') {
+        if (historicalMonths.length >= 1) {
+          // Project quarterly schedule based on the most recent payment month
+          const lastMonth =
+            yahooHistory[yahooHistory.length - 1].date.getMonth() + 1;
+          // Find the sequence that includes the last payment month
+          // Possible sequences: 1,4,7,10 | 2,5,8,11 | 3,6,9,12
+          const remainder = lastMonth % 3;
+          if (remainder === 1) paymentMonths = [1, 4, 7, 10];
+          else if (remainder === 2) paymentMonths = [2, 5, 8, 11];
+          else paymentMonths = [3, 6, 9, 12];
+        } else {
+          paymentMonths = [3, 6, 9, 12]; // Default
+        }
+      } else if (frequency === 'annual') {
+        if (historicalMonths.length >= 1) {
+          paymentMonths = [historicalMonths[0]];
+        } else {
+          paymentMonths = [12];
+        }
+      } else {
+        // Irregular or sparse data
+        paymentMonths = historicalMonths;
+      }
+    }
+
+    // Fallback: If no history (or failed to fetch), or irregular with 0 months, default to monthly
+    // This ensures we always show SOMETHING for the projection
+    if (paymentMonths.length === 0) {
+      paymentMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    }
 
     // Calculate per-payment amount based on frequency
-    const paymentsPerYear = schedule.months.length || 1;
+    const paymentsPerYear = paymentMonths.length || 1;
     const amountPerPayment = annualDividend / paymentsPerYear;
 
     // Add to monthly data for each payment month
-    for (const month of schedule.months) {
-      const monthKey = `${currentYear}-${String(month).padStart(2, "0")}`;
+    for (const month of paymentMonths) {
+      const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`;
       if (monthlyData[monthKey]) {
-        if (info.currency === "CAD") {
+        if (info.currency === 'CAD') {
           monthlyData[monthKey].cad += amountPerPayment;
         } else {
           monthlyData[monthKey].usd += amountPerPayment;
@@ -191,10 +248,10 @@ export async function calculateYahooMonthlyProjections(
   const result: MonthlyYahooProjection[] = [];
   for (const [month, amounts] of Object.entries(monthlyData)) {
     if (amounts.cad > 0) {
-      result.push({ month, totalAmount: amounts.cad, currency: "CAD" });
+      result.push({ month, totalAmount: amounts.cad, currency: 'CAD' });
     }
     if (amounts.usd > 0) {
-      result.push({ month, totalAmount: amounts.usd, currency: "USD" });
+      result.push({ month, totalAmount: amounts.usd, currency: 'USD' });
     }
   }
 
@@ -237,7 +294,10 @@ export async function calculateYahooProjectedDividends(
     let annualDividendPerShare: number | null = null;
     let projectedAnnualDividend = 0;
 
-    if (info.trailingAnnualDividendRate && info.trailingAnnualDividendRate > 0) {
+    if (
+      info.trailingAnnualDividendRate &&
+      info.trailingAnnualDividendRate > 0
+    ) {
       // Use trailing annual dividend rate directly
       annualDividendPerShare = info.trailingAnnualDividendRate;
       projectedAnnualDividend = annualDividendPerShare * holding.quantity;
@@ -265,7 +325,9 @@ export async function calculateYahooProjectedDividends(
   }
 
   // Sort by projected annual descending
-  projections.sort((a, b) => b.projectedAnnualDividend - a.projectedAnnualDividend);
+  projections.sort(
+    (a, b) => b.projectedAnnualDividend - a.projectedAnnualDividend
+  );
 
   const totalProjectedAnnual = projections.reduce(
     (sum, p) => sum + p.projectedAnnualDividend,
@@ -287,7 +349,7 @@ async function getHoldingsWithQuantities(
   accountId?: string
 ): Promise<{ symbol: string; quantity: number }[]> {
   const whereClause: Record<string, unknown> = {
-    action: { in: ["Buy", "Sell"] },
+    action: { in: ['Buy', 'Sell'] },
     symbolMapped: { not: null },
   };
   if (accountId) {
@@ -324,12 +386,14 @@ async function getHoldingsWithQuantities(
 /**
  * Get symbols with dividends that are currently held
  */
-export async function getHeldDividendSymbols(accountId?: string): Promise<string[]> {
+export async function getHeldDividendSymbols(
+  accountId?: string
+): Promise<string[]> {
   const currentHoldings = await getCurrentHoldings(accountId);
 
   // Get all dividend symbols
   const whereClause: Record<string, unknown> = {
-    action: "DIV",
+    action: 'DIV',
     symbolMapped: { not: null },
   };
   if (accountId) {
@@ -339,7 +403,7 @@ export async function getHeldDividendSymbols(accountId?: string): Promise<string
   const results = await prisma.transaction.findMany({
     where: whereClause,
     select: { symbolMapped: true },
-    distinct: ["symbolMapped"],
+    distinct: ['symbolMapped'],
   });
 
   // Filter to only current holdings
@@ -355,7 +419,7 @@ export interface DividendProjection {
   totalPastYear: number;
   paymentCount: number;
   avgPayment: number;
-  frequency: "monthly" | "quarterly" | "annual" | "irregular";
+  frequency: 'monthly' | 'quarterly' | 'annual' | 'irregular';
   projectedAnnual: number;
   remainingPayments: number;
   projectedRemaining: number;
@@ -380,7 +444,7 @@ export interface MonthlyProjection {
  */
 async function getCurrentHoldings(accountId?: string): Promise<Set<string>> {
   const whereClause: Record<string, unknown> = {
-    action: { in: ["Buy", "Sell"] },
+    action: { in: ['Buy', 'Sell'] },
     symbolMapped: { not: null },
   };
   if (accountId) {
@@ -428,7 +492,7 @@ export async function calculateProjectedDividends(
 
   // Get all dividend transactions
   const whereClause: Record<string, unknown> = {
-    action: "DIV",
+    action: 'DIV',
   };
   if (accountId) {
     whereClause.accountId = accountId;
@@ -444,7 +508,7 @@ export async function calculateProjectedDividends(
       settlementDate: true,
     },
     orderBy: {
-      settlementDate: "desc",
+      settlementDate: 'desc',
     },
   });
 
@@ -459,7 +523,7 @@ export async function calculateProjectedDividends(
   >();
 
   for (const div of dividends) {
-    const symbol = div.symbolMapped || div.symbol || "UNKNOWN";
+    const symbol = div.symbolMapped || div.symbol || 'UNKNOWN';
 
     // Skip symbols not in current holdings
     if (!currentHoldings.has(symbol)) continue;
@@ -473,10 +537,10 @@ export async function calculateProjectedDividends(
     }
 
     const date = new Date(div.settlementDate);
-    const dateStr = date.toISOString().split("T")[0];
-    const existingPayment = symbolMap.get(symbol)!.payments.find(
-      (p) => p.date.toISOString().split("T")[0] === dateStr
-    );
+    const dateStr = date.toISOString().split('T')[0];
+    const existingPayment = symbolMap
+      .get(symbol)!
+      .payments.find((p) => p.date.toISOString().split('T')[0] === dateStr);
 
     if (existingPayment) {
       // Aggregate same-day payments
@@ -513,13 +577,13 @@ export async function calculateProjectedDividends(
 
     // Estimate payments per year based on frequency
     const paymentsPerYear =
-      frequency === "monthly"
+      frequency === 'monthly'
         ? 12
-        : frequency === "quarterly"
-          ? 4
-          : frequency === "annual"
-            ? 1
-            : paymentCount; // irregular: use actual count
+        : frequency === 'quarterly'
+        ? 4
+        : frequency === 'annual'
+        ? 1
+        : paymentCount; // irregular: use actual count
 
     // Projected annual dividend
     const projectedAnnual = avgPayment * paymentsPerYear;
@@ -530,7 +594,10 @@ export async function calculateProjectedDividends(
     ).length;
 
     const expectedPaymentsThisYear = paymentsPerYear;
-    const remainingPayments = Math.max(0, expectedPaymentsThisYear - paymentsThisYear);
+    const remainingPayments = Math.max(
+      0,
+      expectedPaymentsThisYear - paymentsThisYear
+    );
 
     // Projected remaining for this year
     const projectedRemaining = avgPayment * remainingPayments;
@@ -545,7 +612,7 @@ export async function calculateProjectedDividends(
     else if (yearsOfData >= 1) confidence = 60;
 
     // Adjust for consistency
-    if (frequency !== "irregular") confidence += 10;
+    if (frequency !== 'irregular') confidence += 10;
 
     confidence = Math.min(100, confidence);
 
@@ -589,8 +656,8 @@ export async function calculateProjectedDividends(
  */
 function detectFrequency(
   payments: { date: Date; amount: number }[]
-): "monthly" | "quarterly" | "annual" | "irregular" {
-  if (payments.length < 2) return "irregular";
+): 'monthly' | 'quarterly' | 'annual' | 'irregular' {
+  if (payments.length < 2) return 'irregular';
 
   // Sort by date
   const sorted = [...payments].sort(
@@ -608,11 +675,11 @@ function detectFrequency(
   const avgGap = totalGap / (sorted.length - 1);
 
   // Determine frequency based on average gap
-  if (avgGap >= 300 && avgGap <= 400) return "annual"; // ~365 days
-  if (avgGap >= 75 && avgGap <= 120) return "quarterly"; // ~90 days
-  if (avgGap >= 20 && avgGap <= 45) return "monthly"; // ~30 days
+  if (avgGap >= 300 && avgGap <= 400) return 'annual'; // ~365 days
+  if (avgGap >= 75 && avgGap <= 120) return 'quarterly'; // ~90 days
+  if (avgGap >= 20 && avgGap <= 45) return 'monthly'; // ~30 days
 
-  return "irregular";
+  return 'irregular';
 }
 
 /**
@@ -631,7 +698,7 @@ export async function calculateMonthlyProjectedDividends(
 
   // Get all dividend transactions
   const whereClause: Record<string, unknown> = {
-    action: "DIV",
+    action: 'DIV',
   };
   if (accountId) {
     whereClause.accountId = accountId;
@@ -650,7 +717,7 @@ export async function calculateMonthlyProjectedDividends(
       settlementDate: true,
     },
     orderBy: {
-      settlementDate: "desc",
+      settlementDate: 'desc',
     },
   });
 
@@ -665,13 +732,13 @@ export async function calculateMonthlyProjectedDividends(
   >();
 
   for (const div of dividends) {
-    const sym = div.symbolMapped || div.symbol || "UNKNOWN";
+    const sym = div.symbolMapped || div.symbol || 'UNKNOWN';
 
     // Skip symbols not in current holdings (unless specific symbol is requested)
     if (!symbol && !currentHoldings.has(sym)) continue;
 
     const date = new Date(div.settlementDate);
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = date.toISOString().split('T')[0];
     const month = date.getMonth() + 1; // 1-12
     const amount = Math.abs(div.netAmount || 0);
 
@@ -693,8 +760,8 @@ export async function calculateMonthlyProjectedDividends(
   // Detect frequency from payments with dates
   const detectPaymentFrequency = (
     paymentDates: string[]
-  ): "monthly" | "quarterly" | "annual" | "irregular" => {
-    if (paymentDates.length < 2) return "irregular";
+  ): 'monthly' | 'quarterly' | 'annual' | 'irregular' => {
+    if (paymentDates.length < 2) return 'irregular';
 
     const sorted = paymentDates.sort();
     let totalGap = 0;
@@ -706,10 +773,10 @@ export async function calculateMonthlyProjectedDividends(
     }
     const avgGap = totalGap / (sorted.length - 1);
 
-    if (avgGap >= 300 && avgGap <= 400) return "annual";
-    if (avgGap >= 75 && avgGap <= 120) return "quarterly";
-    if (avgGap >= 20 && avgGap <= 45) return "monthly";
-    return "irregular";
+    if (avgGap >= 300 && avgGap <= 400) return 'annual';
+    if (avgGap >= 75 && avgGap <= 120) return 'quarterly';
+    if (avgGap >= 20 && avgGap <= 45) return 'monthly';
+    return 'irregular';
   };
 
   // Get projected payment months based on frequency and historical pattern
@@ -720,12 +787,14 @@ export async function calculateMonthlyProjectedDividends(
     const frequency = detectPaymentFrequency(paymentDates);
 
     // Get unique months from historical data
-    const historicalMonths = [...new Set(payments.map((p) => p.month))].sort((a, b) => a - b);
+    const historicalMonths = [...new Set(payments.map((p) => p.month))].sort(
+      (a, b) => a - b
+    );
 
-    if (frequency === "monthly") {
+    if (frequency === 'monthly') {
       // Monthly: expect all 12 months
       return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-    } else if (frequency === "quarterly") {
+    } else if (frequency === 'quarterly') {
       // Quarterly: use historical months to determine pattern (e.g., 3,6,9,12 or 1,4,7,10)
       if (historicalMonths.length >= 2) {
         // Find the pattern - get first month and add 3, 6, 9
@@ -739,7 +808,7 @@ export async function calculateMonthlyProjectedDividends(
       }
       // Default quarterly pattern
       return [3, 6, 9, 12];
-    } else if (frequency === "annual") {
+    } else if (frequency === 'annual') {
       // Annual: use most common month
       if (historicalMonths.length > 0) {
         return [historicalMonths[0]];
@@ -756,7 +825,7 @@ export async function calculateMonthlyProjectedDividends(
 
   // Initialize all months
   for (let m = 1; m <= 12; m++) {
-    const monthKey = `${targetYear}-${String(m).padStart(2, "0")}`;
+    const monthKey = `${targetYear}-${String(m).padStart(2, '0')}`;
     monthlyData[monthKey] = { cad: 0, usd: 0 };
   }
 
@@ -767,14 +836,15 @@ export async function calculateMonthlyProjectedDividends(
     const projectedMonths = getProjectedMonths(payments, paymentDates);
 
     // Calculate average payment (from aggregated payments)
-    const avgPayment = payments.length > 0
-      ? payments.reduce((sum, p) => sum + p.amount, 0) / payments.length
-      : 0;
+    const avgPayment =
+      payments.length > 0
+        ? payments.reduce((sum, p) => sum + p.amount, 0) / payments.length
+        : 0;
 
     for (const month of projectedMonths) {
-      const monthKey = `${targetYear}-${String(month).padStart(2, "0")}`;
+      const monthKey = `${targetYear}-${String(month).padStart(2, '0')}`;
       if (monthlyData[monthKey]) {
-        if (data.currency === "CAD") {
+        if (data.currency === 'CAD') {
           monthlyData[monthKey].cad += avgPayment;
         } else {
           monthlyData[monthKey].usd += avgPayment;
@@ -788,10 +858,10 @@ export async function calculateMonthlyProjectedDividends(
 
   for (const [month, amounts] of Object.entries(monthlyData)) {
     if (amounts.cad > 0) {
-      result.push({ month, totalAmount: amounts.cad, currency: "CAD" });
+      result.push({ month, totalAmount: amounts.cad, currency: 'CAD' });
     }
     if (amounts.usd > 0) {
-      result.push({ month, totalAmount: amounts.usd, currency: "USD" });
+      result.push({ month, totalAmount: amounts.usd, currency: 'USD' });
     }
   }
 
