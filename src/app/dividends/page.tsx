@@ -378,16 +378,23 @@ export default function DividendsPage() {
   // 월별 평균 계산
   const monthlyAverage = totalAmount / 12;
 
+  // Calculate total projected payments count
+  const projectedPaymentsCount = yahooProjections?.projections.reduce((sum, p) => {
+    if (p.projectedMonthlyDividend > 0) return sum + 12;
+    if (p.projectedQuarterlyDividend > 0) return sum + 4;
+    return sum + 1; // Default to 1 (Annual) if unsure
+  }, 0) || 0;
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Total dividends header with account select */}
       <div className="flex items-end justify-between">
         <div>
           <div className="text-xs md:text-sm text-gray-500 mb-1">
-            Total dividends ({selectedYear})
+            {dataTab === "bySymbol" ? `Total dividends (${selectedYear})` : "Est. annual total"}
           </div>
           <div className="text-3xl md:text-4xl font-bold text-gray-900">
-            {formatCurrency(totalAmount)}
+            {formatCurrency(dataTab === "bySymbol" ? totalAmount : totalProjectedAmount)}
             <span className="text-sm md:text-base font-normal text-gray-400 ml-2">{getCurrencyLabel()}</span>
           </div>
         </div>
@@ -491,84 +498,84 @@ export default function DividendsPage() {
           </div>
         ) : dataTab === "bySymbol" ? (
           <div className="h-[200px] md:h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} barCategoryGap="12%">
-              <defs>
-                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
-                  <stop offset="100%" stopColor="#16a34a" stopOpacity={0.7} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis
-                dataKey="monthLabel"
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                tickFormatter={(v) => `$${v}`}
-                axisLine={false}
-                tickLine={false}
-                orientation="right"
-                width={40}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="amount" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} barCategoryGap="12%">
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#16a34a" stopOpacity={0.7} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis
+                  dataKey="monthLabel"
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  tickFormatter={(v) => `$${v}`}
+                  axisLine={false}
+                  tickLine={false}
+                  orientation="right"
+                  width={40}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="amount" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         ) : (
           <div className="h-[200px] md:h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={projectionChartData} barCategoryGap="12%">
-              <defs>
-                <linearGradient id="projBarGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
-                  <stop offset="100%" stopColor="#16a34a" stopOpacity={0.7} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis
-                dataKey="monthLabel"
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                tickFormatter={(v) => `$${v}`}
-                axisLine={false}
-                tickLine={false}
-                orientation="right"
-                width={40}
-              />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (active && payload && payload.length > 0 && payload[0].value && Number(payload[0].value) > 0) {
-                    return (
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
-                        <div className="text-gray-500 mb-1">{label} (Projected)</div>
-                        <div className="font-medium text-[#0a8043]">
-                          {formatCurrency(Number(payload[0].value))}
-                          <span className="text-gray-400 text-xs ml-1">{getCurrencyLabel()}</span>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={projectionChartData} barCategoryGap="12%">
+                <defs>
+                  <linearGradient id="projBarGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#16a34a" stopOpacity={0.7} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis
+                  dataKey="monthLabel"
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  tickFormatter={(v) => `$${v}`}
+                  axisLine={false}
+                  tickLine={false}
+                  orientation="right"
+                  width={40}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0 && payload[0].value && Number(payload[0].value) > 0) {
+                      return (
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
+                          <div className="text-gray-500 mb-1">{label} (Projected)</div>
+                          <div className="font-medium text-[#0a8043]">
+                            {formatCurrency(Number(payload[0].value))}
+                            <span className="text-gray-400 text-xs ml-1">{getCurrencyLabel()}</span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Bar dataKey="amount" fill="url(#projBarGradient)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar dataKey="amount" fill="url(#projBarGradient)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
 
         {/* Summary bar */}
         <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-4 md:gap-6">
+          <div className="flex items-center gap-4 md:gap-8">
             <div>
               <div className="text-[10px] text-gray-400">
                 {dataTab === "bySymbol" ? "YTD Total" : "Est. Annual"}
@@ -579,10 +586,18 @@ export default function DividendsPage() {
             </div>
             <div>
               <div className="text-[10px] text-gray-400">
-                {dataTab === "bySymbol" ? "Payments" : "Symbols"}
+                Symbols
               </div>
               <div className="text-xs md:text-sm font-medium text-gray-700">
-                {dataTab === "bySymbol" ? dividends.length : yahooProjections?.projections.length || 0}
+                {dataTab === "bySymbol" ? dividendsBySymbol.length : yahooProjections?.projections.length || 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-400">
+                {dataTab === "bySymbol" ? "Payments" : "Est. Payments"}
+              </div>
+              <div className="text-xs md:text-sm font-medium text-gray-700">
+                {dataTab === "bySymbol" ? dividends.length : projectedPaymentsCount}
               </div>
             </div>
           </div>
@@ -597,21 +612,19 @@ export default function DividendsPage() {
         <div className="border-b border-gray-200 mb-4 flex gap-4">
           <button
             onClick={() => setDataTab("bySymbol")}
-            className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-              dataTab === "bySymbol"
-                ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                : "text-gray-400 hover:text-gray-600"
-            }`}
+            className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${dataTab === "bySymbol"
+              ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+              : "text-gray-400 hover:text-gray-600"
+              }`}
           >
             BY SYMBOL
           </button>
           <button
             onClick={() => setDataTab("projected")}
-            className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-              dataTab === "projected"
-                ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                : "text-gray-400 hover:text-gray-600"
-            }`}
+            className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${dataTab === "projected"
+              ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+              : "text-gray-400 hover:text-gray-600"
+              }`}
           >
             PROJECTED
           </button>
@@ -634,11 +647,10 @@ export default function DividendsPage() {
                         <span className="text-base font-bold text-gray-900 tracking-tight">
                           {div.symbol.replace(".TO", "")}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          div.currency === "CAD"
-                            ? "bg-red-50 text-red-600 border border-red-100"
-                            : "bg-blue-50 text-blue-600 border border-blue-100"
-                        }`}>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${div.currency === "CAD"
+                          ? "bg-red-50 text-red-600 border border-red-100"
+                          : "bg-blue-50 text-blue-600 border border-blue-100"
+                          }`}>
                           {div.currency}
                         </span>
                       </div>
@@ -697,29 +709,8 @@ export default function DividendsPage() {
         )}
 
         {/* Projected Tab Content - Yahoo Finance based */}
-        {dataTab === "projected" && yahooProjections && yahooProjections.projections.length > 0 && (
+        {(dataTab === "projected" && yahooProjections && yahooProjections.projections.length > 0) && (
           <>
-            {/* Summary Card */}
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4 border border-green-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">Est. monthly dividend</div>
-                  <div className="text-2xl font-bold text-[#0a8043]">
-                    ${formatNumberTrim(totalProjectedAmount / 12)}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-500 mb-1">Est. annual total</div>
-                  <div className="text-lg font-semibold text-gray-700">
-                    ${formatNumberTrim(totalProjectedAmount)}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-green-200/50 text-[10px] text-gray-500">
-                Based on Yahoo Finance dividend data ({getCurrencyLabel()})
-              </div>
-            </div>
-
             {/* Mobile Card View */}
             <div className="md:hidden space-y-2">
               {yahooProjections.projections.map((proj, idx) => (
@@ -732,11 +723,10 @@ export default function DividendsPage() {
                       <span className="text-base font-bold text-gray-900 tracking-tight">
                         {proj.symbol.replace(".TO", "")}
                       </span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        proj.currency === "CAD"
-                          ? "bg-red-50 text-red-600 border border-red-100"
-                          : "bg-blue-50 text-blue-600 border border-blue-100"
-                      }`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${proj.currency === "CAD"
+                        ? "bg-red-50 text-red-600 border border-red-100"
+                        : "bg-blue-50 text-blue-600 border border-blue-100"
+                        }`}>
                         {proj.currency}
                       </span>
                     </div>
@@ -806,11 +796,10 @@ export default function DividendsPage() {
                           <span className="font-medium text-sm text-[#202124]">
                             {proj.symbol.replace(".TO", "")}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                            proj.currency === "CAD"
-                              ? "bg-red-50 text-red-600"
-                              : "bg-blue-50 text-blue-600"
-                          }`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${proj.currency === "CAD"
+                            ? "bg-red-50 text-red-600"
+                            : "bg-blue-50 text-blue-600"
+                            }`}>
                             {proj.currency}
                           </span>
                         </div>
