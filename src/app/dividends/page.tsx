@@ -39,24 +39,31 @@ interface DividendBySymbol {
   count: number;
 }
 
-interface DividendProjection {
+// Yahoo Finance based projection
+interface YahooProjection {
   symbol: string;
   currency: string;
-  totalPastYear: number;
-  paymentCount: number;
-  avgPayment: number;
-  frequency: string;
-  projectedAnnual: number;
-  remainingPayments: number;
-  projectedRemaining: number;
-  confidence: number;
+  quantity: number;
+  price: number;
+  marketValue: number;
+  dividendYield: number | null;
+  annualDividendPerShare: number | null;
+  projectedAnnualDividend: number;
+  projectedQuarterlyDividend: number;
+  projectedMonthlyDividend: number;
 }
 
-interface ProjectionSummary {
-  projections: DividendProjection[];
-  totalProjectedRemaining: number;
+interface YahooProjectionSummary {
+  projections: YahooProjection[];
   totalProjectedAnnual: number;
+  totalProjectedMonthly: number;
   year: number;
+}
+
+interface MonthlyYahooProjection {
+  month: string;
+  totalAmount: number;
+  currency: string;
 }
 
 type CurrencyView = "cad" | "usd";
@@ -72,8 +79,8 @@ export default function DividendsPage() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [dividends, setDividends] = useState<DividendData[]>([]);
   const [dividendsBySymbol, setDividendsBySymbol] = useState<DividendBySymbol[]>([]);
-  const [projections, setProjections] = useState<ProjectionSummary | null>(null);
-  const [projectedMonthly, setProjectedMonthly] = useState<DividendData[]>([]);
+  const [yahooProjections, setYahooProjections] = useState<YahooProjectionSummary | null>(null);
+  const [yahooMonthlyProjections, setYahooMonthlyProjections] = useState<MonthlyYahooProjection[]>([]);
   const [projectedSymbols, setProjectedSymbols] = useState<string[]>([]);
   const [selectedProjectedSymbol, setSelectedProjectedSymbol] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -85,13 +92,14 @@ export default function DividendsPage() {
   }, []);
 
   useEffect(() => {
-    fetchProjections();
-    fetchProjectedMonthly();
+    fetchYahooProjections();
   }, [selectedAccount]);
 
   useEffect(() => {
-    fetchProjectedMonthly();
-  }, [selectedProjectedSymbol]);
+    if (dataTab === "projected") {
+      fetchYahooMonthlyProjections();
+    }
+  }, [selectedAccount, selectedProjectedSymbol, dataTab]);
 
   useEffect(() => {
     fetchYears();
@@ -192,30 +200,35 @@ export default function DividendsPage() {
     }
   }
 
-  async function fetchProjections() {
+  async function fetchYahooProjections() {
     try {
       const accountParam = selectedAccount !== "all" ? `&accountId=${selectedAccount}` : "";
-      const res = await fetch(`/api/dividends?type=projected${accountParam}`);
+      const res = await fetch(`/api/dividends?type=yahooProjected${accountParam}`);
       const data = await res.json();
-      setProjections(data);
-      // Set projected symbols from projections
+      setYahooProjections(data);
+      // Set projected symbols from yahoo projections
       if (data.projections) {
-        setProjectedSymbols(data.projections.map((p: DividendProjection) => p.symbol));
+        setProjectedSymbols(data.projections.map((p: YahooProjection) => p.symbol));
       }
     } catch (error) {
-      console.error("Failed to fetch projections:", error);
+      console.error("Failed to fetch yahoo projections:", error);
     }
   }
 
-  async function fetchProjectedMonthly() {
+  async function fetchYahooMonthlyProjections() {
     try {
-      const accountParam = selectedAccount !== "all" ? `&accountId=${selectedAccount}` : "";
-      const symbolParam = selectedProjectedSymbol !== "all" ? `&symbol=${selectedProjectedSymbol}` : "";
-      const res = await fetch(`/api/dividends?type=projectedMonthly${accountParam}${symbolParam}`);
+      let url = `/api/dividends?type=yahooMonthlyProjected`;
+      if (selectedAccount !== "all") {
+        url += `&accountId=${selectedAccount}`;
+      }
+      if (selectedProjectedSymbol !== "all") {
+        url += `&symbol=${selectedProjectedSymbol}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
-      setProjectedMonthly(data);
+      setYahooMonthlyProjections(data);
     } catch (error) {
-      console.error("Failed to fetch projected monthly:", error);
+      console.error("Failed to fetch yahoo monthly projections:", error);
     }
   }
 
@@ -255,7 +268,7 @@ export default function DividendsPage() {
     return months;
   })();
 
-  // Chart data for projections - monthly (same format as bySymbol)
+  // Chart data for projections - actual payment months from Yahoo Finance + historical schedule
   const projectionChartData = (() => {
     const currentYear = new Date().getFullYear();
     const months: { month: string; monthLabel: string; amount: number }[] = [];
@@ -267,21 +280,21 @@ export default function DividendsPage() {
       months.push({ month: monthStr, monthLabel, amount: 0 });
     }
 
-    // Fill in data based on currency view (combined CAD or USD)
-    for (const div of projectedMonthly) {
-      const monthData = months.find((d) => d.month === div.month);
+    // Fill in data from yahooMonthlyProjections based on currency view
+    for (const proj of yahooMonthlyProjections) {
+      const monthData = months.find((d) => d.month === proj.month);
       if (monthData) {
         if (currencyView === "cad") {
-          if (div.currency === "USD") {
-            monthData.amount += div.totalAmount * fxRate;
+          if (proj.currency === "USD") {
+            monthData.amount += proj.totalAmount * fxRate;
           } else {
-            monthData.amount += div.totalAmount;
+            monthData.amount += proj.totalAmount;
           }
         } else {
-          if (div.currency === "CAD") {
-            monthData.amount += div.totalAmount / fxRate;
+          if (proj.currency === "CAD") {
+            monthData.amount += proj.totalAmount / fxRate;
           } else {
-            monthData.amount += div.totalAmount;
+            monthData.amount += proj.totalAmount;
           }
         }
       }
@@ -290,23 +303,35 @@ export default function DividendsPage() {
     return months;
   })();
 
-  // Total projected amount
+  // Total projected amount from Yahoo Finance
   const totalProjectedAmount = (() => {
-    const totalUSD = projectedMonthly
-      .filter((d) => d.currency === "USD")
-      .reduce((sum, d) => sum + d.totalAmount, 0);
-    const totalCAD = projectedMonthly
-      .filter((d) => d.currency === "CAD")
-      .reduce((sum, d) => sum + d.totalAmount, 0);
+    if (!yahooProjections?.projections) return 0;
 
-    if (currencyView === "cad") {
-      return totalCAD + totalUSD * fxRate;
-    } else {
-      return totalUSD + totalCAD / fxRate;
+    let total = 0;
+    for (const proj of yahooProjections.projections) {
+      if (currencyView === "cad") {
+        if (proj.currency === "USD") {
+          total += proj.projectedAnnualDividend * fxRate;
+        } else {
+          total += proj.projectedAnnualDividend;
+        }
+      } else {
+        if (proj.currency === "CAD") {
+          total += proj.projectedAnnualDividend / fxRate;
+        } else {
+          total += proj.projectedAnnualDividend;
+        }
+      }
     }
+    return total;
   })();
 
-  const projectedMonthlyAverage = totalProjectedAmount / 12;
+  // Calculate projected monthly average from actual payment months
+  const projectedMonthlyAverage = (() => {
+    const monthsWithPayments = projectionChartData.filter(m => m.amount > 0).length;
+    const totalFromChart = projectionChartData.reduce((sum, m) => sum + m.amount, 0);
+    return monthsWithPayments > 0 ? totalFromChart / 12 : 0;
+  })();
 
   // Total dividends calculation based on currency view
   const totalAmount = (() => {
@@ -557,7 +582,7 @@ export default function DividendsPage() {
                 {dataTab === "bySymbol" ? "Payments" : "Symbols"}
               </div>
               <div className="text-xs md:text-sm font-medium text-gray-700">
-                {dataTab === "bySymbol" ? dividends.length : projections?.projections.length || 0}
+                {dataTab === "bySymbol" ? dividends.length : yahooProjections?.projections.length || 0}
               </div>
             </div>
           </div>
@@ -671,33 +696,33 @@ export default function DividendsPage() {
           )
         )}
 
-        {/* Projected Tab Content */}
-        {dataTab === "projected" && projections && projections.projections.length > 0 && (
+        {/* Projected Tab Content - Yahoo Finance based */}
+        {dataTab === "projected" && yahooProjections && yahooProjections.projections.length > 0 && (
           <>
             {/* Summary Card */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4 border border-green-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Estimated remaining this year</div>
+                  <div className="text-xs text-gray-500 mb-1">Est. monthly dividend</div>
                   <div className="text-2xl font-bold text-[#0a8043]">
-                    ${formatNumberTrim(projections.totalProjectedRemaining)}
+                    ${formatNumberTrim(totalProjectedAmount / 12)}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-500 mb-1">Est. annual total</div>
                   <div className="text-lg font-semibold text-gray-700">
-                    ${formatNumberTrim(projections.totalProjectedAnnual)}
+                    ${formatNumberTrim(totalProjectedAmount)}
                   </div>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-green-200/50 text-[10px] text-gray-500">
-                Based on historical dividend patterns
+                Based on Yahoo Finance dividend data ({getCurrencyLabel()})
               </div>
             </div>
 
             {/* Mobile Card View */}
             <div className="md:hidden space-y-2">
-              {projections.projections.map((proj, idx) => (
+              {yahooProjections.projections.map((proj, idx) => (
                 <div
                   key={idx}
                   className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
@@ -715,28 +740,30 @@ export default function DividendsPage() {
                         {proj.currency}
                       </span>
                     </div>
-                    <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                      proj.confidence >= 80
-                        ? "bg-green-100 text-green-700"
-                        : proj.confidence >= 60
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-gray-100 text-gray-600"
-                    }`}>
-                      {proj.confidence}% conf
-                    </div>
+                    {proj.dividendYield && proj.dividendYield > 0 ? (
+                      <div className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                        {proj.dividendYield.toFixed(2)}% yield
+                      </div>
+                    ) : (
+                      <div className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
+                        No dividend
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <div className="text-gray-400">Frequency</div>
-                      <div className="font-medium text-gray-700 capitalize">{proj.frequency}</div>
+                      <div className="text-gray-400">Shares</div>
+                      <div className="font-medium text-gray-700">{formatNumberTrim(proj.quantity)}</div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Remaining</div>
-                      <div className="font-medium text-gray-700">{proj.remainingPayments} payments</div>
+                      <div className="text-gray-400">Annual/Share</div>
+                      <div className="font-medium text-gray-700">
+                        {proj.annualDividendPerShare ? `$${proj.annualDividendPerShare.toFixed(2)}` : '-'}
+                      </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-gray-400">Est. Amount</div>
-                      <div className="font-bold text-[#0a8043]">${formatNumberTrim(proj.projectedRemaining)}</div>
+                      <div className="text-gray-400">Est. Annual</div>
+                      <div className="font-bold text-[#0a8043]">${formatNumberTrim(proj.projectedAnnualDividend)}</div>
                     </div>
                   </div>
                 </div>
@@ -751,25 +778,25 @@ export default function DividendsPage() {
                     <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
                       Symbol
                     </th>
-                    <th className="text-center py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Frequency
+                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Shares
                     </th>
                     <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Avg Payment
+                      Price
                     </th>
                     <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Remaining
+                      Yield
                     </th>
                     <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Est. Amount
+                      Annual/Share
                     </th>
-                    <th className="text-center py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Confidence
+                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Est. Annual
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {projections.projections.map((proj, idx) => (
+                  {yahooProjections.projections.map((proj, idx) => (
                     <tr
                       key={idx}
                       className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
@@ -782,40 +809,32 @@ export default function DividendsPage() {
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                             proj.currency === "CAD"
                               ? "bg-red-50 text-red-600"
-                            : "bg-blue-50 text-blue-600"
-                        }`}>
-                          {proj.currency}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center text-sm text-[#5f6368] capitalize">
-                      {proj.frequency}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                      ${formatNumberTrim(proj.avgPayment)}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
-                      {proj.remainingPayments} payments
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-green-600 font-medium">
-                      ${formatNumberTrim(proj.projectedRemaining)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        proj.confidence >= 80
-                          ? "bg-green-100 text-green-700"
-                          : proj.confidence >= 60
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {proj.confidence}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                              : "bg-blue-50 text-blue-600"
+                          }`}>
+                            {proj.currency}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                        {formatNumberTrim(proj.quantity)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                        ${formatNumberTrim(proj.price)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
+                        {proj.dividendYield ? `${proj.dividendYield.toFixed(2)}%` : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                        {proj.annualDividendPerShare ? `$${proj.annualDividendPerShare.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-green-600 font-medium">
+                        ${formatNumberTrim(proj.projectedAnnualDividend)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>

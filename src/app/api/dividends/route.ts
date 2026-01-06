@@ -5,7 +5,7 @@ import {
   getDividendSymbols,
   getDividendYears,
 } from "@/lib/calculations/dividends";
-import { calculateProjectedDividends, calculateMonthlyProjectedDividends } from "@/lib/calculations/projectedDividends";
+import { calculateProjectedDividends, calculateMonthlyProjectedDividends, getHeldDividendSymbols, calculateYahooProjectedDividends, calculateYahooMonthlyProjections } from "@/lib/calculations/projectedDividends";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +22,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(symbols);
     }
 
+    if (type === "heldSymbols") {
+      // Dividend symbols that are currently held
+      const symbols = await getHeldDividendSymbols(accountId || undefined);
+      return NextResponse.json(symbols);
+    }
+
     if (type === "years") {
       // Available years list
       const years = await getDividendYears(accountId);
@@ -35,8 +41,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "projected") {
-      // Projected dividends summary
+      // Projected dividends summary (historical-based)
       const projections = await calculateProjectedDividends(accountId || undefined, year || undefined);
+      return NextResponse.json(projections);
+    }
+
+    if (type === "yahooProjected") {
+      // Projected dividends using Yahoo Finance data
+      const projections = await calculateYahooProjectedDividends(accountId || undefined);
+      return NextResponse.json(projections);
+    }
+
+    if (type === "yahooMonthlyProjected") {
+      // Monthly projected dividends using Yahoo Finance + historical payment schedule
+      const projections = await calculateYahooMonthlyProjections(
+        accountId || undefined,
+        symbol || undefined
+      );
       return NextResponse.json(projections);
     }
 

@@ -109,3 +109,53 @@ export async function getUsdCadRate(): Promise<number> {
     return 1.35; // 기본값
   }
 }
+
+export interface DividendInfo {
+  symbol: string;
+  price: number;
+  currency: string;
+  dividendYield: number | null; // As percentage (e.g., 3.74 for 3.74%)
+  trailingAnnualDividendRate: number | null; // Annual dividend per share
+  dividendDate: Date | null; // Next dividend date if available
+}
+
+/**
+ * 종목 배당 정보 조회
+ */
+export async function getDividendInfo(symbol: string): Promise<DividendInfo | null> {
+  try {
+    await waitForRateLimit();
+
+    const quote = await yahooFinance.quote(symbol);
+
+    return {
+      symbol: quote.symbol,
+      price: quote.regularMarketPrice || 0,
+      currency: quote.currency || "USD",
+      dividendYield: quote.dividendYield || null,
+      trailingAnnualDividendRate: quote.trailingAnnualDividendRate || null,
+      dividendDate: quote.dividendDate ? new Date(quote.dividendDate) : null,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch dividend info for ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * 복수 종목 배당 정보 조회
+ */
+export async function getDividendInfoBatch(
+  symbols: string[]
+): Promise<Map<string, DividendInfo>> {
+  const results = new Map<string, DividendInfo>();
+
+  for (const symbol of symbols) {
+    const info = await getDividendInfo(symbol);
+    if (info) {
+      results.set(symbol, info);
+    }
+  }
+
+  return results;
+}
