@@ -68,3 +68,29 @@ export function normalizeAccountType(accountType: string): string {
   if (accountType.includes("RRSP") || accountType.includes("RSP")) return "RRSP";
   return accountType;
 }
+
+/**
+ * CON/WDR 트랜잭션의 description에서 BOOK VALUE 또는 MARKET VALUE 금액 추출
+ * 예: "SCHWAB STRATEGIC TR US DIVIDEND EQUITY ETF RSP CONTRIBUTION 4,485.78 U$ CNV@ 1.37940000 6,187.68 C$ EQUIVALENT BOOK VALUE $4,485.78"
+ * 예: "SCHWAB STRATEGIC TR US DIVIDEND EQUITY ETF TFSA WITHDRAWAL 4,485.78 U$ CNV@ 1.37940000 6,187.68 C$ EQUIVALENT MARKET VALUE $4,485.78"
+ */
+export function extractBookValue(description: string): number | null {
+  // Pattern: "BOOK VALUE $4,485.78" or "MARKET VALUE $4,485.78"
+  const match = description.match(/(?:BOOK|MARKET)\s*VALUE\s*\$?([\d,]+\.?\d*)/i);
+  if (match) {
+    return parseFloat(match[1].replace(/,/g, ""));
+  }
+  return null;
+}
+
+/**
+ * CON/WDR 트랜잭션의 description에서 USD 금액 추출 (U$ 앞의 금액)
+ * 예: "4,485.78 U$ CNV@" -> 4485.78
+ */
+export function extractUsdAmount(description: string): number | null {
+  const match = description.match(/([\d,]+\.?\d*)\s*U\$/i);
+  if (match) {
+    return parseFloat(match[1].replace(/,/g, ""));
+  }
+  return null;
+}

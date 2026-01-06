@@ -59,8 +59,8 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Navigation - Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-bottom">
-        <div className="flex items-center justify-around h-16 px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100 safe-area-bottom">
+        <div className="flex items-center justify-around h-[68px] px-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -70,25 +70,57 @@ export function Navigation() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all duration-200",
+                  "relative flex flex-col items-center justify-center flex-1 h-full py-2 transition-all duration-300 ease-out",
                   isActive
-                    ? "bg-[#0a8043] text-white shadow-lg shadow-[#0a8043]/30"
+                    ? "text-[#0a8043]"
                     : "text-gray-400 active:scale-95"
                 )}
               >
-                <Icon
+                {/* Active indicator pill */}
+                <div
                   className={cn(
-                    "transition-all duration-200",
-                    isActive ? "w-6 h-6" : "w-5 h-5"
+                    "absolute top-1.5 w-12 h-[3px] rounded-full transition-all duration-300 ease-out",
+                    isActive
+                      ? "bg-[#0a8043] opacity-100"
+                      : "bg-transparent opacity-0"
                   )}
-                  strokeWidth={isActive ? 2.5 : 2}
                 />
+
+                {/* Icon container with subtle background on active */}
+                <div
+                  className={cn(
+                    "flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 ease-out",
+                    isActive
+                      ? "bg-[#0a8043]/10"
+                      : "bg-transparent"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "transition-all duration-300 ease-out",
+                      isActive ? "w-[22px] h-[22px]" : "w-5 h-5"
+                    )}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                  />
+                </div>
+
+                {/* Label */}
+                <span
+                  className={cn(
+                    "text-[10px] font-medium mt-0.5 transition-all duration-300 ease-out",
+                    isActive
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-60 translate-y-0"
+                  )}
+                >
+                  {item.label.charAt(0) + item.label.slice(1).toLowerCase()}
+                </span>
               </Link>
             );
           })}
         </div>
         {/* Safe area for devices with home indicator */}
-        <div className="h-safe-area-bottom bg-white" />
+        <div className="h-safe-area-bottom bg-white/95" />
       </nav>
 
       {/* Mobile Header - Simple logo only */}

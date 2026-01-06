@@ -73,6 +73,8 @@ export default function HoldingsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("inception");
   const [currencyView, setCurrencyView] = useState<CurrencyView>("combined_cad");
   const [showNetDeposits, setShowNetDeposits] = useState(true);
+  const [expandedPosition, setExpandedPosition] = useState<number | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -124,10 +126,8 @@ export default function HoldingsPage() {
   ];
 
   const currencyViews: { value: CurrencyView; label: string }[] = [
-    { value: "combined_cad", label: "Combined (CAD)" },
-    { value: "combined_usd", label: "Combined (USD)" },
-    { value: "cad", label: "CAD" },
-    { value: "usd", label: "USD" },
+    { value: "combined_cad", label: "CAD" },
+    { value: "combined_usd", label: "USD" },
   ];
 
   const summary = portfolio?.summary;
@@ -266,12 +266,12 @@ export default function HoldingsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Account tabs */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-2 md:gap-3 flex-wrap">
         <button
           onClick={() => setSelectedAccount("all")}
-          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+          className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
             selectedAccount === "all"
               ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
               : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
@@ -283,7 +283,7 @@ export default function HoldingsPage() {
           <button
             key={acc.id}
             onClick={() => setSelectedAccount(acc.id)}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+            className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
               selectedAccount === acc.id
                 ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
                 : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
@@ -302,12 +302,12 @@ export default function HoldingsPage() {
         <>
           {/* Total Equity 헤더 */}
           <div>
-            <div className="text-sm text-gray-500 mb-1">
-              Total equity ({currencyView === "combined_cad" ? "Combined in CAD" :
-                           currencyView === "combined_usd" ? "Combined in USD" :
+            <div className="text-xs md:text-sm text-gray-500 mb-1">
+              Total equity ({currencyView === "combined_cad" ? "CAD" :
+                           currencyView === "combined_usd" ? "USD" :
                            currencyView === "cad" ? "CAD" : "USD"})
             </div>
-            <div className="text-4xl font-bold text-gray-900">
+            <div className="text-3xl md:text-4xl font-bold text-gray-900">
               {formatCurrency(displayValues.totalEquity)}
             </div>
           </div>
@@ -374,12 +374,12 @@ export default function HoldingsPage() {
           </div>
 
           {/* 기간 선택 버튼 */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1.5 md:gap-2 flex-wrap">
             {periods.map((p) => (
               <button
                 key={p.value}
                 onClick={() => setSelectedPeriod(p.value)}
-                className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
                   selectedPeriod === p.value
                     ? "border-gray-400 bg-white font-medium"
                     : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
@@ -392,80 +392,99 @@ export default function HoldingsPage() {
 
           {/* 통화 선택 + 요약 */}
           <div>
-            {/* 통화 탭 */}
-            <div className="flex gap-2 mb-6">
-              {currencyViews.map((cv) => (
-                <button
-                  key={cv.value}
-                  onClick={() => setCurrencyView(cv.value)}
-                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                    currencyView === cv.value
-                      ? "border-green-500 text-green-600 bg-white font-medium"
-                      : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-                  }`}
+            {/* 통화 탭 + 모바일 토글 */}
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <div className="flex gap-1.5 md:gap-2">
+                {currencyViews.map((cv) => (
+                  <button
+                    key={cv.value}
+                    onClick={() => setCurrencyView(cv.value)}
+                    className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
+                      currencyView === cv.value
+                        ? "border-green-500 text-green-600 bg-white font-medium"
+                        : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
+                    }`}
+                  >
+                    {cv.label}
+                  </button>
+                ))}
+              </div>
+              {/* 모바일 토글 버튼 */}
+              <button
+                onClick={() => setShowSummary(!showSummary)}
+                className="md:hidden flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <span>{showSummary ? "Hide" : "Details"}</span>
+                <svg
+                  className={`w-4 h-4 transition-transform duration-200 ${showSummary ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  {cv.label}
-                </button>
-              ))}
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
 
-            {/* 요약 그리드 */}
-            <div className="grid grid-cols-2 gap-x-16 gap-y-4">
-              {/* 왼쪽 컬럼 */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Today&apos;s P&amp;L</span>
-                  <span className="font-medium">
-                    {formatCurrency(displayValues.todayPnL)}
-                  </span>
+            {/* 요약 그리드 - 데스크탑 항상 표시, 모바일 토글 */}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${
+              showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
+            }`}>
+              <div className="grid grid-cols-2 gap-x-4 md:gap-x-16 gap-y-2 md:gap-y-4">
+                {/* 왼쪽 컬럼 */}
+                <div className="space-y-2 md:space-y-4">
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Today&apos;s P&amp;L</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(displayValues.todayPnL, 2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Open P&amp;L</span>
+                    <span className={`text-sm md:text-base font-medium ${displayValues.openPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {displayValues.openPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(displayValues.openPnL), 2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Total P&amp;L</span>
+                    <span className={`text-sm md:text-base font-medium ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {totalPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(totalPnL), 2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Net deposits</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(summary?.netDeposits || 0, 2)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Open P&amp;L</span>
-                  <span className={`font-medium ${displayValues.openPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {displayValues.openPnL >= 0 ? "+" : ""}
-                    {formatCurrency(displayValues.openPnL)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Total P&amp;L</span>
-                  <span className={`font-medium ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {totalPnL >= 0 ? "+" : ""}
-                    {formatCurrency(totalPnL)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Net deposits</span>
-                  <span className="font-medium">
-                    {formatCurrency(summary?.netDeposits || 0)}
-                  </span>
-                </div>
-              </div>
 
-              {/* 오른쪽 컬럼 */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Total equity</span>
-                  <span className="font-medium">
-                    {formatCurrency(displayValues.totalEquity)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Market value</span>
-                  <span className="font-medium">
-                    {formatCurrency(displayValues.marketValue)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Cash</span>
-                  <span className="font-medium">
-                    {formatCurrency(displayValues.cash)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-dotted border-gray-200">
-                  <span className="text-gray-600">Buying power</span>
-                  <span className="font-medium">
-                    {formatCurrency(Math.max(0, displayValues.cash))}
-                  </span>
+                {/* 오른쪽 컬럼 */}
+                <div className="space-y-2 md:space-y-4">
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Total equity</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(displayValues.totalEquity, 2)} <span className="text-gray-400 text-xs">{currencyView === "combined_cad" ? "CAD" : "USD"}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Market value</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(displayValues.marketValue, 2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Cash</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(displayValues.cash, 2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
+                    <span className="text-xs md:text-base text-gray-600">Buying power</span>
+                    <span className="text-sm md:text-base font-medium text-gray-900">
+                      ${formatNumber(Math.max(0, displayValues.cash), 2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -497,110 +516,275 @@ export default function HoldingsPage() {
             </div>
           </div>
 
-          {/* 포지션 테이블 - Questrade 스타일 */}
+          {/* 포지션 - 모바일: 카드 / 데스크탑: 테이블 */}
           {activeTab === "positions" && (
-            <div className="overflow-hidden">
+            <>
               {sortedPositions.length === 0 ? (
                 <div className="flex items-center justify-center h-32">
                   <div className="text-gray-500">No positions</div>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-[#e8eaed]">
-                      <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Symbol
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Today&apos;s P&amp;L
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Open P&amp;L
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Open qty
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Avg price
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Symbol price
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Market value
-                      </th>
-                      <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                        Currency
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedPositions.map((pos, idx) => (
-                      <tr
-                        key={idx}
-                        className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
-                      >
-                        {/* Symbol */}
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-[#202124] text-sm">
-                            {pos.symbolMapped}
-                          </div>
-                          <div className="text-xs text-[#5f6368] truncate max-w-[200px]">
-                            {pos.symbol !== pos.symbolMapped ? pos.symbol : ""}
-                          </div>
-                        </td>
+                <>
+                  {/* 모바일 카드 뷰 */}
+                  <div className="md:hidden divide-y divide-gray-100">
+                    {sortedPositions.map((pos, idx) => {
+                      const isPositive = pos.openPnL >= 0;
+                      const sparklineColor = isPositive ? "#16a34a" : "#dc2626";
 
-                        {/* Today's P&L */}
-                        <td className="py-3 px-4 text-right">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm bg-[#e8f5e9] text-[#5f6368]">
-                            {formatCurrency(0)}
-                          </span>
-                        </td>
+                      const generateSparkline = () => {
+                        const points = [];
+                        const basePrice = pos.avgCost;
+                        const currentPrice = pos.currentPrice;
+                        const steps = 20;
 
-                        {/* Open P&L */}
-                        <td className="py-3 px-4 text-right">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${
-                              pos.openPnL >= 0
-                                ? "bg-[#e8f5e9] text-[#137333]"
-                                : "bg-[#fce8e6] text-[#c5221f]"
+                        for (let i = 0; i <= steps; i++) {
+                          const progress = i / steps;
+                          const trend = basePrice + (currentPrice - basePrice) * progress;
+                          const noise = (Math.random() - 0.5) * (currentPrice * 0.02);
+                          points.push(trend + noise);
+                        }
+                        points[points.length - 1] = currentPrice;
+
+                        const min = Math.min(...points);
+                        const max = Math.max(...points);
+                        const range = max - min || 1;
+
+                        const svgPoints = points.map((p, i) => {
+                          const x = (i / steps) * 80;
+                          const y = 24 - ((p - min) / range) * 20;
+                          return `${x},${y}`;
+                        }).join(" ");
+
+                        return svgPoints;
+                      };
+
+                      const sparklinePoints = generateSparkline();
+                      const isExpanded = expandedPosition === idx;
+
+                      return (
+                        <div key={idx} className="overflow-hidden">
+                          <div
+                            onClick={() => setExpandedPosition(isExpanded ? null : idx)}
+                            className={`flex items-center gap-4 py-4 px-2 transition-colors cursor-pointer ${
+                              isExpanded ? "bg-gray-50" : "hover:bg-gray-50/50"
                             }`}
                           >
-                            {pos.openPnL >= 0 ? "+" : ""}
-                            {formatCurrency(pos.openPnL)}
-                          </span>
-                        </td>
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200/50">
+                              <span className="text-xs font-bold text-gray-600">
+                                {pos.symbolMapped.replace(".TO", "").slice(0, 3)}
+                              </span>
+                            </div>
 
-                        {/* Open qty */}
-                        <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                          {formatNumber(pos.quantity, 4)}
-                        </td>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-gray-900 text-sm">
+                                  {pos.symbolMapped.replace(".TO", "")}
+                                </span>
+                                <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                                  pos.currency === "CAD" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                                }`}>
+                                  {pos.currency === "CAD" ? "C" : "U"}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {formatNumber(pos.quantity, 2)} @ ${formatNumber(pos.avgCost, 2)}
+                              </div>
+                            </div>
 
-                        {/* Avg price */}
-                        <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                          {formatCurrency(pos.avgCost)}
-                        </td>
+                            <div className="w-20 h-8 flex-shrink-0">
+                              <svg viewBox="0 0 80 28" className="w-full h-full">
+                                <polyline
+                                  fill="none"
+                                  stroke={sparklineColor}
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  points={sparklinePoints}
+                                />
+                              </svg>
+                            </div>
 
-                        {/* Symbol price */}
-                        <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                          {formatCurrency(pos.currentPrice)}
-                        </td>
+                            <div className="text-right flex-shrink-0 min-w-[100px]">
+                              <div className="font-semibold text-gray-900 text-sm">
+                                ${formatNumber(pos.marketValue, 2)}
+                              </div>
+                              <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                {isPositive ? "+" : "-"}${formatNumber(Math.abs(pos.openPnL), 2)}
+                                <span className="ml-1">
+                                  ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                        {/* Market value */}
-                        <td className="py-3 px-4 text-right text-sm text-[#202124]">
-                          {formatCurrency(pos.marketValue)}
-                        </td>
+                          <div
+                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                              isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
+                            }`}
+                          >
+                            <div className="bg-gray-50 px-4 pb-4 pt-2">
+                              <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Open quantity</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {formatNumber(pos.quantity, 4)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Avg cost</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      ${formatNumber(pos.avgCost, 2)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Total cost</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      ${formatNumber(pos.totalCost, 2)}
+                                    </span>
+                                  </div>
+                                </div>
 
-                        {/* Currency */}
-                        <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
-                          {pos.currency}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Current price</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      ${formatNumber(pos.currentPrice, 2)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Market value</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      ${formatNumber(pos.marketValue, 2)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">Open P&L</span>
+                                    <span className={`text-sm font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                      {isPositive ? "+" : "-"}${formatNumber(Math.abs(pos.openPnL), 2)}
+                                      <span className="text-xs ml-1">
+                                        ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs text-gray-500">Today&apos;s change</span>
+                                  <span className={`text-sm font-medium ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {pos.todayPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(pos.todayPnL), 2)}
+                                    <span className="text-xs ml-1">
+                                      ({pos.todayPnLPercent >= 0 ? "+" : ""}{pos.todayPnLPercent.toFixed(2)}%)
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 데스크탑 테이블 뷰 */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-[#e8eaed]">
+                          <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Symbol
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Today&apos;s P&amp;L
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Open P&amp;L
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Open qty
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Avg price
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Symbol price
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Market value
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Currency
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedPositions.map((pos, idx) => (
+                          <tr
+                            key={idx}
+                            className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
+                          >
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-[#202124] text-sm">
+                                {pos.symbolMapped}
+                              </div>
+                              <div className="text-xs text-[#5f6368] truncate max-w-[200px]">
+                                {pos.symbol !== pos.symbolMapped ? pos.symbol : ""}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${
+                                pos.todayPnL >= 0
+                                  ? "bg-[#e8f5e9] text-[#137333]"
+                                  : "bg-[#fce8e6] text-[#c5221f]"
+                              }`}>
+                                {pos.todayPnL >= 0 ? "+" : ""}
+                                {formatCurrency(pos.todayPnL)}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm ${
+                                  pos.openPnL >= 0
+                                    ? "bg-[#e8f5e9] text-[#137333]"
+                                    : "bg-[#fce8e6] text-[#c5221f]"
+                                }`}
+                              >
+                                {pos.openPnL >= 0 ? "+" : ""}
+                                {formatCurrency(pos.openPnL)}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                              {formatNumber(pos.quantity, 4)}
+                            </td>
+
+                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                              {formatCurrency(pos.avgCost)}
+                            </td>
+
+                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                              {formatCurrency(pos.currentPrice)}
+                            </td>
+
+                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                              {formatCurrency(pos.marketValue)}
+                            </td>
+
+                            <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
+                              {pos.currency}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
-            </div>
+            </>
           )}
 
           {/* Orders tab (empty state) */}

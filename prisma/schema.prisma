@@ -14,7 +14,6 @@ model Account {
   nickname      String?
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
-
   transactions  Transaction[]
 
   @@map("accounts")
@@ -29,38 +28,33 @@ model ImportFile {
   skippedCount  Int           @map("skipped_count")
   failedCount   Int           @map("failed_count")
   importedAt    DateTime      @default(now()) @map("imported_at")
-
   transactions  Transaction[]
 
   @@map("import_files")
 }
 
 model Transaction {
-  id               String     @id @default(uuid())
-  sourceRowHash    String     @unique @map("source_row_hash")
-
-  transactionDate  DateTime   @map("transaction_date")
-  settlementDate   DateTime   @map("settlement_date")
-  action           String
-  symbol           String?
-  symbolMapped     String?    @map("symbol_mapped")
-  description      String
-  quantity         Float?
-  price            Float?
-  grossAmount      Float?     @map("gross_amount")
-  commission       Float?
-  netAmount        Float?     @map("net_amount")
-  currency         String
-  activityType     String     @map("activity_type")
-  cadEquivalent    Float?     @map("cad_equivalent")
-
-  accountId        String     @map("account_id")
-  account          Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
-  importFileId     String     @map("import_file_id")
-  importFile       ImportFile @relation(fields: [importFileId], references: [id], onDelete: Cascade)
-
-  createdAt        DateTime   @default(now()) @map("created_at")
+  id              String     @id @default(uuid())
+  sourceRowHash   String     @unique @map("source_row_hash")
+  transactionDate DateTime   @map("transaction_date")
+  settlementDate  DateTime   @map("settlement_date")
+  action          String
+  symbol          String?
+  symbolMapped    String?    @map("symbol_mapped")
+  description     String
+  quantity        Float?
+  price           Float?
+  grossAmount     Float?     @map("gross_amount")
+  commission      Float?
+  netAmount       Float?     @map("net_amount")
+  currency        String
+  activityType    String     @map("activity_type")
+  cadEquivalent   Float?     @map("cad_equivalent")
+  accountId       String     @map("account_id")
+  importFileId    String     @map("import_file_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  importFile      ImportFile @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+  account         Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
   @@index([symbol])
@@ -72,33 +66,33 @@ model Transaction {
 }
 
 model PriceCache {
-  id           String    @id @default(uuid())
-  symbol       String    @unique
-  price        Float
+  id            String   @id @default(uuid())
+  symbol        String   @unique
+  price         Float
   previousClose Float?   @map("previous_close")
-  currency     String
-  fetchedAt    DateTime  @map("fetched_at")
-  expiresAt    DateTime  @map("expires_at")
+  currency      String
+  fetchedAt     DateTime @map("fetched_at")
+  expiresAt     DateTime @map("expires_at")
 
   @@map("price_cache")
 }
 
 model FxCache {
-  id           String    @id @default(uuid())
-  pair         String    @unique
-  rate         Float
-  fetchedAt    DateTime  @map("fetched_at")
-  expiresAt    DateTime  @map("expires_at")
+  id        String   @id @default(uuid())
+  pair      String   @unique
+  rate      Float
+  fetchedAt DateTime @map("fetched_at")
+  expiresAt DateTime @map("expires_at")
 
   @@map("fx_cache")
 }
 
 model SymbolMapping {
-  id           String    @id @default(uuid())
-  internalCode String    @unique @map("internal_code")
+  id           String   @id @default(uuid())
+  internalCode String   @unique @map("internal_code")
   ticker       String
   name         String?
-  createdAt    DateTime  @default(now()) @map("created_at")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@map("symbol_mappings")
 }

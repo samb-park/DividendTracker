@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { extractBookValue, extractUsdAmount } from "@/lib/excel/normalizer";
 
 export interface Position {
   symbol: string;
@@ -11,7 +12,7 @@ export interface Position {
 }
 
 // 수량에 영향을 주는 액션들
-const QUANTITY_ACTIONS = ["Buy", "Sell", "REI", "CON", "WDR", "DIS"];
+const QUANTITY_ACTIONS = ["Buy", "Sell", "REI", "CON", "WDR", "DIS", "TFI", "TFO"];
 
 /**
  * 특정 계좌의 포지션 계산
@@ -102,10 +103,27 @@ export async function calculatePositions(
         break;
 
       case "CON":
-        // 현물 이전 입금: 수량 증가, CAD Equivalent를 비용으로
+        // 현물 이전 입금: 수량 증가
         existing.quantity += qty;
-        if (tx.cadEquivalent) {
-          existing.totalCost += tx.cadEquivalent;
+        // 비용 계산 우선순위:
+        // 1. price가 있으면 price * qty
+        // 2. Description에서 BOOK VALUE 추출
+        // 3. Description에서 USD 금액 추출
+        // 4. netAmount 사용
+        if (price > 0) {
+          existing.totalCost += Math.abs(qty * price);
+        } else {
+          const bookValue = extractBookValue(tx.description);
+          if (bookValue && bookValue > 0) {
+            existing.totalCost += bookValue;
+          } else {
+            const usdAmount = extractUsdAmount(tx.description);
+            if (usdAmount && usdAmount > 0) {
+              existing.totalCost += usdAmount;
+            } else if (tx.netAmount) {
+              existing.totalCost += Math.abs(tx.netAmount);
+            }
+          }
         }
         break;
 
@@ -122,6 +140,27 @@ export async function calculatePositions(
       case "DIS":
         // 주식 분할: 무료 주식 추가 (비용 변동 없음)
         existing.quantity += qty;
+        break;
+
+      case "TFI":
+        // Transfer In: 수량 증가
+        existing.quantity += qty;
+        // price가 있으면 사용, 없으면 netAmount
+        if (price > 0) {
+          existing.totalCost += Math.abs(qty * price);
+        } else if (tx.netAmount) {
+          existing.totalCost += Math.abs(tx.netAmount);
+        }
+        break;
+
+      case "TFO":
+        // Transfer Out: 수량 감소, 비용 비례 감소
+        if (existing.quantity > 0) {
+          const avgCost = existing.totalCost / existing.quantity;
+          const transferredQty = Math.abs(qty);
+          existing.quantity -= transferredQty;
+          existing.totalCost = existing.quantity * avgCost;
+        }
         break;
     }
 
