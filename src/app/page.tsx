@@ -72,6 +72,23 @@ interface DividendSummary {
   paymentCount: number;
 }
 
+interface YahooProjection {
+  symbol: string;
+  currency: string;
+  quantity: number;
+  price: number;
+  marketValue: number;
+  dividendYield: number | null;
+  projectedAnnualDividend: number;
+}
+
+interface YahooProjectionSummary {
+  projections: YahooProjection[];
+  totalProjectedAnnual: number;
+  totalProjectedMonthly: number;
+  year: number;
+}
+
 type Period = "1m" | "3m" | "6m" | "1y" | "inception";
 
 export default function HomePage() {
@@ -81,6 +98,8 @@ export default function HomePage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
   const [dividends, setDividends] = useState<DividendSummary[]>([]);
+  const [yahooProjections, setYahooProjections] = useState<YahooProjectionSummary | null>(null);
+  const [totalReceivedDividends, setTotalReceivedDividends] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("1y");
 
@@ -106,26 +125,31 @@ export default function HomePage() {
     setLoading(true);
     try {
       const accountParam = selectedAccount !== "all" ? `accountId=${selectedAccount}` : "";
-      const [portfolioRes, equityRes, transactionsRes] = await Promise.all([
+      const [portfolioRes, equityRes, transactionsRes, yahooRes] = await Promise.all([
         fetch(`/api/portfolio${accountParam ? `?${accountParam}` : ""}`),
         fetch(`/api/equity-history?period=${selectedPeriod}${accountParam ? `&${accountParam}` : ""}`),
         fetch(`/api/transactions?type=DIV${accountParam ? `&${accountParam}` : ""}`),
+        fetch(`/api/dividends?type=yahooProjected${accountParam ? `&${accountParam}` : ""}`),
       ]);
 
       const portfolioData = await portfolioRes.json();
       const equityData = await equityRes.json();
       const transactionsData = await transactionsRes.json();
+      const yahooData = await yahooRes.json();
 
       setSummary(portfolioData.summary);
       setPositions(portfolioData.positions || []);
       setEquityHistory(equityData);
+      setYahooProjections(yahooData);
 
       // 배당금 요약 (DIV 트랜잭션에서 추출)
       const divMap = new Map<string, DividendSummary>();
       const divTransactions = transactionsData.transactions || [];
+      let totalDivReceived = 0;
       for (const tx of divTransactions) {
         if (tx.action !== "DIV" || !tx.symbolMapped || tx.netAmount <= 0) continue;
         const key = tx.symbolMapped;
+        totalDivReceived += tx.netAmount;
         const existing = divMap.get(key);
         if (existing) {
           existing.totalAmount += tx.netAmount;
@@ -140,6 +164,7 @@ export default function HomePage() {
         }
       }
       setDividends(Array.from(divMap.values()).sort((a, b) => b.totalAmount - a.totalAmount).slice(0, 5));
+      setTotalReceivedDividends(totalDivReceived);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -162,6 +187,70 @@ export default function HomePage() {
   const totalReturnPercent = (summary?.netDeposits || 0) > 0
     ? (totalPnL / (summary?.netDeposits || 1)) * 100
     : 0;
+
+  // 포트폴리오 가중 평균 배당 수익률 계산
+  const weightedDividendYield = (() => {
+    if (!yahooProjections?.projections || yahooProjections.projections.length === 0) return 0;
+
+    let totalMarketValue = 0;
+    let weightedYield = 0;
+
+    for (const proj of yahooProjections.projections) {
+      if (proj.dividendYield && proj.dividendYield > 0) {
+        // CAD로 환산
+        const marketValueCad = proj.currency === "USD" ? proj.marketValue * fxRate : proj.marketValue;
+        totalMarketValue += marketValueCad;
+        weightedYield += (proj.dividendYield / 100) * marketValueCad;
+      }
+    }
+
+    return totalMarketValue > 0 ? (weightedYield / totalMarketValue) * 100 : 0;
+  })();
+
+  // 연간 예상 배당금 (CAD로 환산)
+  const projectedAnnualDividendCad = (() => {
+    if (!yahooProjections?.projections) return 0;
+
+    let total = 0;
+    for (const proj of yahooProjections.projections) {
+      if (proj.currency === "USD") {
+        total += proj.projectedAnnualDividend * fxRate;
+      } else {
+        total += proj.projectedAnnualDividend;
+      }
+    }
+    return total;
+  })();
+
+  // CAGR 계산 (투자 기간 기반)
+  const cagr = (() => {
+    if (equityHistory.length < 2) return 0;
+
+    const firstDate = new Date(equityHistory[0].date);
+    const lastDate = new Date(equityHistory[equityHistory.length - 1].date);
+    const years = (lastDate.getTime() - firstDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+    if (years < 0.1) return 0; // 너무 짧은 기간
+
+    const startValue = summary?.netDeposits || 1;
+    const endValue = summary?.totalEquityCad || 0;
+
+    if (startValue <= 0 || endValue <= 0) return 0;
+
+    // CAGR = (EndValue / StartValue)^(1/years) - 1
+    return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
+  })();
+
+  // 배당 포함 총 수익률 (배당금 + 자본이득)
+  const totalReturnWithDividends = (() => {
+    const netDeposits = summary?.netDeposits || 0;
+    if (netDeposits <= 0) return 0;
+
+    const capitalGain = (summary?.totalEquityCad || 0) - netDeposits;
+    const totalReturn = capitalGain + totalReceivedDividends;
+
+    return (totalReturn / netDeposits) * 100;
+  })();
 
   // 포지션 합산 (같은 심볼)
   const aggregatedPositions = (() => {
@@ -269,7 +358,7 @@ export default function HomePage() {
           </Select>
         </div>
 
-        {/* 서브 메트릭 그리드 */}
+        {/* 서브 메트릭 그리드 - 1행 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-white/20">
           <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">Today&apos;s P&amp;L</div>
@@ -290,6 +379,34 @@ export default function HomePage() {
           <div>
             <div className="text-[10px] text-white/60 uppercase tracking-wide">FX Rate</div>
             <div className="text-base font-bold mt-0.5">1 USD = {fxRate.toFixed(4)} CAD</div>
+          </div>
+        </div>
+
+        {/* 서브 메트릭 그리드 - 2행 (배당 & 성과) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 mt-3 border-t border-white/20">
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Dividend Yield</div>
+            <div className="text-base font-bold mt-0.5">
+              {weightedDividendYield.toFixed(2)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Est. Annual Div</div>
+            <div className="text-base font-bold mt-0.5">
+              {formatCurrency(projectedAnnualDividendCad)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">CAGR</div>
+            <div className="text-base font-bold mt-0.5">
+              {cagr >= 0 ? "+" : ""}{cagr.toFixed(2)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/60 uppercase tracking-wide">Total w/ Div</div>
+            <div className="text-base font-bold mt-0.5">
+              {totalReturnWithDividends >= 0 ? "+" : ""}{totalReturnWithDividends.toFixed(2)}%
+            </div>
           </div>
         </div>
       </div>

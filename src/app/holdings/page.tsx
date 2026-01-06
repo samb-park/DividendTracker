@@ -120,12 +120,6 @@ export default function HoldingsPage() {
         const cashBalanceCad = (portfolio.summary.totalCashCad || 0) +
           (portfolio.summary.totalCashUsd || 0) * fxRate;
 
-        console.log("Calculating allocation with:", {
-          positions: portfolio.positions.length,
-          targets: portfolioSettings.targets.length,
-          fxRate,
-        });
-
         const allocation = calculateWeeklyAllocation(
           portfolio.positions.map((p) => ({
             symbol: p.symbol,
@@ -138,18 +132,12 @@ export default function HoldingsPage() {
           cashBalanceCad
         );
 
-        console.log("Allocation result:", allocation);
         setAllocationSummary(allocation);
       } catch (error) {
         console.error("Allocation calculation error:", error);
         setAllocationSummary(null);
       }
     } else {
-      console.log("Skipping allocation - missing data:", {
-        hasPortfolio: !!portfolio,
-        hasSettings: !!portfolioSettings,
-        targetsLength: portfolioSettings?.targets?.length,
-      });
       setAllocationSummary(null);
     }
   }, [portfolio, portfolioSettings]);
