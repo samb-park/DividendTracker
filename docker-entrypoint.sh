@@ -12,6 +12,6 @@ fi
 
 echo "Starting application..."
 # Ensure database schema is up to date
-npx prisma db push
+node ./node_modules/prisma/build/index.js db push
 
 exec "$@"
