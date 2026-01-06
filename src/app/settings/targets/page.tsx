@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { loadPortfolioSettings } from "@/lib/calculations/allocation";
 
 interface TargetAllocation {
   symbol: string;
@@ -76,14 +77,50 @@ export default function TargetsPage() {
   }
 
   async function loadSettings() {
+    let loadedFromApi = false;
     try {
       const res = await fetch("/api/settings/portfolio");
       if (res.ok) {
         const data = await res.json();
-        setSettings(data);
+        // If data is empty (default), check local storage for migration
+        if (data.targets && data.targets.length > 0) {
+          setSettings(data);
+          loadedFromApi = true;
+        } else {
+          // API works but empty, check local
+          const local = loadPortfolioSettings();
+          if (local && local.targets.length > 0) {
+            setSettings(local);
+            // Trigger migration save
+            migrateSettings(local);
+            loadedFromApi = true;
+          } else {
+            setSettings(data); // Use default empty from API
+          }
+        }
       }
     } catch (error) {
-      console.error("Failed to load settings:", error);
+      console.error("Failed to load settings from API:", error);
+    }
+
+    // Fallback if API completely failed (e.g. server error)
+    if (!loadedFromApi) {
+      const local = loadPortfolioSettings();
+      if (local) {
+        setSettings(local);
+      }
+    }
+  }
+
+  async function migrateSettings(data: PortfolioSettings) {
+    try {
+      await fetch("/api/settings/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    } catch (e) {
+      console.error("Migration failed", e);
     }
   }
 
@@ -244,8 +281,8 @@ export default function TargetsPage() {
           </h3>
           <div
             className={`text-xs font-medium px-2 py-1 rounded-full ${isValidTotal
-                ? "bg-green-50 text-green-700"
-                : "bg-red-50 text-red-600"
+              ? "bg-green-50 text-green-700"
+              : "bg-red-50 text-red-600"
               }`}
           >
             Total: {totalWeight.toFixed(1)}%
@@ -280,8 +317,8 @@ export default function TargetsPage() {
                     </div>
                     <span
                       className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${target.currency === "CAD"
-                          ? "bg-red-50 text-red-600"
-                          : "bg-blue-50 text-blue-600"
+                        ? "bg-red-50 text-red-600"
+                        : "bg-blue-50 text-blue-600"
                         }`}
                     >
                       {target.currency}
@@ -394,8 +431,8 @@ export default function TargetsPage() {
       <button
         onClick={saveSettings}
         className={`w-full py-3 rounded-xl text-sm font-medium transition-colors ${saved
-            ? "bg-green-100 text-green-700"
-            : "bg-green-600 text-white hover:bg-green-700"
+          ? "bg-green-100 text-green-700"
+          : "bg-green-600 text-white hover:bg-green-700"
           }`}
       >
         {saved ? "Saved!" : "Save Changes"}

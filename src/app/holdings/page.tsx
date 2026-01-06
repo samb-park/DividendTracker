@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import {
   calculateWeeklyAllocation,
+  loadPortfolioSettings,
   type PortfolioSettings,
   type AllocationSummary,
 } from "@/lib/calculations/allocation";
@@ -98,14 +99,27 @@ export default function HoldingsPage() {
   }, []);
 
   async function fetchPortfolioSettings() {
+    let loadedFromApi = false;
     try {
       const res = await fetch("/api/settings/portfolio");
       if (res.ok) {
         const data = await res.json();
-        setPortfolioSettings(data);
+        // If API returns data, use it
+        if (data.targets && data.targets.length > 0) {
+          setPortfolioSettings(data);
+          loadedFromApi = true;
+        }
       }
     } catch (error) {
       console.error("Failed to load settings:", error);
+    }
+
+    if (!loadedFromApi) {
+      // Fallback to local storage if API failed or returned empty
+      const local = loadPortfolioSettings();
+      if (local) {
+        setPortfolioSettings(local);
+      }
     }
   }
 

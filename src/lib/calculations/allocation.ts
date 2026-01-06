@@ -175,3 +175,19 @@ export function calculateWeeklyAllocation(
     totalMarketValueCad,
   };
 }
+
+/**
+ * Load portfolio settings from localStorage
+ */
+export function loadPortfolioSettings(): PortfolioSettings | null {
+  if (typeof window === 'undefined') return null;
+
+  const saved = localStorage.getItem('portfolioSettings');
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return null;
+  }
+}
