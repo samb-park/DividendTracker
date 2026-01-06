@@ -57,13 +57,14 @@ export default function TransactionsPage() {
 
   // Filter state
   const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [symbolFilter, setSymbolFilter] = useState<string>("");
-  const [searchFilter, setSearchFilter] = useState<string>("");
 
   // Filter options
   const [actions, setActions] = useState<string[]>([]);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [years, setYears] = useState<number[]>([]);
 
   useEffect(() => {
     fetchAccounts();
@@ -72,7 +73,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [pagination.page, accountFilter, actionFilter]);
+  }, [pagination.page, accountFilter, yearFilter, actionFilter, symbolFilter]);
 
   async function fetchAccounts() {
     try {
@@ -86,7 +87,7 @@ export default function TransactionsPage() {
 
   async function fetchFilterOptions() {
     try {
-      const [actionsRes, symbolsRes] = await Promise.all([
+      const [actionsRes, symbolsRes, yearsRes] = await Promise.all([
         fetch("/api/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -97,10 +98,16 @@ export default function TransactionsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: "symbols" }),
         }),
+        fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "years" }),
+        }),
       ]);
 
       setActions(await actionsRes.json());
       setSymbols(await symbolsRes.json());
+      setYears(await yearsRes.json());
     } catch (error) {
       console.error("Failed to fetch filter options:", error);
     }
@@ -116,14 +123,14 @@ export default function TransactionsPage() {
       if (accountFilter !== "all") {
         params.set("accountId", accountFilter);
       }
+      if (yearFilter !== "all") {
+        params.set("year", yearFilter);
+      }
       if (actionFilter !== "all") {
         params.set("action", actionFilter);
       }
       if (symbolFilter) {
         params.set("symbol", symbolFilter);
-      }
-      if (searchFilter) {
-        params.set("search", searchFilter);
       }
 
       const res = await fetch(`/api/transactions?${params.toString()}`);
@@ -138,10 +145,15 @@ export default function TransactionsPage() {
     }
   }
 
-  function handleSearch() {
+  function clearFilters() {
+    setAccountFilter("all");
+    setYearFilter("all");
+    setActionFilter("all");
+    setSymbolFilter("");
     setPagination((prev) => ({ ...prev, page: 1 }));
-    fetchTransactions();
   }
+
+  const hasActiveFilters = accountFilter !== "all" || yearFilter !== "all" || actionFilter !== "all" || symbolFilter !== "";
 
   function getActionStyle(action: string): string {
     switch (action) {
@@ -158,43 +170,44 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Account tabs */}
-      <div className="flex gap-3 flex-wrap">
-        <button
-          onClick={() => setAccountFilter("all")}
-          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
-            accountFilter === "all"
-              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-          }`}
-        >
-          All
-        </button>
-        {accounts.map((acc) => (
-          <button
-            key={acc.id}
-            onClick={() => setAccountFilter(acc.id)}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
-              accountFilter === acc.id
-                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            {acc.accountType}
-          </button>
-        ))}
-      </div>
-
+    <div className="space-y-4 md:space-y-6">
       {/* Filters */}
-      <div className="bg-white rounded-lg p-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All actions" />
+      <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="ACC" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All actions</SelectItem>
+              <SelectItem value="all">ACC</SelectItem>
+              {accounts.map((acc) => (
+                <SelectItem key={acc.id} value={acc.id}>
+                  {acc.accountType}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="YR" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">YR</SelectItem>
+              {years.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="ACT" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ACT</SelectItem>
               {actions.map((action) => (
                 <SelectItem key={action} value={action}>
                   {action}
@@ -204,11 +217,11 @@ export default function TransactionsPage() {
           </Select>
 
           <Select value={symbolFilter || "all"} onValueChange={(value) => setSymbolFilter(value === "all" ? "" : value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="All symbols" />
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="SYM" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All symbols</SelectItem>
+              <SelectItem value="all">SYM</SelectItem>
               {symbols.map((symbol) => (
                 <SelectItem key={symbol} value={symbol}>
                   {symbol}
@@ -217,21 +230,14 @@ export default function TransactionsPage() {
             </SelectContent>
           </Select>
 
-          <input
-            type="text"
-            placeholder="Search description..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          />
-
-          <button
-            onClick={handleSearch}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-          >
-            Search
-          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -255,34 +261,31 @@ export default function TransactionsPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className="border-b border-[#e8eaed]">
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-24 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Date
                     </th>
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-16 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Account
                     </th>
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-14 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Action
                     </th>
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-16 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Symbol
                     </th>
-                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-20 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Qty
                     </th>
-                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                    <th className="w-20 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Price
                     </th>
-                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Net amount
+                    <th className="w-24 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">
+                      Amount
                     </th>
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                      Currency
-                    </th>
-                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368] max-w-[200px]">
+                    <th className="text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">
                       Description
                     </th>
                   </tr>
@@ -293,32 +296,32 @@ export default function TransactionsPage() {
                       key={tx.id}
                       className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
                     >
-                      <td className="py-3 px-4 text-sm text-[#202124] whitespace-nowrap">
+                      <td className="py-3 px-3 text-sm text-[#202124] whitespace-nowrap">
                         {formatDate(tx.settlementDate)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-[#5f6368]">
+                      <td className="py-3 px-3 text-sm text-[#5f6368]">
                         {tx.account.accountType}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-3">
                         <span
-                          className={`px-2 py-1 text-xs rounded font-medium ${getActionStyle(
+                          className={`px-2 py-0.5 text-xs rounded font-medium ${getActionStyle(
                             tx.action
                           )}`}
                         >
                           {tx.action}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-medium text-sm text-[#202124]">
+                      <td className="py-3 px-3 font-medium text-sm text-[#202124]">
                         {tx.symbolMapped || tx.symbol || "-"}
                       </td>
-                      <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                      <td className="py-3 px-3 text-right text-sm text-[#202124]">
                         {tx.quantity ? formatNumber(tx.quantity) : "-"}
                       </td>
-                      <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                      <td className="py-3 px-3 text-right text-sm text-[#202124]">
                         {tx.price ? formatCurrency(tx.price) : "-"}
                       </td>
                       <td
-                        className={`py-3 px-4 text-right text-sm font-medium ${
+                        className={`py-3 px-3 text-right text-sm font-medium ${
                           (tx.netAmount || 0) >= 0
                             ? "text-green-600"
                             : "text-red-600"
@@ -328,10 +331,7 @@ export default function TransactionsPage() {
                           ? formatCurrency(tx.netAmount)
                           : "-"}
                       </td>
-                      <td className="py-3 px-4 text-sm text-[#5f6368]">
-                        {tx.currency}
-                      </td>
-                      <td className="py-3 px-4 max-w-[200px] truncate text-xs text-[#5f6368]">
+                      <td className="py-3 px-3 truncate text-xs text-[#5f6368]">
                         {tx.description}
                       </td>
                     </tr>

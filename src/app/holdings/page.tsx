@@ -10,6 +10,13 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Account {
   id: string;
@@ -69,7 +76,7 @@ export default function HoldingsPage() {
   const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"positions" | "orders">("positions");
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>("inception");
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>("15d");
   const [currencyView, setCurrencyView] = useState<CurrencyView>("combined_cad");
   const [showNetDeposits, setShowNetDeposits] = useState(true);
   const [expandedPosition, setExpandedPosition] = useState<number | null>(null);
@@ -305,49 +312,37 @@ export default function HoldingsPage() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* Account tabs */}
-      <div className="flex gap-2 md:gap-3 flex-wrap">
-        <button
-          onClick={() => setSelectedAccount("all")}
-          className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
-            selectedAccount === "all"
-              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-          }`}
-        >
-          All
-        </button>
-        {accounts.map((acc) => (
-          <button
-            key={acc.id}
-            onClick={() => setSelectedAccount(acc.id)}
-            className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
-              selectedAccount === acc.id
-                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            {acc.accountType}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="text-gray-500">Loading...</div>
         </div>
       ) : (
         <>
-          {/* Total Equity 헤더 */}
-          <div>
-            <div className="text-xs md:text-sm text-gray-500 mb-1">
-              Total equity ({currencyView === "combined_cad" ? "CAD" :
-                           currencyView === "combined_usd" ? "USD" :
-                           currencyView === "cad" ? "CAD" : "USD"})
+          {/* Total Equity header with account select */}
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="text-xs md:text-sm text-gray-500 mb-1">
+                Total equity ({currencyView === "combined_cad" ? "CAD" :
+                             currencyView === "combined_usd" ? "USD" :
+                             currencyView === "cad" ? "CAD" : "USD"})
+              </div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900">
+                {formatCurrency(displayValues.totalEquity)}
+              </div>
             </div>
-            <div className="text-3xl md:text-4xl font-bold text-gray-900">
-              {formatCurrency(displayValues.totalEquity)}
-            </div>
+            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+              <SelectTrigger className="w-[100px] md:w-[120px]">
+                <SelectValue placeholder="Account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {accounts.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id}>
+                    {acc.accountType}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Equity 차트 */}
@@ -380,6 +375,34 @@ export default function HoldingsPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Filters: Period, Currency */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as Period)}>
+                <SelectTrigger variant="compact">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={currencyView} onValueChange={(value) => setCurrencyView(value as CurrencyView)}>
+                <SelectTrigger variant="compact">
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencyViews.map((cv) => (
+                    <SelectItem key={cv.value} value={cv.value}>
+                      {cv.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* 차트 영역 */}
@@ -471,59 +494,8 @@ export default function HoldingsPage() {
             )}
           </div>
 
-          {/* 기간 선택 버튼 */}
-          <div className="flex gap-1.5 md:gap-2 flex-wrap">
-            {periods.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setSelectedPeriod(p.value)}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
-                  selectedPeriod === p.value
-                    ? "border-gray-400 bg-white font-medium"
-                    : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* 통화 선택 + 요약 */}
+          {/* 요약 섹션 */}
           <div>
-            {/* 통화 탭 + 모바일 토글 */}
-            <div className="flex items-center justify-between mb-4 md:mb-6">
-              <div className="flex gap-1.5 md:gap-2">
-                {currencyViews.map((cv) => (
-                  <button
-                    key={cv.value}
-                    onClick={() => setCurrencyView(cv.value)}
-                    className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
-                      currencyView === cv.value
-                        ? "border-green-500 text-green-600 bg-white font-medium"
-                        : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-                    }`}
-                  >
-                    {cv.label}
-                  </button>
-                ))}
-              </div>
-              {/* 모바일 토글 버튼 */}
-              <button
-                onClick={() => setShowSummary(!showSummary)}
-                className="md:hidden flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <span>{showSummary ? "Hide" : "Details"}</span>
-                <svg
-                  className={`w-4 h-4 transition-transform duration-200 ${showSummary ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-
             {/* 요약 그리드 - 데스크탑 항상 표시, 모바일 토글 */}
             <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${
               showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
@@ -590,26 +562,42 @@ export default function HoldingsPage() {
 
           {/* POSITIONS / ORDERS 탭 - Questrade 스타일 */}
           <div className="border-b border-gray-200">
-            <div className="flex gap-6">
+            <div className="flex items-center justify-between">
+              <div className="flex gap-6">
+                <button
+                  onClick={() => setActiveTab("positions")}
+                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
+                    activeTab === "positions"
+                      ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+                      : "text-[#5f6368] hover:text-[#3c4043]"
+                  }`}
+                >
+                  POSITIONS
+                </button>
+                <button
+                  onClick={() => setActiveTab("orders")}
+                  className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
+                    activeTab === "orders"
+                      ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
+                      : "text-[#5f6368] hover:text-[#3c4043]"
+                  }`}
+                >
+                  ORDERS
+                </button>
+              </div>
+              {/* Details toggle - mobile only */}
               <button
-                onClick={() => setActiveTab("positions")}
-                className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-                  activeTab === "positions"
-                    ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                    : "text-[#5f6368] hover:text-[#3c4043]"
-                }`}
+                onClick={() => setShowSummary(!showSummary)}
+                className="md:hidden p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                POSITIONS
-              </button>
-              <button
-                onClick={() => setActiveTab("orders")}
-                className={`pb-2 text-xs font-semibold tracking-wider transition-colors ${
-                  activeTab === "orders"
-                    ? "text-[#0a8043] border-b-[3px] border-[#0a8043]"
-                    : "text-[#5f6368] hover:text-[#3c4043]"
-                }`}
-              >
-                ORDERS
+                <svg
+                  className={`w-5 h-5 transition-transform duration-200 ${showSummary ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </button>
             </div>
           </div>

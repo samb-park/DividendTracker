@@ -34,7 +34,7 @@ const SelectTrigger = React.forwardRef<
       "data-[state=open]:[&>svg]:rotate-180",
       // Variants
       variant === "default" && "w-full rounded-lg",
-      variant === "compact" && "w-auto rounded-full",
+      variant === "compact" && "w-auto rounded-full px-2.5 py-1.5 text-xs",
       className
     )}
     {...props}

@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
     const accountId = searchParams.get("accountId");
+    const year = searchParams.get("year");
     const action = searchParams.get("action");
     const symbol = searchParams.get("symbol");
     const search = searchParams.get("search");
@@ -20,6 +21,14 @@ export async function GET(request: NextRequest) {
 
     if (accountId) {
       where.accountId = accountId;
+    }
+
+    if (year) {
+      const yearNum = parseInt(year);
+      where.settlementDate = {
+        gte: new Date(`${yearNum}-01-01`),
+        lt: new Date(`${yearNum + 1}-01-01`),
+      };
     }
 
     if (action) {
@@ -34,7 +43,7 @@ export async function GET(request: NextRequest) {
       where.description = { contains: search };
     }
 
-    if (startDate || endDate) {
+    if (!year && (startDate || endDate)) {
       where.settlementDate = {};
       if (startDate) {
         (where.settlementDate as Record<string, Date>).gte = new Date(startDate);
@@ -104,6 +113,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         symbols.map((s) => s.symbolMapped).filter(Boolean)
       );
+    }
+
+    if (type === "years") {
+      // 고유 연도 목록
+      const transactions = await prisma.transaction.findMany({
+        select: { settlementDate: true },
+        orderBy: { settlementDate: "desc" },
+      });
+      const yearsSet = new Set<number>();
+      for (const tx of transactions) {
+        if (tx.settlementDate) {
+          yearsSet.add(new Date(tx.settlementDate).getFullYear());
+        }
+      }
+      return NextResponse.json(Array.from(yearsSet).sort((a, b) => b - a));
     }
 
     return NextResponse.json({ error: "Unknown type" }, { status: 400 });

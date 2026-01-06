@@ -39,14 +39,14 @@ interface DividendBySymbol {
   count: number;
 }
 
-type CurrencyView = "combined_cad" | "combined_usd" | "USD" | "CAD";
+type CurrencyView = "cad" | "usd";
 
 export default function DividendsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [currencyView, setCurrencyView] = useState<CurrencyView>("combined_cad");
+  const [currencyView, setCurrencyView] = useState<CurrencyView>("cad");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("all");
   const [symbols, setSymbols] = useState<string[]>([]);
   const [dividends, setDividends] = useState<DividendData[]>([]);
@@ -168,26 +168,24 @@ export default function DividendsPage() {
       months.push({ month: monthStr, monthLabel, amount: 0 });
     }
 
-    // Fill in data based on currency view
+    // Fill in data based on currency view (combined CAD or USD)
     for (const div of dividends) {
       const monthData = months.find((d) => d.month === div.month);
       if (monthData) {
-        if (currencyView === "combined_cad") {
+        if (currencyView === "cad") {
           // Convert to CAD for combined view
           if (div.currency === "USD") {
             monthData.amount += div.totalAmount * fxRate;
           } else {
             monthData.amount += div.totalAmount;
           }
-        } else if (currencyView === "combined_usd") {
+        } else {
           // Convert to USD for combined view
           if (div.currency === "CAD") {
             monthData.amount += div.totalAmount / fxRate;
           } else {
             monthData.amount += div.totalAmount;
           }
-        } else if (currencyView === div.currency) {
-          monthData.amount += div.totalAmount;
         }
       }
     }
@@ -204,22 +202,16 @@ export default function DividendsPage() {
       .filter((d) => d.currency === "CAD")
       .reduce((sum, d) => sum + d.totalAmount, 0);
 
-    if (currencyView === "combined_cad") {
+    if (currencyView === "cad") {
       return totalCAD + totalUSD * fxRate;
-    } else if (currencyView === "combined_usd") {
-      return totalUSD + totalCAD / fxRate;
     } else {
-      return dividends
-        .filter((d) => d.currency === currencyView)
-        .reduce((sum, d) => sum + d.totalAmount, 0);
+      return totalUSD + totalCAD / fxRate;
     }
   })();
 
   // Get currency label for display
   const getCurrencyLabel = () => {
-    if (currencyView === "combined_cad") return "CAD";
-    if (currencyView === "combined_usd") return "USD";
-    return currencyView;
+    return currencyView === "cad" ? "CAD" : "USD";
   };
 
   // Custom tooltip
@@ -239,10 +231,8 @@ export default function DividendsPage() {
   };
 
   const currencyViews: { value: CurrencyView; label: string }[] = [
-    { value: "combined_cad", label: "Combined (CAD)" },
-    { value: "combined_usd", label: "Combined (USD)" },
-    { value: "CAD", label: "CAD" },
-    { value: "USD", label: "USD" },
+    { value: "cad", label: "CAD" },
+    { value: "usd", label: "USD" },
   ];
 
   // 월별 평균 계산
@@ -250,42 +240,30 @@ export default function DividendsPage() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* Account tabs */}
-      <div className="flex gap-2 md:gap-3 flex-wrap">
-        <button
-          onClick={() => setSelectedAccount("all")}
-          className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
-            selectedAccount === "all"
-              ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-          }`}
-        >
-          All
-        </button>
-        {accounts.map((acc) => (
-          <button
-            key={acc.id}
-            onClick={() => setSelectedAccount(acc.id)}
-            className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
-              selectedAccount === acc.id
-                ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            {acc.accountType}
-          </button>
-        ))}
-      </div>
-
-      {/* Total dividends header */}
-      <div>
-        <div className="text-xs md:text-sm text-gray-500 mb-1">
-          Total dividends ({selectedYear})
+      {/* Total dividends header with account select */}
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-xs md:text-sm text-gray-500 mb-1">
+            Total dividends ({selectedYear})
+          </div>
+          <div className="text-3xl md:text-4xl font-bold text-gray-900">
+            {formatCurrency(totalAmount)}
+            <span className="text-sm md:text-base font-normal text-gray-400 ml-2">{getCurrencyLabel()}</span>
+          </div>
         </div>
-        <div className="text-3xl md:text-4xl font-bold text-gray-900">
-          {formatCurrency(totalAmount)}
-          <span className="text-sm md:text-base font-normal text-gray-400 ml-2">{getCurrencyLabel()}</span>
-        </div>
+        <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+          <SelectTrigger className="w-[100px] md:w-[120px]">
+            <SelectValue placeholder="Account" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            {accounts.map((acc) => (
+              <SelectItem key={acc.id} value={acc.id}>
+                {acc.accountType}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Chart Card */}
@@ -308,8 +286,8 @@ export default function DividendsPage() {
           </div>
         </div>
 
-        {/* Symbol filter */}
-        <div className="flex items-center gap-2 mb-3">
+        {/* Filters: Symbol, Year, Currency */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
             <SelectTrigger variant="compact">
               <SelectValue placeholder="All symbols" />
@@ -319,6 +297,30 @@ export default function DividendsPage() {
               {symbols.map((symbol) => (
                 <SelectItem key={symbol} value={symbol}>
                   {symbol}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(Number(value))}>
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableYears.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={currencyView} onValueChange={(value) => setCurrencyView(value as CurrencyView)}>
+            <SelectTrigger variant="compact">
+              <SelectValue placeholder="Currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyViews.map((cv) => (
+                <SelectItem key={cv.value} value={cv.value}>
+                  {cv.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -381,57 +383,6 @@ export default function DividendsPage() {
             {getCurrencyLabel()}
           </div>
         </div>
-      </div>
-
-      {/* Year selection */}
-      <div className="flex gap-1.5 md:gap-2 flex-wrap items-center">
-        {availableYears.slice(0, 5).map((year) => (
-          <button
-            key={year}
-            onClick={() => setSelectedYear(year)}
-            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
-              selectedYear === year
-                ? "border-gray-400 bg-white font-medium"
-                : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-            }`}
-          >
-            {year}
-          </button>
-        ))}
-        {availableYears.length > 5 && (
-          <Select
-            value={availableYears.slice(5).includes(selectedYear) ? String(selectedYear) : ""}
-            onValueChange={(value) => setSelectedYear(Number(value))}
-          >
-            <SelectTrigger variant="compact">
-              <SelectValue placeholder="More..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.slice(5).map((year) => (
-                <SelectItem key={year} value={String(year)}>
-                  {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      {/* Currency view selection */}
-      <div className="flex gap-1.5 md:gap-2 flex-wrap">
-        {currencyViews.map((cv) => (
-          <button
-            key={cv.value}
-            onClick={() => setCurrencyView(cv.value)}
-            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
-              currencyView === cv.value
-                ? "border-green-500 text-green-600 bg-white font-medium"
-                : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
-            }`}
-          >
-            {cv.label}
-          </button>
-        ))}
       </div>
 
       {/* Dividends by symbol section */}
