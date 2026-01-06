@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid,
 } from "recharts";
 
 interface Account {
@@ -261,9 +260,48 @@ export default function HoldingsPage() {
     return true; // combined_cad, combined_usd는 모든 포지션 표시
   });
 
-  const sortedPositions = filteredPositions.sort(
+  // "All" 계좌일 때 같은 심볼 합산
+  const aggregatedPositions = selectedAccount === "all"
+    ? (() => {
+        const map = new Map<string, Position>();
+        for (const pos of filteredPositions) {
+          const key = pos.symbolMapped;
+          const existing = map.get(key);
+          if (existing) {
+            const totalQty = existing.quantity + pos.quantity;
+            const totalCost = existing.totalCost + pos.totalCost;
+            const totalMarketValue = existing.marketValue + pos.marketValue;
+            const totalOpenPnL = existing.openPnL + pos.openPnL;
+            const totalTodayPnL = existing.todayPnL + pos.todayPnL;
+            map.set(key, {
+              ...existing,
+              quantity: totalQty,
+              totalCost,
+              avgCost: totalCost / totalQty,
+              marketValue: totalMarketValue,
+              openPnL: totalOpenPnL,
+              openPnLPercent: totalCost > 0 ? (totalOpenPnL / totalCost) * 100 : 0,
+              todayPnL: totalTodayPnL,
+            });
+          } else {
+            map.set(key, { ...pos });
+          }
+        }
+        return Array.from(map.values());
+      })()
+    : filteredPositions;
+
+  const sortedPositions = aggregatedPositions.sort(
     (a, b) => b.marketValue - a.marketValue
   );
+
+  // 비중 계산을 위한 총 시장가치 (CAD로 환산)
+  const totalMarketValueForWeight = sortedPositions.reduce((sum, pos) => {
+    if (pos.currency === "USD") {
+      return sum + pos.marketValue * fxRate;
+    }
+    return sum + pos.marketValue;
+  }, 0);
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -313,62 +351,122 @@ export default function HoldingsPage() {
           </div>
 
           {/* Equity 차트 */}
-          <div className="bg-white rounded-lg p-4">
-            {/* Net Deposits 토글 */}
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                onClick={() => setShowNetDeposits(!showNetDeposits)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition-colors ${
-                  showNetDeposits
-                    ? "border-blue-500 text-blue-600 bg-blue-50"
-                    : "border-gray-200 text-gray-500 bg-gray-50 hover:bg-white"
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full ${showNetDeposits ? "bg-blue-500" : "bg-gray-300"}`} />
-                Net deposits
-              </button>
+          <div className="bg-white rounded-2xl p-3 md:p-5 shadow-sm border border-gray-100">
+            {/* 차트 헤더 - 범례 */}
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-4">
+                {/* Equity 범례 */}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-[#0a8043] rounded-full" />
+                  <span className="text-[10px] md:text-xs text-gray-500 font-medium">Equity</span>
+                </div>
+                {/* Net deposits 토글 */}
+                <button
+                  onClick={() => setShowNetDeposits(!showNetDeposits)}
+                  className={`flex items-center gap-1.5 transition-opacity ${
+                    showNetDeposits ? "opacity-100" : "opacity-50"
+                  }`}
+                >
+                  <div className={`w-3 h-0.5 rounded-full ${showNetDeposits ? "bg-blue-500" : "bg-gray-300"}`} style={{ backgroundImage: showNetDeposits ? "repeating-linear-gradient(90deg, #3b82f6, #3b82f6 3px, transparent 3px, transparent 6px)" : "none" }} />
+                  <span className="text-[10px] md:text-xs text-gray-500 font-medium">Deposits</span>
+                </button>
+              </div>
+              {/* 현재 값 표시 */}
+              {equityHistory.length > 0 && (
+                <div className="text-right">
+                  <div className="text-[10px] text-gray-400">Current</div>
+                  <div className="text-xs md:text-sm font-semibold text-[#0a8043]">
+                    ${formatNumber(equityHistory[equityHistory.length - 1]?.equity || 0, 0)}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* 차트 영역 */}
             {equityHistory.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={equityHistory}>
-                  <XAxis
-                    dataKey="date"
-                    hide={true}
-                  />
-                  <YAxis
-                    domain={[minEquity, maxEquity]}
-                    tick={{ fontSize: 11, fill: "#9ca3af" }}
-                    tickFormatter={(v) => v.toLocaleString()}
-                    axisLine={false}
-                    tickLine={false}
-                    orientation="right"
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#e5e7eb" />
-                  {showNetDeposits && (
-                    <Line
-                      type="monotone"
-                      dataKey="netDeposits"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      dot={false}
-                      name="Net Deposits"
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart
+                    data={equityHistory}
+                    margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0a8043" stopOpacity={0.2} />
+                        <stop offset="100%" stopColor="#0a8043" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="depositsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.1} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="date"
+                      hide={true}
                     />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey="equity"
-                    stroke="#16a34a"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Equity"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+                    <YAxis
+                      domain={[minEquity, maxEquity]}
+                      tick={{ fontSize: 10, fill: "#9ca3af" }}
+                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                      axisLine={false}
+                      tickLine={false}
+                      orientation="right"
+                      width={45}
+                      tickCount={4}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    {showNetDeposits && (
+                      <Area
+                        type="monotone"
+                        dataKey="netDeposits"
+                        stroke="#3b82f6"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        fill="url(#depositsGradient)"
+                        name="Net Deposits"
+                      />
+                    )}
+                    <Area
+                      type="monotone"
+                      dataKey="equity"
+                      stroke="#0a8043"
+                      strokeWidth={2}
+                      fill="url(#equityGradient)"
+                      name="Equity"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-gray-400">
+              <div className="h-[220px] flex items-center justify-center text-gray-400 text-sm">
                 No data available
+              </div>
+            )}
+
+            {/* P&L 요약 바 */}
+            {equityHistory.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-4 md:gap-6">
+                  <div>
+                    <div className="text-[10px] text-gray-400">Net Deposits</div>
+                    <div className="text-xs md:text-sm font-medium text-gray-700">
+                      ${formatNumber(equityHistory[equityHistory.length - 1]?.netDeposits || 0, 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-gray-400">Total Gain</div>
+                    <div className={`text-xs md:text-sm font-medium ${totalPnL >= 0 ? "text-[#0a8043]" : "text-red-500"}`}>
+                      {totalPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(totalPnL), 0)}
+                    </div>
+                  </div>
+                </div>
+                <div className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-medium ${
+                  totalPnL >= 0
+                    ? "bg-green-50 text-[#0a8043]"
+                    : "bg-red-50 text-red-500"
+                }`}>
+                  {totalPnL >= 0 ? "+" : ""}{((totalPnL / (summary?.netDeposits || 1)) * 100).toFixed(1)}%
+                </div>
               </div>
             )}
           </div>
@@ -525,157 +623,137 @@ export default function HoldingsPage() {
                 </div>
               ) : (
                 <>
-                  {/* 모바일 카드 뷰 */}
-                  <div className="md:hidden divide-y divide-gray-100">
+                  {/* 모바일 카드 뷰 - 세련된 금융 스타일 */}
+                  <div className="md:hidden space-y-2">
                     {sortedPositions.map((pos, idx) => {
                       const isPositive = pos.openPnL >= 0;
-                      const sparklineColor = isPositive ? "#16a34a" : "#dc2626";
-
-                      const generateSparkline = () => {
-                        const points = [];
-                        const basePrice = pos.avgCost;
-                        const currentPrice = pos.currentPrice;
-                        const steps = 20;
-
-                        for (let i = 0; i <= steps; i++) {
-                          const progress = i / steps;
-                          const trend = basePrice + (currentPrice - basePrice) * progress;
-                          const noise = (Math.random() - 0.5) * (currentPrice * 0.02);
-                          points.push(trend + noise);
-                        }
-                        points[points.length - 1] = currentPrice;
-
-                        const min = Math.min(...points);
-                        const max = Math.max(...points);
-                        const range = max - min || 1;
-
-                        const svgPoints = points.map((p, i) => {
-                          const x = (i / steps) * 80;
-                          const y = 24 - ((p - min) / range) * 20;
-                          return `${x},${y}`;
-                        }).join(" ");
-
-                        return svgPoints;
-                      };
-
-                      const sparklinePoints = generateSparkline();
                       const isExpanded = expandedPosition === idx;
+                      const pnlPercent = pos.openPnLPercent;
+                      // 비중 계산 (CAD로 환산)
+                      const posValueCad = pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue;
+                      const weight = totalMarketValueForWeight > 0 ? (posValueCad / totalMarketValueForWeight) * 100 : 0;
 
                       return (
-                        <div key={idx} className="overflow-hidden">
+                        <div
+                          key={idx}
+                          className={`bg-white rounded-xl border transition-all duration-200 ${
+                            isExpanded
+                              ? "border-gray-200 shadow-md"
+                              : "border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200"
+                          }`}
+                        >
+                          {/* 메인 카드 */}
                           <div
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
-                            className={`flex items-center gap-4 py-4 px-2 transition-colors cursor-pointer ${
-                              isExpanded ? "bg-gray-50" : "hover:bg-gray-50/50"
-                            }`}
+                            className="p-4 cursor-pointer"
                           >
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200/50">
-                              <span className="text-xs font-bold text-gray-600">
-                                {pos.symbolMapped.replace(".TO", "").slice(0, 3)}
-                              </span>
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-gray-900 text-sm">
+                            <div className="flex items-center justify-between mb-3">
+                              {/* 심볼 + 통화 배지 + 비중 */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-base font-bold text-gray-900 tracking-tight">
                                   {pos.symbolMapped.replace(".TO", "")}
                                 </span>
-                                <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
-                                  pos.currency === "CAD" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                  pos.currency === "CAD"
+                                    ? "bg-red-50 text-red-600 border border-red-100"
+                                    : "bg-blue-50 text-blue-600 border border-blue-100"
                                 }`}>
-                                  {pos.currency === "CAD" ? "C" : "U"}
+                                  {pos.currency === "CAD" ? "CAD" : "USD"}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  {weight.toFixed(1)}%
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-500 truncate">
-                                {formatNumber(pos.quantity, 2)} @ ${formatNumber(pos.avgCost, 2)}
+                              {/* P&L 배지 */}
+                              <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                isPositive
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-red-50 text-red-600"
+                              }`}>
+                                {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
                               </div>
                             </div>
 
-                            <div className="w-20 h-8 flex-shrink-0">
-                              <svg viewBox="0 0 80 28" className="w-full h-full">
-                                <polyline
-                                  fill="none"
-                                  stroke={sparklineColor}
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  points={sparklinePoints}
-                                />
+                            {/* 수량 & 평균가 / 현재가 */}
+                            <div className="flex items-end justify-between">
+                              <div>
+                                <div className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">
+                                  {formatNumber(pos.quantity, 2)} shares
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <span className="text-gray-400">@</span> ${formatNumber(pos.avgCost, 2)}
+                                  <span className="mx-1.5 text-gray-300">→</span>
+                                  <span className="font-medium text-gray-900">${formatNumber(pos.currentPrice, 2)}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-lg font-bold text-gray-900">
+                                  ${formatNumber(pos.marketValue, 0)}
+                                </div>
+                                <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                  {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 0)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 확장 표시 */}
+                            <div className="flex justify-center mt-2">
+                              <svg
+                                className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${
+                                  isExpanded ? "rotate-180" : ""
+                                }`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
-                            </div>
-
-                            <div className="text-right flex-shrink-0 min-w-[100px]">
-                              <div className="font-semibold text-gray-900 text-sm">
-                                ${formatNumber(pos.marketValue, 2)}
-                              </div>
-                              <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                {isPositive ? "+" : "-"}${formatNumber(Math.abs(pos.openPnL), 2)}
-                                <span className="ml-1">
-                                  ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
-                                </span>
-                              </div>
                             </div>
                           </div>
 
+                          {/* 확장 영역 */}
                           <div
                             className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                              isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
+                              isExpanded ? "max-h-[400px]" : "max-h-0"
                             }`}
                           >
-                            <div className="bg-gray-50 px-4 pb-4 pt-2">
-                              <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-                                <div className="space-y-3">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Open quantity</span>
-                                    <span className="text-sm font-medium text-gray-900">
-                                      {formatNumber(pos.quantity, 4)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Avg cost</span>
-                                    <span className="text-sm font-medium text-gray-900">
-                                      ${formatNumber(pos.avgCost, 2)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Total cost</span>
-                                    <span className="text-sm font-medium text-gray-900">
-                                      ${formatNumber(pos.totalCost, 2)}
-                                    </span>
-                                  </div>
+                            <div className="px-4 pb-4 border-t border-gray-100">
+                              {/* 상세 그리드 */}
+                              <div className="grid grid-cols-2 gap-3 pt-4">
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
+                                  <div className="text-sm font-semibold text-gray-900">{formatNumber(pos.quantity, 4)}</div>
                                 </div>
-
-                                <div className="space-y-3">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Current price</span>
-                                    <span className="text-sm font-medium text-gray-900">
-                                      ${formatNumber(pos.currentPrice, 2)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Market value</span>
-                                    <span className="text-sm font-medium text-gray-900">
-                                      ${formatNumber(pos.marketValue, 2)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-500">Open P&L</span>
-                                    <span className={`text-sm font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                      {isPositive ? "+" : "-"}${formatNumber(Math.abs(pos.openPnL), 2)}
-                                      <span className="text-xs ml-1">
-                                        ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
-                                      </span>
-                                    </span>
-                                  </div>
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Avg Cost</div>
+                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.avgCost, 2)}</div>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Total Cost</div>
+                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.totalCost, 2)}</div>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Current Price</div>
+                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.currentPrice, 2)}</div>
                                 </div>
                               </div>
 
-                              <div className="mt-3 pt-3 border-t border-gray-200">
+                              {/* P&L 섹션 */}
+                              <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-gray-50 to-white border border-gray-100">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-xs text-gray-500">Open P&L</span>
+                                  <span className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                    {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 2)}
+                                    <span className="text-xs font-medium ml-1">
+                                      ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
+                                    </span>
+                                  </span>
+                                </div>
                                 <div className="flex justify-between items-center">
-                                  <span className="text-xs text-gray-500">Today&apos;s change</span>
-                                  <span className={`text-sm font-medium ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                    {pos.todayPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(pos.todayPnL), 2)}
-                                    <span className="text-xs ml-1">
+                                  <span className="text-xs text-gray-500">Today&apos;s Change</span>
+                                  <span className={`text-sm font-bold ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {pos.todayPnL >= 0 ? "+" : ""}${formatNumber(pos.todayPnL, 2)}
+                                    <span className="text-xs font-medium ml-1">
                                       ({pos.todayPnLPercent >= 0 ? "+" : ""}{pos.todayPnLPercent.toFixed(2)}%)
                                     </span>
                                   </span>
@@ -715,12 +793,18 @@ export default function HoldingsPage() {
                             Market value
                           </th>
                           <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                            Weight
+                          </th>
+                          <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
                             Currency
                           </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedPositions.map((pos, idx) => (
+                        {sortedPositions.map((pos, idx) => {
+                          const posValueCad = pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue;
+                          const weight = totalMarketValueForWeight > 0 ? (posValueCad / totalMarketValueForWeight) * 100 : 0;
+                          return (
                           <tr
                             key={idx}
                             className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
@@ -774,11 +858,16 @@ export default function HoldingsPage() {
                               {formatCurrency(pos.marketValue)}
                             </td>
 
+                            <td className="py-3 px-4 text-right text-sm text-[#202124]">
+                              {weight.toFixed(1)}%
+                            </td>
+
                             <td className="py-3 px-4 text-right text-sm text-[#5f6368]">
                               {pos.currency}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

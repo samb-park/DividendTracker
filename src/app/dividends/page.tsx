@@ -245,13 +245,16 @@ export default function DividendsPage() {
     { value: "USD", label: "USD" },
   ];
 
+  // 월별 평균 계산
+  const monthlyAverage = totalAmount / 12;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Account tabs */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-2 md:gap-3 flex-wrap">
         <button
           onClick={() => setSelectedAccount("all")}
-          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+          className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
             selectedAccount === "all"
               ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
               : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
@@ -263,7 +266,7 @@ export default function DividendsPage() {
           <button
             key={acc.id}
             onClick={() => setSelectedAccount(acc.id)}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+            className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${
               selectedAccount === acc.id
                 ? "bg-[#0a8043] text-white shadow-md shadow-[#0a8043]/20"
                 : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
@@ -276,18 +279,37 @@ export default function DividendsPage() {
 
       {/* Total dividends header */}
       <div>
-        <div className="text-sm text-gray-500 mb-1">
+        <div className="text-xs md:text-sm text-gray-500 mb-1">
           Total dividends ({selectedYear})
         </div>
-        <div className="text-4xl font-bold text-gray-900">
+        <div className="text-3xl md:text-4xl font-bold text-gray-900">
           {formatCurrency(totalAmount)}
+          <span className="text-sm md:text-base font-normal text-gray-400 ml-2">{getCurrencyLabel()}</span>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-white rounded-lg p-4">
+      {/* Chart Card */}
+      <div className="bg-white rounded-2xl p-3 md:p-5 shadow-sm border border-gray-100">
+        {/* Chart header */}
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <div className="flex items-center gap-3">
+            {/* 범례 */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-[#16a34a]" />
+              <span className="text-[10px] md:text-xs text-gray-500 font-medium">Monthly</span>
+            </div>
+          </div>
+          {/* 월 평균 */}
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400">Avg/month</div>
+            <div className="text-xs md:text-sm font-semibold text-[#0a8043]">
+              ${monthlyAverage.toFixed(0)}
+            </div>
+          </div>
+        </div>
+
         {/* Symbol filter */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
             <SelectTrigger variant="compact">
               <SelectValue placeholder="All symbols" />
@@ -304,40 +326,70 @@ export default function DividendsPage() {
         </div>
 
         {loading ? (
-          <div className="h-[300px] flex items-center justify-center text-gray-500">
+          <div className="h-[200px] md:h-[280px] flex items-center justify-center text-gray-500">
             Loading...
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData} barCategoryGap="15%">
-              <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#e5e7eb" />
+          <div className="h-[200px] md:h-[280px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} barCategoryGap="12%">
+              <defs>
+                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#16a34a" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid horizontal={true} vertical={false} strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis
                 dataKey="monthLabel"
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                tick={{ fontSize: 10, fill: "#9ca3af" }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                tick={{ fontSize: 10, fill: "#9ca3af" }}
                 tickFormatter={(v) => `$${v}`}
                 axisLine={false}
                 tickLine={false}
                 orientation="right"
+                width={40}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="amount" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="amount" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         )}
+
+        {/* Summary bar */}
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-4 md:gap-6">
+            <div>
+              <div className="text-[10px] text-gray-400">YTD Total</div>
+              <div className="text-xs md:text-sm font-medium text-gray-700">
+                ${totalAmount.toFixed(0)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-400">Payments</div>
+              <div className="text-xs md:text-sm font-medium text-gray-700">
+                {dividends.length}
+              </div>
+            </div>
+          </div>
+          <div className="px-2 py-1 rounded-full text-[10px] md:text-xs font-medium bg-green-50 text-[#0a8043]">
+            {getCurrencyLabel()}
+          </div>
+        </div>
       </div>
 
-      {/* Year selection - last 5 years as buttons, older in dropdown */}
-      <div className="flex gap-2 flex-wrap items-center">
+      {/* Year selection */}
+      <div className="flex gap-1.5 md:gap-2 flex-wrap items-center">
         {availableYears.slice(0, 5).map((year) => (
           <button
             key={year}
             onClick={() => setSelectedYear(year)}
-            className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
               selectedYear === year
                 ? "border-gray-400 bg-white font-medium"
                 : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
@@ -366,12 +418,12 @@ export default function DividendsPage() {
       </div>
 
       {/* Currency view selection */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-1.5 md:gap-2 flex-wrap">
         {currencyViews.map((cv) => (
           <button
             key={cv.value}
             onClick={() => setCurrencyView(cv.value)}
-            className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full border text-xs md:text-sm transition-colors ${
               currencyView === cv.value
                 ? "border-green-500 text-green-600 bg-white font-medium"
                 : "border-gray-200 bg-gray-50 hover:bg-white text-gray-600"
@@ -382,7 +434,7 @@ export default function DividendsPage() {
         ))}
       </div>
 
-      {/* Dividends by symbol table */}
+      {/* Dividends by symbol section */}
       <div>
         <div className="border-b border-gray-200 mb-4">
           <span className="pb-2 text-xs font-semibold tracking-wider text-[#0a8043] border-b-[3px] border-[#0a8043] inline-block">
@@ -390,45 +442,80 @@ export default function DividendsPage() {
           </span>
         </div>
         {dividendsBySymbol.length === 0 ? (
-          <div className="text-gray-500">No dividend data</div>
+          <div className="text-gray-500 text-sm">No dividend data</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#e8eaed]">
-                  <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                    Symbol
-                  </th>
-                  <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                    Payments
-                  </th>
-                  <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                    Total amount
-                  </th>
-                  <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
-                    Currency
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {dividendsBySymbol.map((div, idx) => (
-                  <tr
-                    key={idx}
-                    className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
-                  >
-                    <td className="py-3 px-4 font-medium text-sm text-[#202124]">{div.symbol}</td>
-                    <td className="py-3 px-4 text-right text-sm text-[#202124]">{div.count}</td>
-                    <td className="py-3 px-4 text-right text-sm text-green-600 font-medium">
-                      {formatCurrency(div.totalAmount)}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-[#5f6368]">
-                      {div.currency}
-                    </td>
+          <>
+            {/* 모바일 카드 뷰 */}
+            <div className="md:hidden space-y-2">
+              {dividendsBySymbol.map((div, idx) => (
+                <div
+                  key={idx}
+                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold text-gray-900 tracking-tight">
+                        {div.symbol.replace(".TO", "")}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        div.currency === "CAD"
+                          ? "bg-red-50 text-red-600 border border-red-100"
+                          : "bg-blue-50 text-blue-600 border border-blue-100"
+                      }`}>
+                        {div.currency}
+                      </span>
+                    </div>
+                    <div className="text-lg font-bold text-[#0a8043]">
+                      ${div.totalAmount.toFixed(0)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{div.count} payments</span>
+                    <span>~${(div.totalAmount / div.count).toFixed(2)}/payment</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 데스크탑 테이블 뷰 */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#e8eaed]">
+                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Symbol
+                    </th>
+                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Payments
+                    </th>
+                    <th className="text-right py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Total amount
+                    </th>
+                    <th className="text-left py-2.5 px-4 text-xs font-normal text-[#5f6368]">
+                      Currency
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {dividendsBySymbol.map((div, idx) => (
+                    <tr
+                      key={idx}
+                      className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}
+                    >
+                      <td className="py-3 px-4 font-medium text-sm text-[#202124]">{div.symbol}</td>
+                      <td className="py-3 px-4 text-right text-sm text-[#202124]">{div.count}</td>
+                      <td className="py-3 px-4 text-right text-sm text-green-600 font-medium">
+                        {formatCurrency(div.totalAmount)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-[#5f6368]">
+                        {div.currency}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
