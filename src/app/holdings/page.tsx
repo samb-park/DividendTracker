@@ -130,6 +130,7 @@ export default function HoldingsPage() {
         fxRate,
         cashBalanceCad
       );
+
       setAllocationSummary(allocation);
     } else {
       setAllocationSummary(null);
@@ -580,7 +581,7 @@ export default function HoldingsPage() {
                   {/* Mobile Card View */}
                   <div className="md:hidden space-y-2">
                     {allocationSummary.allocations.map((a) => {
-                      const isUnderweight = a.gap < -1;
+                      const isUnderweight = a.gap > 1; // gap > 0 means underweight (target > current)
                       return (
                         <div
                           key={a.symbol}
@@ -663,7 +664,7 @@ export default function HoldingsPage() {
                       </thead>
                       <tbody>
                         {allocationSummary.allocations.map((a) => {
-                          const isUnderweight = a.gap < -1;
+                          const isUnderweight = a.gap > 1; // gap > 0 means underweight (target > current)
                           return (
                             <tr key={a.symbol} className={isUnderweight ? "bg-green-50/50" : ""}>
                               <td className="py-2.5">

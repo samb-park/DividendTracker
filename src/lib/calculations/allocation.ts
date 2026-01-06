@@ -68,8 +68,8 @@ export function calculateWeeklyAllocation(
 
   // 3. Calculate allocation for each target
   const allocations: AllocationResult[] = targets.map((target) => {
-    // Find matching position
-    const matchingPos = positions.find((p) => {
+    // Find ALL matching positions (same symbol across multiple accounts)
+    const matchingPositions = positions.filter((p) => {
       const normalizedSymbol = p.symbolMapped.replace(".TO", "");
       return (
         normalizedSymbol === target.symbol ||
@@ -78,15 +78,17 @@ export function calculateWeeklyAllocation(
       );
     });
 
-    // Calculate current value in CAD
+    // Calculate current value in CAD (sum all matching positions)
     let currentValueCad = 0;
     if (target.symbol === "CASH") {
       currentValueCad = cashBalanceCad;
-    } else if (matchingPos) {
-      currentValueCad =
-        matchingPos.currency === "USD"
-          ? matchingPos.marketValue * fxRate
-          : matchingPos.marketValue;
+    } else {
+      for (const pos of matchingPositions) {
+        currentValueCad +=
+          pos.currency === "USD"
+            ? pos.marketValue * fxRate
+            : pos.marketValue;
+      }
     }
 
     // Calculate weights and gap
@@ -118,11 +120,12 @@ export function calculateWeeklyAllocation(
   // 4. Distribute weekly amount: base allocation + bonus for underweight
   // Base: proportional to target weight (everyone gets their fair share)
   // Bonus: extra allocation for underweight positions
+  // Note: gap > 0 means underweight (target > current), gap < 0 means overweight
 
   const totalTargetWeight = allocations.reduce((sum, a) => sum + a.targetWeight, 0);
-  const underweightAllocations = allocations.filter((a) => a.gap < 0);
+  const underweightAllocations = allocations.filter((a) => a.gap > 0); // gap > 0 = underweight
   const totalGapDeficit = underweightAllocations.reduce(
-    (sum, a) => sum + Math.abs(a.gap),
+    (sum, a) => sum + a.gap, // positive gaps only
     0
   );
 
@@ -141,8 +144,8 @@ export function calculateWeeklyAllocation(
 
     // Bonus allocation: proportional to how underweight (only for underweight positions)
     let bonusAmount = 0;
-    if (allocation.gap < 0 && totalGapDeficit > 0) {
-      bonusAmount = (Math.abs(allocation.gap) / totalGapDeficit) * weeklyAmount * bonusRatio;
+    if (allocation.gap > 0 && totalGapDeficit > 0) { // gap > 0 = underweight
+      bonusAmount = (allocation.gap / totalGapDeficit) * weeklyAmount * bonusRatio;
     }
 
     const rawAmount = baseAmount + bonusAmount;
