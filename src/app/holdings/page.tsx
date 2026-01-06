@@ -685,8 +685,8 @@ export default function HoldingsPage() {
 
                       // Allocation Data
                       const allocation = allocationSummary?.allocations.find(a => a.symbol === pos.symbol);
-                      const isUnderweight = allocation ? allocation.gap > 1 : false;
-                      const showAllocationInfo = allocation && allocation.weeklyBuyActual > 0;
+                      const hasAllocationTarget = allocation && allocation.targetWeight > 0;
+                      const shouldBuy = allocation && allocation.weeklyBuyActual > 0;
 
                       return (
                         <div
@@ -716,7 +716,7 @@ export default function HoldingsPage() {
                                 <span className="text-[9px] text-gray-400 font-medium">
                                   {weight.toFixed(1)}%
                                 </span>
-                                {showAllocationInfo && (
+                                {shouldBuy && (
                                   <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
                                     BUY
                                   </span>
@@ -754,20 +754,24 @@ export default function HoldingsPage() {
                             </div>
 
                             {/* Allocation Inline Info */}
-                            {showAllocationInfo && allocation && (
+                            {hasAllocationTarget && allocation && (
                               <div className="mt-2 pt-2 border-t border-dashed border-gray-100">
-                                <div className="flex items-center justify-between text-xs mb-1">
+                                <div className="flex items-center justify-between text-xs">
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500">Target</span>
                                     <span className="font-medium">{allocation.targetWeight}%</span>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500">Gap</span>
-                                    <span className="text-green-600 font-medium">+{allocation.gap.toFixed(1)}%</span>
+                                    <span className={`font-medium ${allocation.gap > 0 ? "text-green-600" : "text-gray-500"}`}>
+                                      {allocation.gap > 0 ? "+" : ""}{allocation.gap.toFixed(1)}%
+                                    </span>
                                   </div>
-                                  <div className="font-bold text-[#0a8043]">
-                                    +${allocation.weeklyBuyActual.toFixed(2)}
-                                  </div>
+                                  {shouldBuy && (
+                                    <div className="font-bold text-[#0a8043]">
+                                      +${allocation.weeklyBuyActual.toFixed(0)}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}

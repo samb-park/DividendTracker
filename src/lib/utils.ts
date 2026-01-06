@@ -25,19 +25,17 @@ export function formatNumber(value: number, decimals: number = 4): string {
 // Format with up to maxDecimals but remove trailing zeros
 export function formatNumberTrim(value: number, maxDecimals: number = 4): string {
   const formatted = value.toFixed(maxDecimals);
-  // Remove trailing zeros but keep at least 2 decimal places
+  // Remove trailing zeros completely (including all decimals if zeros)
   const trimmed = parseFloat(formatted).toString();
   const parts = trimmed.split(".");
   if (parts.length === 1) {
-    return new Intl.NumberFormat("en-CA", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    // Integer - no decimal places
+    return new Intl.NumberFormat("en-CA").format(value);
   }
-  const decimals = Math.max(2, parts[1].length);
+  // Has decimals - show only necessary decimal places
   return new Intl.NumberFormat("en-CA", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: parts[1].length,
+    maximumFractionDigits: parts[1].length,
   }).format(value);
 }
 
