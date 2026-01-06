@@ -8,6 +8,14 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Portfolio Tracker",
   description: "Personal portfolio tracker for investments",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "InvTracker",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
