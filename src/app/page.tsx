@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import {
   ResponsiveContainer,
@@ -89,6 +89,7 @@ export default function HomePage() {
   const [totalReceivedDividends, setTotalReceivedDividends] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [allocationTargets, setAllocationTargets] = useState<{ symbol: string; targetWeight: number }[]>([]);
 
   useEffect(() => {
     fetchAccounts();
@@ -112,50 +113,25 @@ export default function HomePage() {
     setLoading(true);
     try {
       const accountParam = selectedAccount !== "all" ? `accountId=${selectedAccount}` : "";
-      const [portfolioRes, transactionsRes, yahooRes] = await Promise.all([
+      const [portfolioRes, dividendSummaryRes, yahooRes, targetsRes] = await Promise.all([
         fetch(`/api/portfolio${accountParam ? `?${accountParam}` : ""}`),
-        fetch(`/api/transactions?type=DIV&limit=10000${accountParam ? `&${accountParam}` : ""}`),
+        fetch(`/api/transactions?type=dividendSummary${accountParam ? `&${accountParam}` : ""}`),
         fetch(`/api/dividends?type=yahooProjected${accountParam ? `&${accountParam}` : ""}`),
+        fetch("/api/settings/portfolio"),
       ]);
 
       const portfolioData = await portfolioRes.json();
-      const transactionsData = await transactionsRes.json();
+      const dividendData = await dividendSummaryRes.json();
       const yahooData = await yahooRes.json();
+      const targetsData = await targetsRes.json();
 
+      // 한번에 모든 state 업데이트 (React 18 automatic batching)
       setSummary(portfolioData.summary);
       setPositions(portfolioData.positions || []);
       setYahooProjections(yahooData);
-
-      // Define fxRate early for use in calculations
-      const currentFxRate = portfolioData.summary?.fxRate || 1.44;
-
-      // 배당금 요약 (DIV 트랜잭션에서 추출)
-      const divMap = new Map<string, DividendSummary>();
-      const divTransactions = transactionsData.transactions || [];
-      let totalDivReceived = 0;
-      for (const tx of divTransactions) {
-        if (tx.action !== "DIV" || !tx.symbolMapped || tx.netAmount <= 0) continue;
-
-        // Calculate CAD value for total
-        const amountCad = tx.currency === "USD" ? tx.netAmount * currentFxRate : tx.netAmount;
-        totalDivReceived += amountCad;
-
-        const key = tx.symbolMapped;
-        const existing = divMap.get(key);
-        if (existing) {
-          existing.totalAmount += amountCad; // Accumulate in CAD for consistent sorting
-          existing.paymentCount++;
-        } else {
-          divMap.set(key, {
-            symbol: tx.symbolMapped,
-            totalAmount: amountCad, // Store in CAD
-            currency: "CAD", // Normalized to CAD
-            paymentCount: 1,
-          });
-        }
-      }
-      setDividends(Array.from(divMap.values()).sort((a, b) => b.totalAmount - a.totalAmount).slice(0, 5));
-      setTotalReceivedDividends(totalDivReceived);
+      setAllocationTargets(targetsData.targets || []);
+      setDividends(dividendData.dividends || []);
+      setTotalReceivedDividends(dividendData.totalReceived || 0);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -165,10 +141,8 @@ export default function HomePage() {
 
   const fxRate = summary?.fxRate || 1.44;
 
-  const totalPnL = (summary?.totalEquityCad || 0) - (summary?.netDeposits || 0);
-
-  // 포트폴리오 가중 평균 배당 수익률 계산
-  const weightedDividendYield = (() => {
+  // 포트폴리오 가중 평균 배당 수익률 계산 (memoized)
+  const weightedDividendYield = useMemo(() => {
     if (!yahooProjections?.projections || yahooProjections.projections.length === 0) return 0;
 
     let totalMarketValue = 0;
@@ -176,7 +150,6 @@ export default function HomePage() {
 
     for (const proj of yahooProjections.projections) {
       if (proj.dividendYield && proj.dividendYield > 0) {
-        // CAD로 환산
         const marketValueCad = proj.currency === "USD" ? proj.marketValue * fxRate : proj.marketValue;
         totalMarketValue += marketValueCad;
         weightedYield += (proj.dividendYield / 100) * marketValueCad;
@@ -184,10 +157,10 @@ export default function HomePage() {
     }
 
     return totalMarketValue > 0 ? (weightedYield / totalMarketValue) * 100 : 0;
-  })();
+  }, [yahooProjections, fxRate]);
 
-  // 연간 예상 배당금 (CAD로 환산)
-  const projectedAnnualDividendCad = (() => {
+  // 연간 예상 배당금 (memoized)
+  const projectedAnnualDividendCad = useMemo(() => {
     if (!yahooProjections?.projections) return 0;
 
     let total = 0;
@@ -199,54 +172,41 @@ export default function HomePage() {
       }
     }
     return total;
-  })();
+  }, [yahooProjections, fxRate]);
 
-  // CAGR Calculation (Lifetime)
-  const cagr = (() => {
-    // 1. Determine Start Date (First Transaction Date)
+  // CAGR Calculation (memoized)
+  const cagr = useMemo(() => {
     const firstTxDateStr = (summary as any)?.firstTransactionDate;
     if (!firstTxDateStr) return 0;
 
     const startDate = new Date(firstTxDateStr);
     const endDate = new Date();
-
-    // 2. Calculate Years Active
     const years = (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
     if (years < 0.1) return 0;
 
-    // 3. Get Start and End Values
     const startValue = summary?.netDeposits || 0;
     const endValue = summary?.totalEquityCad || 0;
-
     if (startValue <= 0 || endValue <= 0) return 0;
 
-    // 4. Calculate CAGR: (End / Start) ^ (1 / n) - 1
     return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
-  })();
+  }, [summary]);
 
-  // 1. Capital Return (Price Appreciation Only)
-  // Capital Gain % = Total Open PnL / Total Cost
-  // Total Cost = Market Value - Open PnL
-  const capitalReturnPercent = (() => {
+  // Return percentages (memoized)
+  const { capitalReturnPercent, totalNetReturnPercent } = useMemo(() => {
     const marketVal = summary?.totalMarketValueCad || 0;
     const openPnl = summary?.totalOpenPnLCad || 0;
-    const cost = marketVal - openPnl;
-    if (cost <= 0) return 0;
-    return (openPnl / cost) * 100;
-  })();
-
-  // 2. Total Net Return (Real Total Return)
-  // (Total Equity - Net Deposits) / Net Deposits
-  // This includes Dividends (Cash) + Capital Gains
-  const totalNetReturnPercent = (() => {
     const equity = summary?.totalEquityCad || 0;
     const deposits = summary?.netDeposits || 0;
-    if (deposits <= 0) return 0;
-    return ((equity - deposits) / deposits) * 100;
-  })();
 
-  // 포지션 합산 (같은 심볼)
-  const aggregatedPositions = (() => {
+    const cost = marketVal - openPnl;
+    const capitalReturn = cost > 0 ? (openPnl / cost) * 100 : 0;
+    const totalReturn = deposits > 0 ? ((equity - deposits) / deposits) * 100 : 0;
+
+    return { capitalReturnPercent: capitalReturn, totalNetReturnPercent: totalReturn };
+  }, [summary]);
+
+  // 포지션 합산 (memoized - 가장 비용이 큰 계산)
+  const aggregatedPositions = useMemo(() => {
     const map = new Map<string, Position>();
     for (const pos of positions) {
       const key = pos.symbolMapped;
@@ -272,37 +232,39 @@ export default function HomePage() {
       }
     }
     return Array.from(map.values());
-  })();
+  }, [positions]);
 
-  // Top 5 holdings (CAD 환산 기준)
-  const topHoldings = aggregatedPositions
-    .map(pos => ({
-      ...pos,
-      marketValueCad: pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue,
-    }))
-    .sort((a, b) => b.marketValueCad - a.marketValueCad)
-    .slice(0, 5);
+  // Top holdings + allocation data (memoized)
+  const { topHoldings, allocationData, totalMarketValueCad } = useMemo(() => {
+    const totalMVCad = aggregatedPositions.reduce((sum, pos) => {
+      return sum + (pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue);
+    }, 0);
 
-  // 자산 배분 데이터 (파이차트용)
-  const totalMarketValueCad = aggregatedPositions.reduce((sum, pos) => {
-    return sum + (pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue);
-  }, 0);
+    const holdings = aggregatedPositions
+      .map(pos => ({
+        ...pos,
+        marketValueCad: pos.currency === "USD" ? pos.marketValue * fxRate : pos.marketValue,
+      }))
+      .sort((a, b) => b.marketValueCad - a.marketValueCad)
+      .slice(0, 5);
 
-  const allocationData = topHoldings.map((pos) => ({
-    name: pos.symbolMapped.replace(".TO", ""),
-    value: pos.marketValueCad,
-    percent: totalMarketValueCad > 0 ? (pos.marketValueCad / totalMarketValueCad) * 100 : 0,
-  }));
+    const allocation = holdings.map((pos) => ({
+      name: pos.symbolMapped.replace(".TO", ""),
+      value: pos.marketValueCad,
+      percent: totalMVCad > 0 ? (pos.marketValueCad / totalMVCad) * 100 : 0,
+    }));
 
-  // 나머지 합산
-  const othersValue = totalMarketValueCad - topHoldings.reduce((sum, pos) => sum + pos.marketValueCad, 0);
-  if (othersValue > 0) {
-    allocationData.push({
-      name: "Others",
-      value: othersValue,
-      percent: (othersValue / totalMarketValueCad) * 100,
-    });
-  }
+    const othersValue = totalMVCad - holdings.reduce((sum, pos) => sum + pos.marketValueCad, 0);
+    if (othersValue > 0) {
+      allocation.push({
+        name: "Others",
+        value: othersValue,
+        percent: (othersValue / totalMVCad) * 100,
+      });
+    }
+
+    return { topHoldings: holdings, allocationData: allocation, totalMarketValueCad: totalMVCad };
+  }, [aggregatedPositions, fxRate]);
 
   const COLORS = ["#0a8043", "#16a34a", "#22c55e", "#4ade80", "#86efac", "#d1d5db"];
 
@@ -478,18 +440,37 @@ export default function HomePage() {
               </ResponsiveContainer>
             </div>
             <div className="flex-1 space-y-1.5">
-              {allocationData.map((item, idx) => (
-                <div key={item.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                    />
-                    <span className="text-gray-700 font-medium">{item.name}</span>
+              {allocationData.map((item, idx) => {
+                const target = allocationTargets.find(t =>
+                  t.symbol.replace(".TO", "") === item.name || t.symbol === item.name
+                );
+                const diff = target ? item.percent - target.targetWeight : null;
+                return (
+                  <div key={item.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                      />
+                      <span className="text-gray-700 font-medium">{item.name}</span>
+                      {target && (
+                        <span className="text-[9px] px-1 py-0.5 rounded font-medium bg-gray-100 text-gray-500">
+                          {target.targetWeight.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] ${
+                        diff !== null && Math.abs(diff) < 1 ? "text-gray-400" :
+                        diff !== null && diff > 0 ? "text-amber-500" : "text-blue-500"
+                      }`}>
+                        {diff !== null && diff > 0 ? "+" : ""}{diff?.toFixed(1)}%
+                      </span>
+                      <span className="text-gray-900 font-medium">{item.percent.toFixed(1)}%</span>
+                    </div>
                   </div>
-                  <span className="text-gray-500">{item.percent.toFixed(1)}%</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

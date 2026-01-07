@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+// 5분 캐싱 (시장 데이터는 자주 변하므로 짧은 TTL)
+const CACHE_TTL = 5 * 60; // 5분
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      next: { revalidate: CACHE_TTL }, // Next.js 캐싱 활성화
     });
 
     if (!res.ok) {

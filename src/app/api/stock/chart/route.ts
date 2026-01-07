@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+// Period에 따른 캐시 TTL (초)
+function getCacheTTL(period: string): number {
+  switch (period) {
+    case "1D":
+      return 5 * 60; // 5분
+    case "5D":
+      return 15 * 60; // 15분
+    default:
+      return 60 * 60; // 1시간 (1M, 6M, YTD, 1Y, 5Y)
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,7 +68,7 @@ export async function GET(request: NextRequest) {
         "Accept": "application/json",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      cache: "no-store",
+      next: { revalidate: getCacheTTL(period) }, // Next.js 캐싱 활성화
     });
 
     if (!res.ok) {

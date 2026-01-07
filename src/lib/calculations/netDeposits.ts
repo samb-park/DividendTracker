@@ -6,18 +6,23 @@ export interface NetDepositsResult {
 }
 
 /**
- * 순입금액 계산
+ * 순입금액 계산 (최적화: 단일 groupBy 쿼리 사용)
  * - CON: 입금 (현금 입금 + 현물 이전)
+ * - TFI: 이체 입금
  * - WDR: 출금 (현금 출금 + 현물 이전)
+ * - TFO: 이체 출금
  */
 export async function calculateNetDeposits(
   accountId?: string | null,
   asOfDate?: Date
 ): Promise<NetDepositsResult> {
   const baseWhere: {
+    action: { in: string[] };
     settlementDate?: { lte: Date };
     accountId?: string;
-  } = {};
+  } = {
+    action: { in: ['CON', 'TFI', 'WDR', 'TFO'] },
+  };
 
   if (accountId) {
     baseWhere.accountId = accountId;
@@ -27,36 +32,26 @@ export async function calculateNetDeposits(
     baseWhere.settlementDate = { lte: asOfDate };
   }
 
-  // CON (입금) & TFI (이체 입금)
-  const depositTransactions = await prisma.transaction.findMany({
-    where: { ...baseWhere, action: { in: ['CON', 'TFI'] } },
-    select: { netAmount: true, cadEquivalent: true },
-  });
-
-  // WDR (출금) & TFO (이체 출금)
-  const withdrawalTransactions = await prisma.transaction.findMany({
-    where: { ...baseWhere, action: { in: ['WDR', 'TFO'] } },
-    select: { netAmount: true, cadEquivalent: true },
+  // 단일 쿼리로 모든 입출금 집계 (N+1 문제 해결)
+  const results = await prisma.transaction.groupBy({
+    by: ['action'],
+    where: baseWhere,
+    _sum: {
+      cadEquivalent: true,
+      netAmount: true,
+    },
   });
 
   // 합계 계산
   let totalNetDeposits = 0;
 
-  // 입금 추가
-  for (const tx of depositTransactions) {
-    if (tx.cadEquivalent) {
-      totalNetDeposits += tx.cadEquivalent;
-    } else if (tx.netAmount) {
-      totalNetDeposits += tx.netAmount;
-    }
-  }
-
-  // 출금 빼기
-  for (const tx of withdrawalTransactions) {
-    if (tx.cadEquivalent) {
-      totalNetDeposits -= tx.cadEquivalent;
-    } else if (tx.netAmount) {
-      totalNetDeposits -= Math.abs(tx.netAmount);
+  for (const r of results) {
+    const amount = r._sum.cadEquivalent || r._sum.netAmount || 0;
+    if (['CON', 'TFI'].includes(r.action)) {
+      totalNetDeposits += amount;
+    } else {
+      // WDR, TFO - 출금
+      totalNetDeposits -= Math.abs(amount);
     }
   }
 

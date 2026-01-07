@@ -6,9 +6,43 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
+    const type = searchParams.get("type");
+    const accountId = searchParams.get("accountId");
+
+    // Server-side dividend aggregation (10K 레코드 대신 집계된 결과만 반환)
+    if (type === "dividendSummary") {
+      const results = await prisma.transaction.groupBy({
+        by: ["symbolMapped"],
+        where: {
+          action: "DIV",
+          netAmount: { gt: 0 },
+          symbolMapped: { not: null },
+          ...(accountId ? { accountId } : {}),
+        },
+        _sum: { cadEquivalent: true, netAmount: true },
+        _count: { id: true },
+      });
+
+      const dividends = results
+        .filter((r) => r.symbolMapped)
+        .map((r) => ({
+          symbol: r.symbolMapped!,
+          totalAmount: r._sum.cadEquivalent || r._sum.netAmount || 0,
+          currency: "CAD",
+          paymentCount: r._count.id,
+        }))
+        .sort((a, b) => b.totalAmount - a.totalAmount);
+
+      const totalReceived = dividends.reduce((sum, d) => sum + d.totalAmount, 0);
+
+      return NextResponse.json({
+        dividends: dividends.slice(0, 5), // Top 5
+        totalReceived,
+      });
+    }
+
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
-    const accountId = searchParams.get("accountId");
     const year = searchParams.get("year");
     const action = searchParams.get("action");
     const symbol = searchParams.get("symbol");

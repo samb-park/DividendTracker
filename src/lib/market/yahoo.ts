@@ -81,18 +81,43 @@ export async function getQuote(
 }
 
 /**
- * 복수 종목 시세 조회
+ * 복수 종목 시세 조회 (Batch API 사용)
  */
 export async function getQuotes(
   symbols: string[]
 ): Promise<Map<string, QuoteResult>> {
   const results = new Map<string, QuoteResult>();
 
-  // 순차적으로 조회 (getQuote에서 rate limit 처리)
-  for (const symbol of symbols) {
-    const quote = await getQuote(symbol);
-    if (quote) {
-      results.set(symbol, quote);
+  if (symbols.length === 0) return results;
+
+  try {
+    await waitForRateLimit();
+
+    // Yahoo Finance batch quote - 한번에 여러 심볼 조회
+    const quotes = await yahooFinance.quote(symbols);
+    const quotesArray = Array.isArray(quotes) ? quotes : [quotes];
+
+    for (const quote of quotesArray) {
+      if (quote && quote.symbol) {
+        results.set(quote.symbol, {
+          symbol: quote.symbol,
+          regularMarketPrice: quote.regularMarketPrice || 0,
+          regularMarketPreviousClose: quote.regularMarketPreviousClose || 0,
+          currency: quote.currency || 'USD',
+          regularMarketTime: quote.regularMarketTime
+            ? new Date(quote.regularMarketTime)
+            : new Date(),
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Batch quote failed, falling back to sequential:', error);
+    // Fallback: 순차적으로 조회
+    for (const symbol of symbols) {
+      const quote = await getQuote(symbol);
+      if (quote) {
+        results.set(symbol, quote);
+      }
     }
   }
 
@@ -151,17 +176,42 @@ export async function getDividendInfo(
 }
 
 /**
- * 복수 종목 배당 정보 조회
+ * 복수 종목 배당 정보 조회 (Batch API 사용)
  */
 export async function getDividendInfoBatch(
   symbols: string[]
 ): Promise<Map<string, DividendInfo>> {
   const results = new Map<string, DividendInfo>();
 
-  for (const symbol of symbols) {
-    const info = await getDividendInfo(symbol);
-    if (info) {
-      results.set(symbol, info);
+  if (symbols.length === 0) return results;
+
+  try {
+    await waitForRateLimit();
+
+    // Yahoo Finance batch quote - 한번에 여러 심볼 조회
+    const quotes = await yahooFinance.quote(symbols);
+    const quotesArray = Array.isArray(quotes) ? quotes : [quotes];
+
+    for (const quote of quotesArray) {
+      if (quote && quote.symbol) {
+        results.set(quote.symbol, {
+          symbol: quote.symbol,
+          price: quote.regularMarketPrice || 0,
+          currency: quote.currency || 'USD',
+          dividendYield: quote.dividendYield || null,
+          trailingAnnualDividendRate: quote.trailingAnnualDividendRate || null,
+          dividendDate: quote.dividendDate ? new Date(quote.dividendDate) : null,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Batch dividend info failed, falling back to sequential:', error);
+    // Fallback: 순차적으로 조회
+    for (const symbol of symbols) {
+      const info = await getDividendInfo(symbol);
+      if (info) {
+        results.set(symbol, info);
+      }
     }
   }
 
