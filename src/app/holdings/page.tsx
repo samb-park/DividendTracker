@@ -49,6 +49,10 @@ interface Position {
   todayPnLPercent: number;
   currency: string;
   accountId: string;
+  // 52-week data
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHighChangePercent: number | null;
 }
 
 interface PortfolioSummary {
@@ -753,7 +757,7 @@ export default function HoldingsPage() {
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
                             className="px-3 py-2 cursor-pointer"
                           >
-                            {/* 첫 번째 줄: 심볼, 배지들, P&L% */}
+                            {/* 첫 번째 줄: 심볼, 배지들, P&L%, 52W */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm font-bold text-gray-900">
@@ -774,11 +778,23 @@ export default function HoldingsPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPositive
-                                ? "bg-green-50 text-green-700"
-                                : "bg-red-50 text-red-600"
-                                }`}>
-                                {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
+                              <div className="flex items-center gap-1.5">
+                                {/* 52-week drawdown indicator */}
+                                {pos.fiftyTwoWeekHighChangePercent !== null && (
+                                  <span className={`text-[9px] font-medium ${
+                                    pos.fiftyTwoWeekHighChangePercent >= -5 ? "text-green-600" :
+                                    pos.fiftyTwoWeekHighChangePercent >= -15 ? "text-yellow-600" :
+                                    "text-red-500"
+                                  }`}>
+                                    52W:{pos.fiftyTwoWeekHighChangePercent.toFixed(0)}%
+                                  </span>
+                                )}
+                                <div className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPositive
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-red-50 text-red-600"
+                                  }`}>
+                                  {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
+                                </div>
                               </div>
                             </div>
 
@@ -859,6 +875,41 @@ export default function HoldingsPage() {
                                   </span>
                                 </div>
                               </div>
+                              {/* 52-Week Range - in expanded section */}
+                              {pos.fiftyTwoWeekHigh && pos.fiftyTwoWeekLow && (
+                                <div className="mt-2 pt-2 border-t border-gray-50">
+                                  <div className="flex items-center justify-between text-xs mb-1">
+                                    <span className="text-gray-500">52W Range</span>
+                                    <span className={`font-semibold ${
+                                      (pos.fiftyTwoWeekHighChangePercent ?? 0) >= -5 ? "text-green-600" :
+                                      (pos.fiftyTwoWeekHighChangePercent ?? 0) >= -15 ? "text-yellow-600" :
+                                      "text-red-500"
+                                    }`}>
+                                      {pos.fiftyTwoWeekHighChangePercent?.toFixed(1)}% from high
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9px] text-gray-400">${formatNumber(pos.fiftyTwoWeekLow, 2)}</span>
+                                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full relative overflow-hidden">
+                                      {(() => {
+                                        const range = pos.fiftyTwoWeekHigh - pos.fiftyTwoWeekLow;
+                                        const position = range > 0 ? ((pos.currentPrice - pos.fiftyTwoWeekLow) / range) * 100 : 50;
+                                        return (
+                                          <div
+                                            className={`absolute left-0 top-0 h-full rounded-full ${
+                                              position >= 80 ? "bg-green-500" :
+                                              position >= 50 ? "bg-yellow-500" :
+                                              "bg-red-400"
+                                            }`}
+                                            style={{ width: `${Math.max(0, Math.min(100, position))}%` }}
+                                          />
+                                        );
+                                      })()}
+                                    </div>
+                                    <span className="text-[9px] text-gray-400">${formatNumber(pos.fiftyTwoWeekHigh, 2)}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

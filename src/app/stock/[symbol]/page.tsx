@@ -21,6 +21,14 @@ interface QuoteData {
   marketCap: number;
   fiftyTwoWeekHigh: number;
   fiftyTwoWeekLow: number;
+  fiftyTwoWeekHighChange: number | null;
+  fiftyTwoWeekHighChangePercent: number | null;
+  fiftyTwoWeekLowChange: number | null;
+  fiftyTwoWeekLowChangePercent: number | null;
+  fiftyDayAverage: number | null;
+  twoHundredDayAverage: number | null;
+  fiftyDayAverageChangePercent: number | null;
+  twoHundredDayAverageChangePercent: number | null;
   trailingPE: number;
   dividendYield: number;
   currency: string;
@@ -277,6 +285,130 @@ export default function StockDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 52-Week Range & Drawdown */}
+      {quote.fiftyTwoWeekHigh && quote.fiftyTwoWeekLow && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <h3 className="text-xs font-semibold tracking-wider text-gray-500 uppercase mb-3">52-Week Range</h3>
+
+          {/* Drawdown from High */}
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-gray-500">From 52W High</span>
+              <span className={`text-sm font-semibold ${
+                (quote.fiftyTwoWeekHighChangePercent ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+              }`}>
+                {quote.fiftyTwoWeekHighChangePercent !== null
+                  ? `${quote.fiftyTwoWeekHighChangePercent >= 0 ? "+" : ""}${formatNumber(quote.fiftyTwoWeekHighChangePercent)}%`
+                  : "-"
+                }
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-12">{formatNumber(quote.fiftyTwoWeekLow)}</span>
+              <div className="flex-1 h-2 bg-gray-100 rounded-full relative overflow-hidden">
+                {(() => {
+                  const range = quote.fiftyTwoWeekHigh - quote.fiftyTwoWeekLow;
+                  const position = range > 0 ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / range) * 100 : 50;
+                  const fromHigh = 100 - position;
+                  return (
+                    <>
+                      <div
+                        className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full"
+                        style={{ width: `${Math.max(0, Math.min(100, position))}%` }}
+                      />
+                      {fromHigh > 10 && (
+                        <div
+                          className="absolute right-0 top-0 h-full bg-red-200 rounded-r-full"
+                          style={{ width: `${Math.max(0, Math.min(100, fromHigh))}%` }}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              <span className="text-xs text-gray-400 w-12 text-right">{formatNumber(quote.fiftyTwoWeekHigh)}</span>
+            </div>
+          </div>
+
+          {/* Rise from Low */}
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">From 52W Low</span>
+            <span className={`font-semibold ${
+              (quote.fiftyTwoWeekLowChangePercent ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+            }`}>
+              {quote.fiftyTwoWeekLowChangePercent !== null
+                ? `+${formatNumber(quote.fiftyTwoWeekLowChangePercent)}%`
+                : "-"
+              }
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Moving Averages */}
+      {(quote.fiftyDayAverage || quote.twoHundredDayAverage) && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <h3 className="text-xs font-semibold tracking-wider text-gray-500 uppercase mb-3">Moving Averages</h3>
+          <div className="space-y-3">
+            {quote.fiftyDayAverage && (
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm text-gray-700">50-Day MA</span>
+                  <span className="text-xs text-gray-400 ml-2">{formatNumber(quote.fiftyDayAverage)}</span>
+                </div>
+                <span className={`text-sm font-semibold px-2 py-0.5 rounded ${
+                  (quote.fiftyDayAverageChangePercent ?? 0) >= 0
+                    ? "bg-green-50 text-green-600"
+                    : "bg-red-50 text-red-600"
+                }`}>
+                  {quote.fiftyDayAverageChangePercent !== null
+                    ? `${quote.fiftyDayAverageChangePercent >= 0 ? "+" : ""}${formatNumber(quote.fiftyDayAverageChangePercent)}%`
+                    : "-"
+                  }
+                </span>
+              </div>
+            )}
+            {quote.twoHundredDayAverage && (
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm text-gray-700">200-Day MA</span>
+                  <span className="text-xs text-gray-400 ml-2">{formatNumber(quote.twoHundredDayAverage)}</span>
+                </div>
+                <span className={`text-sm font-semibold px-2 py-0.5 rounded ${
+                  (quote.twoHundredDayAverageChangePercent ?? 0) >= 0
+                    ? "bg-green-50 text-green-600"
+                    : "bg-red-50 text-red-600"
+                }`}>
+                  {quote.twoHundredDayAverageChangePercent !== null
+                    ? `${quote.twoHundredDayAverageChangePercent >= 0 ? "+" : ""}${formatNumber(quote.twoHundredDayAverageChangePercent)}%`
+                    : "-"
+                  }
+                </span>
+              </div>
+            )}
+            {/* Overall MA Status */}
+            {quote.fiftyDayAverage && quote.twoHundredDayAverage && (
+              <div className="pt-2 border-t border-gray-100">
+                <div className={`text-xs font-medium px-2 py-1 rounded text-center ${
+                  quote.regularMarketPrice >= quote.fiftyDayAverage && quote.regularMarketPrice >= quote.twoHundredDayAverage
+                    ? "bg-green-100 text-green-700"
+                    : quote.regularMarketPrice < quote.fiftyDayAverage && quote.regularMarketPrice < quote.twoHundredDayAverage
+                    ? "bg-red-100 text-red-700"
+                    : "bg-yellow-100 text-yellow-700"
+                }`}>
+                  {quote.regularMarketPrice >= quote.fiftyDayAverage && quote.regularMarketPrice >= quote.twoHundredDayAverage
+                    ? "Above Both MAs - Bullish"
+                    : quote.regularMarketPrice < quote.fiftyDayAverage && quote.regularMarketPrice < quote.twoHundredDayAverage
+                    ? "Below Both MAs - Bearish"
+                    : "Between MAs - Mixed"
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chart */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

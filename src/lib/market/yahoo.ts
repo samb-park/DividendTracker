@@ -11,6 +11,9 @@ export interface QuoteResult {
   regularMarketPreviousClose: number;
   currency: string;
   regularMarketTime: Date;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHighChangePercent: number | null;
 }
 
 // Rate limit 방지를 위한 딜레이
@@ -52,14 +55,23 @@ export async function getQuote(
 
       const quote = await yahooFinance.quote(symbol);
 
+      const price = quote.regularMarketPrice || 0;
+      const high52 = quote.fiftyTwoWeekHigh || null;
+      const highChangePercent = high52 && price
+        ? ((price - high52) / high52) * 100
+        : null;
+
       return {
         symbol: quote.symbol,
-        regularMarketPrice: quote.regularMarketPrice || 0,
+        regularMarketPrice: price,
         regularMarketPreviousClose: quote.regularMarketPreviousClose || 0,
         currency: quote.currency || 'USD',
         regularMarketTime: quote.regularMarketTime
           ? new Date(quote.regularMarketTime)
           : new Date(),
+        fiftyTwoWeekHigh: high52,
+        fiftyTwoWeekLow: quote.fiftyTwoWeekLow || null,
+        fiftyTwoWeekHighChangePercent: highChangePercent,
       };
     } catch (error) {
       const errorMessage =
@@ -99,14 +111,23 @@ export async function getQuotes(
 
     for (const quote of quotesArray) {
       if (quote && quote.symbol) {
+        const price = quote.regularMarketPrice || 0;
+        const high52 = quote.fiftyTwoWeekHigh || null;
+        const highChangePercent = high52 && price
+          ? ((price - high52) / high52) * 100
+          : null;
+
         results.set(quote.symbol, {
           symbol: quote.symbol,
-          regularMarketPrice: quote.regularMarketPrice || 0,
+          regularMarketPrice: price,
           regularMarketPreviousClose: quote.regularMarketPreviousClose || 0,
           currency: quote.currency || 'USD',
           regularMarketTime: quote.regularMarketTime
             ? new Date(quote.regularMarketTime)
             : new Date(),
+          fiftyTwoWeekHigh: high52,
+          fiftyTwoWeekLow: quote.fiftyTwoWeekLow || null,
+          fiftyTwoWeekHighChangePercent: highChangePercent,
         });
       }
     }

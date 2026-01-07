@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
         const netAmount = tx.netAmount || 0;
 
         // 포지션 업데이트
-        if (symbol && ["Buy", "Sell", "REI", "CON", "WDR", "DIS"].includes(tx.action)) {
+        if (symbol && ["Buy", "Sell", "REI", "CON", "WDR", "DIS", "DEP", "TFI", "TFO"].includes(tx.action)) {
           const existing = positions.get(symbol) || { qty: 0, cost: 0, currency: tx.currency };
 
           switch (tx.action) {
@@ -140,6 +140,22 @@ export async function GET(request: NextRequest) {
             case "DIS":
               existing.qty += qty;
               break;
+            case "DEP":
+            case "TFI":
+              // 현물 입금 (주식 이전 입금)
+              existing.qty += qty;
+              if (tx.cadEquivalent) {
+                existing.cost += tx.cadEquivalent;
+              }
+              break;
+            case "TFO":
+              // 현물 출금 (주식 이전 출금)
+              if (existing.qty > 0) {
+                const avgCost = existing.cost / existing.qty;
+                existing.qty -= Math.abs(qty);
+                existing.cost = existing.qty * avgCost;
+              }
+              break;
           }
 
           positions.set(symbol, existing);
@@ -177,26 +193,29 @@ export async function GET(request: NextRequest) {
       const totalEquity = marketValueCad + marketValueUsd * fxRate + cashCad + cashUsd * fxRate;
 
       // Net deposits 계산 (해당 날짜까지의 누적)
-      // CON: 입금, WDR: 출금
+      // 입금: CON (Contribution), TFI (Transfer In), DEP (Deposit)
+      // 출금: WDR (Withdrawal), TFO (Transfer Out)
+      const DEPOSIT_ACTIONS = ["CON", "TFI", "DEP"];
+      const WITHDRAWAL_ACTIONS = ["WDR", "TFO"];
+
       let netDepositsCad = 0;
       for (const tx of transactions) {
         if (new Date(tx.settlementDate) > asOfDate) break;
 
-        // CON: 입금 (contribution)
-        if (tx.action === "CON") {
-          if (tx.cadEquivalent) {
-            netDepositsCad += tx.cadEquivalent;
-          } else if (tx.netAmount) {
-            netDepositsCad += tx.netAmount;
-          }
+        // 입금 (CON, TFI, DEP)
+        // cadEquivalent: 현물 이전 시 CAD 환산 가치
+        // netAmount: 현금 입출금 금액
+        // 같은 거래에서 둘 다 값이 있는 경우는 없으므로 합산이 안전
+        if (DEPOSIT_ACTIONS.includes(tx.action)) {
+          const cadEquiv = tx.cadEquivalent ?? 0;
+          const netAmt = tx.netAmount ?? 0;
+          netDepositsCad += cadEquiv + netAmt;
         }
-        // WDR: 출금 (withdrawal)
-        else if (tx.action === "WDR") {
-          if (tx.cadEquivalent) {
-            netDepositsCad -= tx.cadEquivalent;
-          } else if (tx.netAmount) {
-            netDepositsCad -= Math.abs(tx.netAmount);
-          }
+        // 출금 (WDR, TFO)
+        else if (WITHDRAWAL_ACTIONS.includes(tx.action)) {
+          const cadEquiv = tx.cadEquivalent ?? 0;
+          const netAmt = tx.netAmount ?? 0;
+          netDepositsCad -= Math.abs(cadEquiv) + Math.abs(netAmt);
         }
       }
 

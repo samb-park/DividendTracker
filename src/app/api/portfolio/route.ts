@@ -20,6 +20,10 @@ export interface PositionWithMarket {
   todayPnLPercent: number;
   currency: string;
   accountId: string;
+  // 52-week data
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHighChangePercent: number | null;
 }
 
 export interface PortfolioSummary {
@@ -120,6 +124,9 @@ export async function GET(request: NextRequest) {
         openPnLPercent,
         todayPnL,
         todayPnLPercent,
+        fiftyTwoWeekHigh: quote?.fiftyTwoWeekHigh ?? null,
+        fiftyTwoWeekLow: quote?.fiftyTwoWeekLow ?? null,
+        fiftyTwoWeekHighChangePercent: quote?.fiftyTwoWeekHighChangePercent ?? null,
       };
     });
 

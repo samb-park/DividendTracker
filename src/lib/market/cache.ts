@@ -9,6 +9,10 @@ export interface CachedQuote {
   price: number;
   previousClose: number;
   currency: string;
+  // 52-week data (not cached in DB, only available from fresh quotes)
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHighChangePercent: number | null;
 }
 
 /**
@@ -26,6 +30,9 @@ export async function getCachedQuote(symbol: string): Promise<CachedQuote | null
       price: cached.price,
       previousClose: cached.previousClose || cached.price,
       currency: cached.currency,
+      fiftyTwoWeekHigh: null, // Not available from DB cache
+      fiftyTwoWeekLow: null,
+      fiftyTwoWeekHighChangePercent: null,
     };
   }
 
@@ -62,6 +69,9 @@ export async function getCachedQuote(symbol: string): Promise<CachedQuote | null
     price: quote.regularMarketPrice,
     previousClose: quote.regularMarketPreviousClose,
     currency: quote.currency,
+    fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
+    fiftyTwoWeekHighChangePercent: quote.fiftyTwoWeekHighChangePercent,
   };
 }
 
@@ -88,6 +98,9 @@ export async function getCachedQuotes(
       price: c.price,
       previousClose: c.previousClose || c.price,
       currency: c.currency,
+      fiftyTwoWeekHigh: null, // Not available from DB cache
+      fiftyTwoWeekLow: null,
+      fiftyTwoWeekHighChangePercent: null,
     });
   }
 
@@ -132,6 +145,9 @@ export async function getCachedQuotes(
         price: quote.regularMarketPrice,
         previousClose: quote.regularMarketPreviousClose,
         currency: quote.currency,
+        fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
+        fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
+        fiftyTwoWeekHighChangePercent: quote.fiftyTwoWeekHighChangePercent,
       });
     }
   }

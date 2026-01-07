@@ -11,25 +11,43 @@ export async function GET(request: NextRequest) {
 
     // Server-side dividend aggregation (10K 레코드 대신 집계된 결과만 반환)
     if (type === "dividendSummary") {
+      // Get FX rate for USD to CAD conversion
+      const fxCache = await prisma.fxCache.findUnique({
+        where: { pair: "USDCAD" },
+      });
+      const fxRate = fxCache?.rate || 1.44; // Default fallback
+
+      // Group by symbol AND currency to handle USD/CAD separately
       const results = await prisma.transaction.groupBy({
-        by: ["symbolMapped"],
+        by: ["symbolMapped", "currency"],
         where: {
           action: "DIV",
           netAmount: { gt: 0 },
           symbolMapped: { not: null },
           ...(accountId ? { accountId } : {}),
         },
-        _sum: { cadEquivalent: true, netAmount: true },
+        _sum: { netAmount: true },
         _count: { id: true },
       });
 
-      const dividends = results
-        .filter((r) => r.symbolMapped)
-        .map((r) => ({
-          symbol: r.symbolMapped!,
-          totalAmount: r._sum.cadEquivalent || r._sum.netAmount || 0,
+      // Aggregate by symbol, converting USD to CAD
+      const symbolMap = new Map<string, { amount: number; count: number }>();
+      for (const r of results) {
+        if (!r.symbolMapped) continue;
+        const existing = symbolMap.get(r.symbolMapped) || { amount: 0, count: 0 };
+        const amount = r._sum.netAmount || 0;
+        // Convert USD to CAD, keep CAD as is
+        existing.amount += r.currency === "USD" ? amount * fxRate : amount;
+        existing.count += r._count.id;
+        symbolMap.set(r.symbolMapped, existing);
+      }
+
+      const dividends = Array.from(symbolMap.entries())
+        .map(([symbol, data]) => ({
+          symbol,
+          totalAmount: data.amount,
           currency: "CAD",
-          paymentCount: r._count.id,
+          paymentCount: data.count,
         }))
         .sort((a, b) => b.totalAmount - a.totalAmount);
 
@@ -38,6 +56,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         dividends: dividends.slice(0, 5), // Top 5
         totalReceived,
+      });
+    }
+
+    // Debug: Net deposits calculation
+    if (type === "netDepositsDebug") {
+      const DEPOSIT_ACTIONS = ['CON', 'TFI', 'DEP'];
+      const WITHDRAWAL_ACTIONS = ['WDR', 'TFO'];
+      const ALL_ACTIONS = [...DEPOSIT_ACTIONS, ...WITHDRAWAL_ACTIONS];
+
+      const results = await prisma.transaction.groupBy({
+        by: ['action'],
+        where: {
+          action: { in: ALL_ACTIONS },
+        },
+        _sum: {
+          cadEquivalent: true,
+          netAmount: true,
+        },
+        _count: { id: true },
+      });
+
+      let totalNetDeposits = 0;
+      const details = results.map(r => {
+        const amount = r._sum.cadEquivalent ?? r._sum.netAmount ?? 0;
+        const isDeposit = DEPOSIT_ACTIONS.includes(r.action);
+        const isWithdrawal = WITHDRAWAL_ACTIONS.includes(r.action);
+        if (isDeposit) totalNetDeposits += amount;
+        if (isWithdrawal) totalNetDeposits -= Math.abs(amount);
+        return {
+          action: r.action,
+          count: r._count.id,
+          sumCadEquivalent: r._sum.cadEquivalent,
+          sumNetAmount: r._sum.netAmount,
+          effectiveAmount: amount,
+          type: isDeposit ? 'deposit' : isWithdrawal ? 'withdrawal' : 'unknown',
+        };
+      });
+
+      return NextResponse.json({
+        actions: ALL_ACTIONS,
+        results: details,
+        totalNetDeposits,
       });
     }
 

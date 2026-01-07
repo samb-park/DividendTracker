@@ -42,6 +42,38 @@ export async function GET(request: NextRequest) {
     const change = currentPrice && previousClose ? currentPrice - previousClose : 0;
     const changePercent = previousClose ? (change / previousClose) * 100 : 0;
 
+    // 52-week high/low calculations
+    const fiftyTwoWeekHigh = meta.fiftyTwoWeekHigh;
+    const fiftyTwoWeekLow = meta.fiftyTwoWeekLow;
+    const fiftyTwoWeekHighChange = fiftyTwoWeekHigh && currentPrice
+      ? currentPrice - fiftyTwoWeekHigh
+      : null;
+    const fiftyTwoWeekHighChangePercent = fiftyTwoWeekHigh && currentPrice
+      ? ((currentPrice - fiftyTwoWeekHigh) / fiftyTwoWeekHigh) * 100
+      : null;
+    const fiftyTwoWeekLowChange = fiftyTwoWeekLow && currentPrice
+      ? currentPrice - fiftyTwoWeekLow
+      : null;
+    const fiftyTwoWeekLowChangePercent = fiftyTwoWeekLow && currentPrice
+      ? ((currentPrice - fiftyTwoWeekLow) / fiftyTwoWeekLow) * 100
+      : null;
+
+    // Moving averages (from Yahoo Finance meta)
+    const fiftyDayAverage = meta.fiftyDayAverage;
+    const twoHundredDayAverage = meta.twoHundredDayAverage;
+    const fiftyDayAverageChange = fiftyDayAverage && currentPrice
+      ? currentPrice - fiftyDayAverage
+      : null;
+    const fiftyDayAverageChangePercent = fiftyDayAverage && currentPrice
+      ? ((currentPrice - fiftyDayAverage) / fiftyDayAverage) * 100
+      : null;
+    const twoHundredDayAverageChange = twoHundredDayAverage && currentPrice
+      ? currentPrice - twoHundredDayAverage
+      : null;
+    const twoHundredDayAverageChangePercent = twoHundredDayAverage && currentPrice
+      ? ((currentPrice - twoHundredDayAverage) / twoHundredDayAverage) * 100
+      : null;
+
     return NextResponse.json({
       symbol: meta.symbol,
       shortName: meta.shortName || meta.symbol,
@@ -55,8 +87,21 @@ export async function GET(request: NextRequest) {
       regularMarketDayLow: meta.regularMarketDayLow || quote?.low?.[lastIndex],
       regularMarketVolume: meta.regularMarketVolume || quote?.volume?.[lastIndex],
       marketCap: meta.marketCap,
-      fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
-      fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+      // 52-week data
+      fiftyTwoWeekHigh,
+      fiftyTwoWeekLow,
+      fiftyTwoWeekHighChange,
+      fiftyTwoWeekHighChangePercent,
+      fiftyTwoWeekLowChange,
+      fiftyTwoWeekLowChangePercent,
+      // Moving averages
+      fiftyDayAverage,
+      twoHundredDayAverage,
+      fiftyDayAverageChange,
+      fiftyDayAverageChangePercent,
+      twoHundredDayAverageChange,
+      twoHundredDayAverageChangePercent,
+      // Other metrics
       trailingPE: meta.trailingPE,
       dividendYield: meta.dividendYield,
       currency: meta.currency,
