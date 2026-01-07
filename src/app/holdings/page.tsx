@@ -757,36 +757,46 @@ export default function HoldingsPage() {
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
                             className="px-3 py-2.5 cursor-pointer"
                           >
-                            {/* 첫 번째 줄: 심볼 | 시장가치 + 통화 */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-base font-bold text-gray-900">
-                                  {pos.symbolMapped.replace(".TO", "")}
-                                </span>
-                                {shouldBuy && (
-                                  <span className="bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded font-bold">
-                                    BUY
+                            <div className="flex items-start justify-between">
+                              {/* 왼쪽: 로고 + 심볼/수량 */}
+                              <div className="flex items-center gap-2.5">
+                                <img
+                                  src={`https://logo.clearbit.com/${pos.symbolMapped.replace(".TO", "").toLowerCase()}.com`}
+                                  alt={pos.symbolMapped}
+                                  className="w-9 h-9 rounded-lg object-contain bg-gray-50"
+                                  onError={(e) => {
+                                    // Fallback to text icon if logo fails
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = "none";
+                                    target.nextElementSibling?.classList.remove("hidden");
+                                  }}
+                                />
+                                <div className="w-9 h-9 bg-gray-100 rounded-lg hidden items-center justify-center text-gray-600 font-bold text-xs">
+                                  {pos.symbolMapped.replace(".TO", "").slice(0, 3)}
+                                </div>
+                                <div>
+                                  <div className="text-base font-bold text-gray-900">
+                                    {pos.symbolMapped.replace(".TO", "")}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {formatNumberTrim(pos.quantity)} Shares
+                                  </div>
+                                </div>
+                              </div>
+                              {/* 오른쪽: 시장가치 + 손익 */}
+                              <div className="text-right">
+                                <div className="flex items-baseline gap-1 justify-end">
+                                  <span className="text-base font-bold text-gray-900">
+                                    ${formatNumber(pos.marketValue, 0)}
                                   </span>
-                                )}
+                                  <span className="text-xs text-gray-400">
+                                    {pos.currency}
+                                  </span>
+                                </div>
+                                <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                  {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)} ({isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%)
+                                </div>
                               </div>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-base font-bold text-gray-900">
-                                  ${formatNumber(pos.marketValue, 0)}
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                  {pos.currency}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* 두 번째 줄: 수량 | 손익금액 (손익%) */}
-                            <div className="flex items-center justify-between mt-0.5">
-                              <span className="text-sm text-gray-500">
-                                {formatNumberTrim(pos.quantity)}
-                              </span>
-                              <span className={`text-sm font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)} ({isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%)
-                              </span>
                             </div>
                           </div>
 
@@ -820,55 +830,73 @@ export default function HoldingsPage() {
                                 </div>
                               </div>
 
-                              {/* P&L Section */}
-                              <div className="flex justify-between items-center mt-2.5 pt-2.5 border-t border-gray-100">
-                                <div className="text-xs">
-                                  <span className="text-gray-500">Open P&L: </span>
-                                  <span className={`font-semibold ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                    {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 2)} ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(1)}%)
-                                  </span>
+                              {/* P&L Grid - 일관된 스타일 */}
+                              <div className="grid grid-cols-2 gap-1.5 mt-2.5 pt-2.5 border-t border-gray-100 text-center">
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Open P&L</div>
+                                  <div className={`text-xs font-semibold ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                    {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 0)} ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(1)}%)
+                                  </div>
                                 </div>
-                                <div className="text-xs">
-                                  <span className="text-gray-500">Today: </span>
-                                  <span className={`font-semibold ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                    {pos.todayPnL >= 0 ? "+" : ""}${formatNumber(pos.todayPnL, 2)}
-                                  </span>
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Today</div>
+                                  <div className={`text-xs font-semibold ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {pos.todayPnL >= 0 ? "+" : ""}${formatNumber(pos.todayPnL, 0)} ({pos.todayPnL >= 0 ? "+" : ""}{pos.todayPnLPercent.toFixed(1)}%)
+                                  </div>
                                 </div>
                               </div>
 
-                              {/* 52-Week Range */}
+                              {/* 52W High Drawdown with Progress Bar */}
                               {pos.fiftyTwoWeekHigh && pos.fiftyTwoWeekLow && (
                                 <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                                  <div className="flex items-center justify-between text-xs mb-1.5">
-                                    <span className="text-gray-500">52W Range</span>
-                                    <span className={`font-semibold ${
-                                      (pos.fiftyTwoWeekHighChangePercent ?? 0) >= -5 ? "text-green-600" :
-                                      (pos.fiftyTwoWeekHighChangePercent ?? 0) >= -15 ? "text-yellow-600" :
-                                      "text-red-500"
-                                    }`}>
-                                      {pos.fiftyTwoWeekHighChangePercent?.toFixed(1)}% from high
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[9px] text-gray-400">${formatNumber(pos.fiftyTwoWeekLow, 2)}</span>
-                                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full relative overflow-hidden">
-                                      {(() => {
-                                        const range = pos.fiftyTwoWeekHigh - pos.fiftyTwoWeekLow;
-                                        const position = range > 0 ? ((pos.currentPrice - pos.fiftyTwoWeekLow) / range) * 100 : 50;
-                                        return (
-                                          <div
-                                            className={`absolute left-0 top-0 h-full rounded-full ${
-                                              position >= 80 ? "bg-green-500" :
-                                              position >= 50 ? "bg-yellow-500" :
-                                              "bg-red-400"
-                                            }`}
-                                            style={{ width: `${Math.max(0, Math.min(100, position))}%` }}
-                                          />
-                                        );
-                                      })()}
-                                    </div>
-                                    <span className="text-[9px] text-gray-400">${formatNumber(pos.fiftyTwoWeekHigh, 2)}</span>
-                                  </div>
+                                  {(() => {
+                                    const drawdownPercent = ((pos.currentPrice - pos.fiftyTwoWeekHigh) / pos.fiftyTwoWeekHigh) * 100;
+                                    const range = pos.fiftyTwoWeekHigh - pos.fiftyTwoWeekLow;
+                                    const position = range > 0 ? ((pos.currentPrice - pos.fiftyTwoWeekLow) / range) * 100 : 50;
+                                    const clampedPosition = Math.max(0, Math.min(100, position));
+
+                                    // 색상 결정: 0~-10 녹색, -10~-15 노랑, -15~-25 주황, -25~-40 빨강, -40+ 진빨강
+                                    let colorClass = "text-green-600 bg-green-50";
+                                    let barColor = "bg-green-500";
+                                    if (drawdownPercent <= -40) {
+                                      colorClass = "text-red-700 bg-red-100";
+                                      barColor = "bg-red-700";
+                                    } else if (drawdownPercent <= -25) {
+                                      colorClass = "text-red-600 bg-red-50";
+                                      barColor = "bg-red-500";
+                                    } else if (drawdownPercent <= -15) {
+                                      colorClass = "text-orange-600 bg-orange-50";
+                                      barColor = "bg-orange-500";
+                                    } else if (drawdownPercent <= -10) {
+                                      colorClass = "text-yellow-600 bg-yellow-50";
+                                      barColor = "bg-yellow-500";
+                                    }
+
+                                    return (
+                                      <>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                          <span className="text-[9px] text-gray-400 uppercase tracking-wide">From 52W High</span>
+                                          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${colorClass}`}>
+                                            {drawdownPercent >= 0 ? "+" : ""}{drawdownPercent.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[9px] text-gray-400 w-10">${formatNumber(pos.fiftyTwoWeekLow, 0)}</span>
+                                          <div className="flex-1 relative h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                              className={`absolute top-0 left-0 h-full ${barColor} rounded-full`}
+                                              style={{ width: `${clampedPosition}%` }}
+                                            />
+                                            <div
+                                              className={`absolute top-1/2 -translate-y-1/2 w-2 h-2 ${barColor} border-2 border-white rounded-full shadow-sm`}
+                                              style={{ left: `calc(${clampedPosition}% - 4px)` }}
+                                            />
+                                          </div>
+                                          <span className="text-[9px] text-gray-400 w-10 text-right">${formatNumber(pos.fiftyTwoWeekHigh, 0)}</span>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               )}
 

@@ -82,9 +82,8 @@ export async function getCachedQuotes(
   symbols: string[]
 ): Promise<Map<string, CachedQuote>> {
   const results = new Map<string, CachedQuote>();
-  const toFetch: string[] = [];
-
-  // 캐시 확인
+  // 52W 데이터는 DB 캐시에 저장하지 않으므로, 항상 fresh 데이터 필요
+  // 캐시된 가격 데이터를 먼저 읽고, fresh 데이터로 52W 정보 보강
   const cached = await prisma.priceCache.findMany({
     where: {
       symbol: { in: symbols },
@@ -92,26 +91,20 @@ export async function getCachedQuotes(
     },
   });
 
+  const cachedMap = new Map<string, typeof cached[0]>();
   for (const c of cached) {
-    results.set(c.symbol, {
-      symbol: c.symbol,
-      price: c.price,
-      previousClose: c.previousClose || c.price,
-      currency: c.currency,
-      fiftyTwoWeekHigh: null, // Not available from DB cache
-      fiftyTwoWeekLow: null,
-      fiftyTwoWeekHighChangePercent: null,
-    });
+    cachedMap.set(c.symbol, c);
   }
 
-  // 캐시에 없는 것 찾기
+  // 캐시에 없는 심볼 찾기
+  const toFetch: string[] = [];
   for (const s of symbols) {
-    if (!results.has(s)) {
+    if (!cachedMap.has(s)) {
       toFetch.push(s);
     }
   }
 
-  // 새로 조회
+  // 캐시 안 된 심볼만 새로 조회
   if (toFetch.length > 0) {
     const freshQuotes = await getQuotes(toFetch);
 
@@ -148,6 +141,30 @@ export async function getCachedQuotes(
         fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
         fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
         fiftyTwoWeekHighChangePercent: quote.fiftyTwoWeekHighChangePercent,
+      });
+    }
+  }
+
+  // 52W 데이터가 필요하지만 캐시에서 읽은 심볼들 처리
+  // 캐시된 가격은 사용하되, 52W 데이터를 위해 fresh 조회 필요
+  const symbolsNeedingFresh52W = symbols.filter(s => !results.has(s) && cachedMap.has(s));
+
+  if (symbolsNeedingFresh52W.length > 0) {
+    const fresh52WQuotes = await getQuotes(symbolsNeedingFresh52W);
+
+    for (const s of symbolsNeedingFresh52W) {
+      const cachedData = cachedMap.get(s)!;
+      const freshQuote = fresh52WQuotes.get(s);
+
+      results.set(s, {
+        symbol: cachedData.symbol,
+        price: cachedData.price,
+        previousClose: cachedData.previousClose || cachedData.price,
+        currency: cachedData.currency,
+        // 52W 데이터는 fresh에서 가져옴
+        fiftyTwoWeekHigh: freshQuote?.fiftyTwoWeekHigh ?? null,
+        fiftyTwoWeekLow: freshQuote?.fiftyTwoWeekLow ?? null,
+        fiftyTwoWeekHighChangePercent: freshQuote?.fiftyTwoWeekHighChangePercent ?? null,
       });
     }
   }
