@@ -8,7 +8,14 @@
       "Bash(cat:*)",
       "Bash(sqlite3:*)",
       "Bash(npx prisma db push:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(tree:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(lsof:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(xargs kill:*)",
+      "Bash(npx next build:*)"
     ]
   }
 }

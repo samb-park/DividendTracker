@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { formatCurrency, formatNumber, formatNumberTrim } from "@/lib/utils";
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react";
 import {
@@ -760,8 +761,23 @@ export default function HoldingsPage() {
                             <div className="flex items-start justify-between">
                               {/* 왼쪽: 아이콘 + 심볼/수량 */}
                               <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 font-bold text-[10px]">
-                                  {pos.symbolMapped.replace(".TO", "").slice(0, 4)}
+                                <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                                  <Image
+                                    src={`https://financialmodelingprep.com/image-stock/${pos.symbolMapped.replace(".TO", "")}.png`}
+                                    alt={pos.symbolMapped}
+                                    width={36}
+                                    height={36}
+                                    className="object-cover"
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      target.style.display = 'none';
+                                      const fallback = target.nextElementSibling as HTMLElement;
+                                      if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                  />
+                                  <span className="text-gray-600 font-bold text-[10px] hidden items-center justify-center w-full h-full">
+                                    {pos.symbolMapped.replace(".TO", "").slice(0, 4)}
+                                  </span>
                                 </div>
                                 <div>
                                   <div className="text-base font-bold text-gray-900">
