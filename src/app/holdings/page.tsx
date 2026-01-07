@@ -576,30 +576,34 @@ export default function HoldingsPage() {
             )}
 
             {/* P&L 요약 바 */}
-            {equityHistory.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-4 md:gap-6">
-                  <div>
-                    <div className="text-[10px] text-gray-400">Net Deposits</div>
-                    <div className="text-xs md:text-sm font-medium text-gray-700">
-                      ${formatNumber(equityHistory[equityHistory.length - 1]?.netDeposits || 0, 0)}
+            {equityHistory.length > 0 && (() => {
+              const latestNetDeposits = equityHistory[equityHistory.length - 1]?.netDeposits || 0;
+              const gainPercent = latestNetDeposits > 0 ? (totalPnL / latestNetDeposits) * 100 : 0;
+              return (
+                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-4 md:gap-6">
+                    <div>
+                      <div className="text-[10px] text-gray-400">Net Deposits</div>
+                      <div className="text-xs md:text-sm font-medium text-gray-700">
+                        ${formatNumber(latestNetDeposits, 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400">Total Gain</div>
+                      <div className={`text-xs md:text-sm font-medium ${totalPnL >= 0 ? "text-[#0a8043]" : "text-red-500"}`}>
+                        {totalPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(totalPnL), 0)}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400">Total Gain</div>
-                    <div className={`text-xs md:text-sm font-medium ${totalPnL >= 0 ? "text-[#0a8043]" : "text-red-500"}`}>
-                      {totalPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(totalPnL), 0)}
-                    </div>
+                  <div className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-medium ${totalPnL >= 0
+                    ? "bg-green-50 text-[#0a8043]"
+                    : "bg-red-50 text-red-500"
+                    }`}>
+                    {gainPercent >= 0 ? "+" : ""}{gainPercent.toFixed(1)}%
                   </div>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-medium ${totalPnL >= 0
-                  ? "bg-green-50 text-[#0a8043]"
-                  : "bg-red-50 text-red-500"
-                  }`}>
-                  {totalPnL >= 0 ? "+" : ""}{((totalPnL / (summary?.netDeposits || 1)) * 100).toFixed(1)}%
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* 요약 섹션 */}
@@ -716,8 +720,8 @@ export default function HoldingsPage() {
                 </div>
               ) : (
                 <>
-                  {/* 모바일 카드 뷰 - 세련된 금융 스타일 */}
-                  <div className="md:hidden space-y-2">
+                  {/* 모바일 카드 뷰 - 컴팩트 프로페셔널 스타일 */}
+                  <div className="md:hidden space-y-1.5">
                     {sortedPositions.map((pos, idx) => {
                       const isPositive = pos.openPnL >= 0;
                       const isExpanded = expandedPosition === idx;
@@ -739,39 +743,38 @@ export default function HoldingsPage() {
                       return (
                         <div
                           key={idx}
-                          className={`bg-white rounded-xl border transition-all duration-200 ${isExpanded
-                            ? "border-gray-200 shadow-md"
-                            : "border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200"
+                          className={`bg-white rounded-lg border transition-all duration-200 ${isExpanded
+                            ? "border-gray-300 shadow-md"
+                            : "border-gray-100 hover:border-gray-200"
                             }`}
                         >
-                          {/* 메인 카드 */}
+                          {/* 컴팩트 카드 - 한 줄에 모든 핵심 정보 */}
                           <div
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
-                            className="px-3 py-2.5 cursor-pointer"
+                            className="px-3 py-2 cursor-pointer"
                           >
-                            <div className="flex items-center justify-between mb-1.5">
-                              {/* 심볼 + 통화 배지 + 비중 */}
+                            {/* 첫 번째 줄: 심볼, 배지들, P&L% */}
+                            <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-bold text-gray-900 tracking-tight">
+                                <span className="text-sm font-bold text-gray-900">
                                   {pos.symbolMapped.replace(".TO", "")}
                                 </span>
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${pos.currency === "CAD"
-                                  ? "bg-red-50 text-red-600 border border-red-100"
-                                  : "bg-blue-50 text-blue-600 border border-blue-100"
+                                <span className={`px-1 py-0.5 rounded text-[8px] font-semibold ${pos.currency === "CAD"
+                                  ? "bg-red-50 text-red-600"
+                                  : "bg-blue-50 text-blue-600"
                                   }`}>
-                                  {pos.currency === "CAD" ? "CAD" : "USD"}
+                                  {pos.currency}
                                 </span>
-                                <span className="text-[9px] text-gray-400 font-medium">
+                                <span className="text-[10px] text-gray-400">
                                   {weight.toFixed(1)}%
                                 </span>
                                 {shouldBuy && (
-                                  <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                                  <span className="bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded font-bold">
                                     BUY
                                   </span>
                                 )}
                               </div>
-                              {/* P&L 배지 */}
-                              <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPositive
+                              <div className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPositive
                                 ? "bg-green-50 text-green-700"
                                 : "bg-red-50 text-red-600"
                                 }`}>
@@ -779,96 +782,80 @@ export default function HoldingsPage() {
                               </div>
                             </div>
 
-                            {/* 수량 & 평균가 / 현재가 */}
-                            <div className="flex items-end justify-between">
-                              <div>
-                                <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
-                                  {formatNumberTrim(pos.quantity)} shares
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  <span className="text-gray-400">@</span> ${formatNumber(pos.avgCost, 2)}
-                                  <span className="mx-1 text-gray-300">→</span>
-                                  <span className="font-medium text-gray-900">${formatNumber(pos.currentPrice, 2)}</span>
-                                </div>
+                            {/* 두 번째 줄: 수량/가격 → 시장가치/손익 (한 줄로 압축) */}
+                            <div className="flex items-center justify-between mt-1">
+                              <div className="flex items-baseline gap-1 text-[11px]">
+                                <span className="text-gray-400">{formatNumberTrim(pos.quantity)}</span>
+                                <span className="text-gray-300">×</span>
+                                <span className="text-gray-500">${formatNumber(pos.avgCost, 2)}</span>
+                                <span className="text-gray-300">→</span>
+                                <span className="font-medium text-gray-800">${formatNumber(pos.currentPrice, 2)}</span>
                               </div>
-                              <div className="text-right">
-                                <div className="text-base font-bold text-gray-900">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-sm font-bold text-gray-900">
                                   ${formatNumber(pos.marketValue, 0)}
-                                </div>
-                                <div className={`text-[11px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                </span>
+                                <span className={`text-[10px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
                                   {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)}
-                                </div>
+                                </span>
                               </div>
                             </div>
 
-                            {/* Allocation Inline Info */}
+                            {/* 세 번째 줄: Allocation 정보 (있을 경우만) - 더 컴팩트하게 */}
                             {hasAllocationTarget && allocation && (
-                              <div className="mt-2 pt-2 border-t border-dashed border-gray-100">
-                                <div className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-500">Target</span>
-                                    <span className="font-medium">{allocation.targetWeight}%</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-500">Gap</span>
-                                    <span className={`font-medium ${allocation.gap > 0 ? "text-green-600" : "text-gray-500"}`}>
-                                      {allocation.gap > 0 ? "+" : ""}{allocation.gap.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                  {shouldBuy && (
-                                    <div className="font-bold text-[#0a8043]">
-                                      +${allocation.weeklyBuyActual.toFixed(0)}
-                                    </div>
-                                  )}
+                              <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50 text-[10px]">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-gray-400">
+                                    Target <span className="text-gray-600 font-medium">{allocation.targetWeight}%</span>
+                                  </span>
+                                  <span className={`${allocation.gap > 0 ? "text-green-600" : allocation.gap < 0 ? "text-red-500" : "text-gray-400"}`}>
+                                    Gap {allocation.gap > 0 ? "+" : ""}{allocation.gap.toFixed(1)}%
+                                  </span>
                                 </div>
+                                {shouldBuy && (
+                                  <span className="font-bold text-green-600">
+                                    +${allocation.weeklyBuyActual.toFixed(0)}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
 
                           {/* 확장 영역 */}
                           <div
-                            className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? "max-h-[400px]" : "max-h-0"
+                            className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-[200px]" : "max-h-0"
                               }`}
                           >
-                            <div className="px-4 pb-4 border-t border-gray-100">
-                              {/* 상세 그리드 */}
-                              <div className="grid grid-cols-2 gap-3 pt-4">
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
-                                  <div className="text-sm font-semibold text-gray-900">{formatNumberTrim(pos.quantity)}</div>
+                            <div className="px-3 pb-3 border-t border-gray-100">
+                              <div className="grid grid-cols-4 gap-2 pt-2 text-center">
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase">Qty</div>
+                                  <div className="text-xs font-semibold">{formatNumberTrim(pos.quantity)}</div>
                                 </div>
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Avg Cost</div>
-                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.avgCost, 2)}</div>
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase">Avg</div>
+                                  <div className="text-xs font-semibold">${formatNumber(pos.avgCost, 2)}</div>
                                 </div>
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Total Cost</div>
-                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.totalCost, 2)}</div>
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase">Cost</div>
+                                  <div className="text-xs font-semibold">${formatNumber(pos.totalCost, 0)}</div>
                                 </div>
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Current Price</div>
-                                  <div className="text-sm font-semibold text-gray-900">${formatNumber(pos.currentPrice, 2)}</div>
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase">Price</div>
+                                  <div className="text-xs font-semibold">${formatNumber(pos.currentPrice, 2)}</div>
                                 </div>
                               </div>
-
-                              {/* P&L 섹션 */}
-                              <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-gray-50 to-white border border-gray-100">
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-xs text-gray-500">Open P&L</span>
-                                  <span className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                    {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 2)}
-                                    <span className="text-xs font-medium ml-1">
-                                      ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(2)}%)
-                                    </span>
+                              <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-50">
+                                <div className="text-xs">
+                                  <span className="text-gray-500">Open P&L: </span>
+                                  <span className={`font-semibold ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                    {isPositive ? "+" : ""}${formatNumber(pos.openPnL, 2)} ({isPositive ? "+" : ""}{pos.openPnLPercent.toFixed(1)}%)
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-xs text-gray-500">Today&apos;s Change</span>
-                                  <span className={`text-sm font-bold ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                <div className="text-xs">
+                                  <span className="text-gray-500">Today: </span>
+                                  <span className={`font-semibold ${pos.todayPnL >= 0 ? "text-green-600" : "text-red-500"}`}>
                                     {pos.todayPnL >= 0 ? "+" : ""}${formatNumber(pos.todayPnL, 2)}
-                                    <span className="text-xs font-medium ml-1">
-                                      ({pos.todayPnLPercent >= 0 ? "+" : ""}{pos.todayPnLPercent.toFixed(2)}%)
-                                    </span>
                                   </span>
                                 </div>
                               </div>
