@@ -758,27 +758,16 @@ export default function HoldingsPage() {
                             className="px-3 py-2.5 cursor-pointer"
                           >
                             <div className="flex items-start justify-between">
-                              {/* 왼쪽: 로고 + 심볼/수량 */}
+                              {/* 왼쪽: 아이콘 + 심볼/수량 */}
                               <div className="flex items-center gap-2.5">
-                                <img
-                                  src={`https://logo.clearbit.com/${pos.symbolMapped.replace(".TO", "").toLowerCase()}.com`}
-                                  alt={pos.symbolMapped}
-                                  className="w-9 h-9 rounded-lg object-contain bg-gray-50"
-                                  onError={(e) => {
-                                    // Fallback to text icon if logo fails
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = "none";
-                                    target.nextElementSibling?.classList.remove("hidden");
-                                  }}
-                                />
-                                <div className="w-9 h-9 bg-gray-100 rounded-lg hidden items-center justify-center text-gray-600 font-bold text-xs">
-                                  {pos.symbolMapped.replace(".TO", "").slice(0, 3)}
+                                <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 font-bold text-[10px]">
+                                  {pos.symbolMapped.replace(".TO", "").slice(0, 4)}
                                 </div>
                                 <div>
                                   <div className="text-base font-bold text-gray-900">
                                     {pos.symbolMapped.replace(".TO", "")}
                                   </div>
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-[11px] text-gray-500">
                                     {formatNumberTrim(pos.quantity)} Shares
                                   </div>
                                 </div>
@@ -789,11 +778,11 @@ export default function HoldingsPage() {
                                   <span className="text-base font-bold text-gray-900">
                                     ${formatNumber(pos.marketValue, 0)}
                                   </span>
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-[10px] text-gray-400">
                                     {pos.currency}
                                   </span>
                                 </div>
-                                <div className={`text-xs font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                <div className={`text-[11px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
                                   {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)} ({isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%)
                                 </div>
                               </div>

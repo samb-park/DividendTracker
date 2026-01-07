@@ -651,32 +651,42 @@ export default function DividendsPage() {
             <div className="text-gray-500 text-sm">No dividend data</div>
           ) : (
             <>
-              {/* 모바일 카드 뷰 */}
+              {/* 모바일 카드 뷰 - Holdings 스타일 */}
               <div className="md:hidden space-y-2">
                 {dividendsBySymbol.map((div, idx) => (
                   <div
                     key={idx}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+                    className="bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-all duration-200 px-3 py-2.5"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-bold text-gray-900 tracking-tight">
-                          {div.symbol.replace(".TO", "")}
-                        </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${div.currency === "CAD"
-                          ? "bg-red-50 text-red-600 border border-red-100"
-                          : "bg-blue-50 text-blue-600 border border-blue-100"
-                          }`}>
-                          {div.currency}
-                        </span>
+                    <div className="flex items-start justify-between">
+                      {/* 왼쪽: 아이콘 + 심볼/payments */}
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 font-bold text-[10px]">
+                          {div.symbol.replace(".TO", "").slice(0, 4)}
+                        </div>
+                        <div>
+                          <div className="text-base font-bold text-gray-900">
+                            {div.symbol.replace(".TO", "")}
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {div.count} payments
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-lg font-bold text-[#0a8043]">
-                        ${formatNumberTrim(div.totalAmount)}
+                      {/* 오른쪽: 총액 + 평균 */}
+                      <div className="text-right">
+                        <div className="flex items-baseline gap-1 justify-end">
+                          <span className="text-base font-bold text-[#0a8043]">
+                            ${formatNumberTrim(div.totalAmount)}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {div.currency}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          ~${formatNumberTrim(div.totalAmount / div.count)}/payment
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{div.count} payments</span>
-                      <span>~${formatNumberTrim(div.totalAmount / div.count)}/payment</span>
                     </div>
                   </div>
                 ))}
@@ -727,49 +737,47 @@ export default function DividendsPage() {
         {/* Projected Tab Content - Yahoo Finance based */}
         {(dataTab === "projected" && yahooProjections && yahooProjections.projections.length > 0) && (
           <>
-            {/* Mobile Card View */}
+            {/* Mobile Card View - Holdings 스타일 */}
             <div className="md:hidden space-y-2">
               {yahooProjections.projections.map((proj, idx) => (
                 <div
                   key={idx}
-                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+                  className="bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-all duration-200 px-3 py-2.5"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-bold text-gray-900 tracking-tight">
-                        {proj.symbol.replace(".TO", "")}
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${proj.currency === "CAD"
-                        ? "bg-red-50 text-red-600 border border-red-100"
-                        : "bg-blue-50 text-blue-600 border border-blue-100"
-                        }`}>
-                        {proj.currency}
-                      </span>
-                    </div>
-                    {proj.dividendYield && proj.dividendYield > 0 ? (
-                      <div className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                        {proj.dividendYield.toFixed(2)}% yield
+                  <div className="flex items-start justify-between">
+                    {/* 왼쪽: 아이콘 + 심볼/수량 */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 font-bold text-[10px]">
+                        {proj.symbol.replace(".TO", "").slice(0, 4)}
                       </div>
-                    ) : (
-                      <div className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
-                        No dividend
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <div className="text-gray-400">Shares</div>
-                      <div className="font-medium text-gray-700">{formatNumberTrim(proj.quantity)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Annual/Share</div>
-                      <div className="font-medium text-gray-700">
-                        {proj.annualDividendPerShare ? `$${proj.annualDividendPerShare.toFixed(2)}` : '-'}
+                      <div>
+                        <div className="text-base font-bold text-gray-900">
+                          {proj.symbol.replace(".TO", "")}
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          {formatNumberTrim(proj.quantity)} Shares
+                        </div>
                       </div>
                     </div>
+                    {/* 오른쪽: Est. Annual + Yield */}
                     <div className="text-right">
-                      <div className="text-gray-400">Est. Annual</div>
-                      <div className="font-bold text-[#0a8043]">${formatNumberTrim(proj.projectedAnnualDividend)}</div>
+                      <div className="flex items-baseline gap-1 justify-end">
+                        <span className="text-base font-bold text-[#0a8043]">
+                          ${formatNumberTrim(proj.projectedAnnualDividend)}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {proj.currency}
+                        </span>
+                      </div>
+                      {proj.dividendYield && proj.dividendYield > 0 ? (
+                        <div className="text-[11px] text-green-600 font-medium">
+                          {proj.dividendYield.toFixed(2)}% yield
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-gray-400">
+                          No dividend
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
