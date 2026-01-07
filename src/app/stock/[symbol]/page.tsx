@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Star, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface QuoteData {
   symbol: string;
@@ -163,11 +164,45 @@ export default function StockDetailPage() {
           <Link href="/favorites" className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
             <ArrowLeft className="w-4 h-4 text-gray-600" />
           </Link>
-          <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+          <div>
+            <Skeleton className="h-5 w-24 mb-1" />
+            <Skeleton className="h-3 w-32" />
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="h-8 w-24 bg-gray-200 rounded animate-pulse mb-2" />
-          <div className="h-12 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <Skeleton className="h-8 w-32 mb-1" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="flex gap-1 mb-4">
+            {[...Array(7)].map((_, i) => (
+              <Skeleton key={i} className="h-8 w-10 rounded-full" />
+            ))}
+          </div>
+          <Skeleton className="h-48 w-full rounded-lg" />
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-gray-100">
+            <div className="divide-y divide-gray-100">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="px-4 py-3 flex justify-between">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              ))}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="px-4 py-3 flex justify-between">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -265,7 +300,7 @@ export default function StockDetailPage() {
           <div className="relative">
             {chartLoading && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
-                <div className="text-gray-500 text-sm">Loading...</div>
+                <div className="w-5 h-5 border-2 border-gray-300 border-t-[#0a8043] rounded-full animate-spin" />
               </div>
             )}
             {renderChart()}

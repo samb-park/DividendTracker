@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
@@ -207,7 +208,19 @@ export default function AccountsSettingsPage() {
           </h3>
         </div>
         {loading ? (
-          <div className="p-4 text-gray-500 text-sm">Loading...</div>
+          <div className="divide-y divide-gray-100">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Skeleton className="h-4 w-24 mb-1" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : accounts.length === 0 ? (
           <div className="p-4 text-gray-500 text-sm">
             No accounts found. Please import an Excel file.

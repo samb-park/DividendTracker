@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Star, TrendingUp, TrendingDown, Plus, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface StockQuote {
   symbol: string;
@@ -210,7 +211,7 @@ export default function FavoritesPage() {
                     <div>
                       <div className="font-semibold text-gray-900">{symbol}</div>
                       <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                        {quote?.shortName || "Loading..."}
+                        {quote?.shortName || <Skeleton className="h-3 w-20 inline-block" />}
                       </div>
                     </div>
                   </div>

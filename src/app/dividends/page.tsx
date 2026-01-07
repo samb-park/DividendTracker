@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
@@ -493,8 +494,23 @@ export default function DividendsPage() {
         </div>
 
         {loading ? (
-          <div className="h-[200px] md:h-[280px] flex items-center justify-center text-gray-500">
-            Loading...
+          <div className="h-[200px] md:h-[280px] flex items-center justify-center">
+            <div className="w-full space-y-3">
+              <div className="flex items-end justify-between h-[160px] md:h-[240px] gap-2 px-4">
+                {[...Array(12)].map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className="flex-1 rounded-t"
+                    style={{ height: `${Math.random() * 60 + 20}%` }}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between px-4">
+                {["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"].map((m, i) => (
+                  <Skeleton key={i} className="h-3 w-4" />
+                ))}
+              </div>
+            </div>
           </div>
         ) : dataTab === "bySymbol" ? (
           <div className="h-[200px] md:h-[280px]">
@@ -519,7 +535,7 @@ export default function DividendsPage() {
                   axisLine={false}
                   tickLine={false}
                   orientation="right"
-                  width={40}
+                  width={32}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="amount" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
@@ -549,7 +565,7 @@ export default function DividendsPage() {
                   axisLine={false}
                   tickLine={false}
                   orientation="right"
-                  width={40}
+                  width={32}
                 />
                 <Tooltip
                   content={({ active, payload, label }) => {

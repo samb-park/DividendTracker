@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
@@ -264,8 +265,16 @@ export default function TransactionsSettingsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-gray-500">Loading...</div>
+          <div className="space-y-2">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-4 w-24" />
+              </div>
+            ))}
           </div>
         ) : transactions.length === 0 ? (
           <div className="flex items-center justify-center h-32">

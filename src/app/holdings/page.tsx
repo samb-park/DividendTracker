@@ -25,6 +25,7 @@ import {
   type PortfolioSettings,
   type AllocationSummary,
 } from "@/lib/calculations/allocation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
@@ -380,8 +381,50 @@ export default function HoldingsPage() {
   return (
     <div className="space-y-4 md:space-y-6">
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading...</div>
+        <div className="space-y-4 md:space-y-6">
+          {/* Header skeleton */}
+          <div className="flex items-end justify-between">
+            <div>
+              <Skeleton className="h-3 w-24 mb-2" />
+              <Skeleton className="h-10 w-48" />
+            </div>
+            <Skeleton className="h-10 w-28 rounded-md" />
+          </div>
+          {/* Chart skeleton */}
+          <div className="bg-white rounded-2xl p-3 md:p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <Skeleton className="h-[220px] w-full rounded-lg" />
+            <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between">
+              <div className="flex gap-6">
+                <div>
+                  <Skeleton className="h-2.5 w-16 mb-1" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <div>
+                  <Skeleton className="h-2.5 w-16 mb-1" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              </div>
+              <Skeleton className="h-6 w-14 rounded-full" />
+            </div>
+          </div>
+          {/* Positions skeleton */}
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 p-3">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-10 rounded" />
+                  </div>
+                  <Skeleton className="h-5 w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <>
@@ -477,7 +520,7 @@ export default function HoldingsPage() {
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart
                     data={equityHistory}
-                    margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+                    margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
                   >
                     <defs>
                       <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
@@ -500,7 +543,7 @@ export default function HoldingsPage() {
                       axisLine={false}
                       tickLine={false}
                       orientation="right"
-                      width={45}
+                      width={36}
                       tickCount={4}
                     />
                     <Tooltip content={<CustomTooltip />} />

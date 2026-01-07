@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { formatDate } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
@@ -192,7 +193,17 @@ export default function AccountsPage() {
           </span>
         </div>
         {loading ? (
-          <div className="text-gray-500 text-sm">Loading...</div>
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
         ) : accounts.length === 0 ? (
           <div className="text-gray-500 text-sm">
             No accounts found. Please import an Excel file.
