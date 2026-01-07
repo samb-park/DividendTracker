@@ -842,9 +842,9 @@ export default function HoldingsPage() {
                                 <div className="mt-2.5 pt-2.5 border-t border-gray-100">
                                   {(() => {
                                     const drawdownPercent = ((pos.currentPrice - pos.fiftyTwoWeekHigh) / pos.fiftyTwoWeekHigh) * 100;
-                                    const range = pos.fiftyTwoWeekHigh - pos.fiftyTwoWeekLow;
-                                    const position = range > 0 ? ((pos.currentPrice - pos.fiftyTwoWeekLow) / range) * 100 : 50;
-                                    const clampedPosition = Math.max(0, Math.min(100, position));
+                                    // 프로그래스 바: High 대비 현재 가격 비율 (100% = High 도달, 0% = 완전 하락)
+                                    // drawdown이 0%면 100%, -50%면 50%
+                                    const clampedBarPosition = Math.max(0, Math.min(100, 100 + drawdownPercent));
 
                                     // 색상 결정: 0~-10 녹색, -10~-15 노랑, -15~-25 주황, -25~-40 빨강, -40+ 진빨강
                                     let colorClass = "text-green-600 bg-green-50";
@@ -866,24 +866,24 @@ export default function HoldingsPage() {
                                     return (
                                       <>
                                         <div className="flex items-center justify-between mb-1.5">
-                                          <span className="text-[9px] text-gray-400 uppercase tracking-wide">From 52W High</span>
+                                          <span className="text-[9px] text-gray-400 uppercase tracking-wide">From 52W High (${formatNumber(pos.fiftyTwoWeekHigh, 2)})</span>
                                           <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${colorClass}`}>
-                                            {drawdownPercent >= 0 ? "+" : ""}{drawdownPercent.toFixed(1)}%
+                                            {drawdownPercent >= 0 ? "+" : ""}{drawdownPercent.toFixed(2)}%
                                           </span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[9px] text-gray-400 w-10">${formatNumber(pos.fiftyTwoWeekLow, 0)}</span>
+                                          <span className="text-[9px] text-gray-400 w-6">0%</span>
                                           <div className="flex-1 relative h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
                                               className={`absolute top-0 left-0 h-full ${barColor} rounded-full`}
-                                              style={{ width: `${clampedPosition}%` }}
+                                              style={{ width: `${clampedBarPosition}%` }}
                                             />
                                             <div
                                               className={`absolute top-1/2 -translate-y-1/2 w-2 h-2 ${barColor} border-2 border-white rounded-full shadow-sm`}
-                                              style={{ left: `calc(${clampedPosition}% - 4px)` }}
+                                              style={{ left: `calc(${clampedBarPosition}% - 4px)` }}
                                             />
                                           </div>
-                                          <span className="text-[9px] text-gray-400 w-10 text-right">${formatNumber(pos.fiftyTwoWeekHigh, 0)}</span>
+                                          <span className="text-[9px] text-gray-400 w-8 text-right">100%</span>
                                         </div>
                                       </>
                                     );
