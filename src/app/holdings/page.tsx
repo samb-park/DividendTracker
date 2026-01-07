@@ -752,25 +752,16 @@ export default function HoldingsPage() {
                             : "border-gray-100 hover:border-gray-200"
                             }`}
                         >
-                          {/* 컴팩트 카드 - 한 줄에 모든 핵심 정보 */}
+                          {/* 심플 카드 레이아웃 */}
                           <div
                             onClick={() => setExpandedPosition(isExpanded ? null : idx)}
-                            className="px-3 py-2 cursor-pointer"
+                            className="px-3 py-2.5 cursor-pointer"
                           >
-                            {/* 첫 번째 줄: 심볼, 배지들, P&L%, 52W */}
+                            {/* 첫 번째 줄: 심볼 | 시장가치 + 통화 */}
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-bold text-gray-900">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base font-bold text-gray-900">
                                   {pos.symbolMapped.replace(".TO", "")}
-                                </span>
-                                <span className={`px-1 py-0.5 rounded text-[8px] font-semibold ${pos.currency === "CAD"
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-blue-50 text-blue-600"
-                                  }`}>
-                                  {pos.currency}
-                                </span>
-                                <span className="text-[10px] text-gray-400">
-                                  {weight.toFixed(1)}%
                                 </span>
                                 {shouldBuy && (
                                   <span className="bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded font-bold">
@@ -778,90 +769,59 @@ export default function HoldingsPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                {/* 52-week drawdown indicator */}
-                                {pos.fiftyTwoWeekHighChangePercent !== null && (
-                                  <span className={`text-[9px] font-medium ${
-                                    pos.fiftyTwoWeekHighChangePercent >= -5 ? "text-green-600" :
-                                    pos.fiftyTwoWeekHighChangePercent >= -15 ? "text-yellow-600" :
-                                    "text-red-500"
-                                  }`}>
-                                    52W:{pos.fiftyTwoWeekHighChangePercent.toFixed(0)}%
-                                  </span>
-                                )}
-                                <div className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPositive
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-red-50 text-red-600"
-                                  }`}>
-                                  {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 두 번째 줄: 수량/가격 → 시장가치/손익 (한 줄로 압축) */}
-                            <div className="flex items-center justify-between mt-1">
-                              <div className="flex items-baseline gap-1 text-[11px]">
-                                <span className="text-gray-400">{formatNumberTrim(pos.quantity)}</span>
-                                <span className="text-gray-300">×</span>
-                                <span className="text-gray-500">${formatNumber(pos.avgCost, 2)}</span>
-                                <span className="text-gray-300">→</span>
-                                <span className="font-medium text-gray-800">${formatNumber(pos.currentPrice, 2)}</span>
-                              </div>
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-bold text-gray-900">
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-base font-bold text-gray-900">
                                   ${formatNumber(pos.marketValue, 0)}
                                 </span>
-                                <span className={`text-[10px] font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                                  {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)}
+                                <span className="text-xs text-gray-400">
+                                  {pos.currency}
                                 </span>
                               </div>
                             </div>
 
-                            {/* 세 번째 줄: Allocation 정보 (있을 경우만) - 더 컴팩트하게 */}
-                            {hasAllocationTarget && allocation && (
-                              <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50 text-[10px]">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-gray-400">
-                                    Target <span className="text-gray-600 font-medium">{allocation.targetWeight}%</span>
-                                  </span>
-                                  <span className={`${allocation.gap > 0 ? "text-green-600" : allocation.gap < 0 ? "text-red-500" : "text-gray-400"}`}>
-                                    Gap {allocation.gap > 0 ? "+" : ""}{allocation.gap.toFixed(1)}%
-                                  </span>
-                                </div>
-                                {shouldBuy && (
-                                  <span className="font-bold text-green-600">
-                                    +${allocation.weeklyBuyActual.toFixed(0)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            {/* 두 번째 줄: 수량 | 손익금액 (손익%) */}
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="text-sm text-gray-500">
+                                {formatNumberTrim(pos.quantity)}
+                              </span>
+                              <span className={`text-sm font-medium ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                                {isPositive ? "+" : ""}${formatNumberTrim(pos.openPnL)} ({isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%)
+                              </span>
+                            </div>
                           </div>
 
                           {/* 확장 영역 */}
                           <div
-                            className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-[200px]" : "max-h-0"
+                            className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-[400px]" : "max-h-0"
                               }`}
                           >
                             <div className="px-3 pb-3 border-t border-gray-100">
-                              <div className="grid grid-cols-4 gap-2 pt-2 text-center">
+                              {/* Position Details Grid */}
+                              <div className="grid grid-cols-5 gap-1.5 pt-2.5 text-center">
                                 <div>
-                                  <div className="text-[9px] text-gray-400 uppercase">Qty</div>
-                                  <div className="text-xs font-semibold">{formatNumberTrim(pos.quantity)}</div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Qty</div>
+                                  <div className="text-xs font-semibold text-gray-800">{formatNumberTrim(pos.quantity)}</div>
                                 </div>
                                 <div>
-                                  <div className="text-[9px] text-gray-400 uppercase">Avg</div>
-                                  <div className="text-xs font-semibold">${formatNumber(pos.avgCost, 2)}</div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Avg</div>
+                                  <div className="text-xs font-semibold text-gray-800">${formatNumber(pos.avgCost, 2)}</div>
                                 </div>
                                 <div>
-                                  <div className="text-[9px] text-gray-400 uppercase">Cost</div>
-                                  <div className="text-xs font-semibold">${formatNumber(pos.totalCost, 0)}</div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Price</div>
+                                  <div className="text-xs font-semibold text-gray-800">${formatNumber(pos.currentPrice, 2)}</div>
                                 </div>
                                 <div>
-                                  <div className="text-[9px] text-gray-400 uppercase">Price</div>
-                                  <div className="text-xs font-semibold">${formatNumber(pos.currentPrice, 2)}</div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Cost</div>
+                                  <div className="text-xs font-semibold text-gray-800">${formatNumber(pos.totalCost, 0)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">Weight</div>
+                                  <div className="text-xs font-semibold text-gray-800">{weight.toFixed(1)}%</div>
                                 </div>
                               </div>
-                              <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-50">
+
+                              {/* P&L Section */}
+                              <div className="flex justify-between items-center mt-2.5 pt-2.5 border-t border-gray-100">
                                 <div className="text-xs">
                                   <span className="text-gray-500">Open P&L: </span>
                                   <span className={`font-semibold ${isPositive ? "text-green-600" : "text-red-500"}`}>
@@ -875,10 +835,11 @@ export default function HoldingsPage() {
                                   </span>
                                 </div>
                               </div>
-                              {/* 52-Week Range - in expanded section */}
+
+                              {/* 52-Week Range */}
                               {pos.fiftyTwoWeekHigh && pos.fiftyTwoWeekLow && (
-                                <div className="mt-2 pt-2 border-t border-gray-50">
-                                  <div className="flex items-center justify-between text-xs mb-1">
+                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                  <div className="flex items-center justify-between text-xs mb-1.5">
                                     <span className="text-gray-500">52W Range</span>
                                     <span className={`font-semibold ${
                                       (pos.fiftyTwoWeekHighChangePercent ?? 0) >= -5 ? "text-green-600" :
@@ -907,6 +868,40 @@ export default function HoldingsPage() {
                                       })()}
                                     </div>
                                     <span className="text-[9px] text-gray-400">${formatNumber(pos.fiftyTwoWeekHigh, 2)}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Allocation Section (moved from main card) */}
+                              {hasAllocationTarget && allocation && (
+                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                  <div className="flex items-center justify-between text-xs mb-1.5">
+                                    <span className="text-gray-500">Allocation</span>
+                                    {shouldBuy && (
+                                      <span className="bg-green-500 text-white text-[9px] px-1.5 py-0.5 rounded font-semibold">
+                                        Weekly Buy: ${allocation.weeklyBuyActual.toFixed(0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="bg-gray-50 rounded-md py-1.5">
+                                      <div className="text-[9px] text-gray-400 uppercase tracking-wide">Target</div>
+                                      <div className="text-xs font-semibold text-gray-800">{allocation.targetWeight}%</div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-md py-1.5">
+                                      <div className="text-[9px] text-gray-400 uppercase tracking-wide">Current</div>
+                                      <div className="text-xs font-semibold text-gray-800">{weight.toFixed(1)}%</div>
+                                    </div>
+                                    <div className={`rounded-md py-1.5 ${
+                                      allocation.gap > 0 ? "bg-green-50" : allocation.gap < 0 ? "bg-red-50" : "bg-gray-50"
+                                    }`}>
+                                      <div className="text-[9px] text-gray-400 uppercase tracking-wide">Gap</div>
+                                      <div className={`text-xs font-semibold ${
+                                        allocation.gap > 0 ? "text-green-600" : allocation.gap < 0 ? "text-red-500" : "text-gray-600"
+                                      }`}>
+                                        {allocation.gap > 0 ? "+" : ""}{allocation.gap.toFixed(1)}%
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               )}
