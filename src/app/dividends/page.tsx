@@ -662,21 +662,26 @@ export default function DividendsPage() {
                     <div className="flex items-start justify-between">
                       {/* 왼쪽: 아이콘 + 심볼/payments */}
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                        <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
                           <Image
-                            src={`https://financialmodelingprep.com/image-stock/${div.symbol.replace(".TO", "")}.png`}
+                            src={`https://financialmodelingprep.com/image-stock/${div.symbol.endsWith('.TO') ? div.symbol : div.symbol.replace(".TO", "")}.png`}
                             alt={div.symbol}
-                            width={36}
-                            height={36}
-                            className="object-cover"
+                            width={40}
+                            height={40}
+                            className="object-contain w-full h-full"
                             onError={(e) => {
                               const target = e.currentTarget;
+                              if (div.symbol.endsWith('.TO') && !target.dataset.tried) {
+                                target.dataset.tried = 'true';
+                                target.src = `https://financialmodelingprep.com/image-stock/${div.symbol.replace(".TO", "")}.png`;
+                                return;
+                              }
                               target.style.display = 'none';
                               const fallback = target.nextElementSibling as HTMLElement;
                               if (fallback) fallback.style.display = 'flex';
                             }}
                           />
-                          <span className="text-gray-600 font-bold text-[10px] hidden items-center justify-center w-full h-full">
+                          <span className="text-gray-500 font-bold text-[11px] hidden items-center justify-center w-full h-full">
                             {div.symbol.replace(".TO", "").slice(0, 4)}
                           </span>
                         </div>
@@ -763,21 +768,26 @@ export default function DividendsPage() {
                   <div className="flex items-start justify-between">
                     {/* 왼쪽: 아이콘 + 심볼/수량 */}
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                      <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
                         <Image
-                          src={`https://financialmodelingprep.com/image-stock/${proj.symbol.replace(".TO", "")}.png`}
+                          src={`https://financialmodelingprep.com/image-stock/${proj.symbol.endsWith('.TO') ? proj.symbol : proj.symbol.replace(".TO", "")}.png`}
                           alt={proj.symbol}
-                          width={36}
-                          height={36}
-                          className="object-cover"
+                          width={40}
+                          height={40}
+                          className="object-contain w-full h-full"
                           onError={(e) => {
                             const target = e.currentTarget;
+                            if (proj.symbol.endsWith('.TO') && !target.dataset.tried) {
+                              target.dataset.tried = 'true';
+                              target.src = `https://financialmodelingprep.com/image-stock/${proj.symbol.replace(".TO", "")}.png`;
+                              return;
+                            }
                             target.style.display = 'none';
                             const fallback = target.nextElementSibling as HTMLElement;
                             if (fallback) fallback.style.display = 'flex';
                           }}
                         />
-                        <span className="text-gray-600 font-bold text-[10px] hidden items-center justify-center w-full h-full">
+                        <span className="text-gray-500 font-bold text-[11px] hidden items-center justify-center w-full h-full">
                           {proj.symbol.replace(".TO", "").slice(0, 4)}
                         </span>
                       </div>

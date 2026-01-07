@@ -611,67 +611,47 @@ export default function HoldingsPage() {
             })()}
           </div>
 
-          {/* 요약 섹션 */}
-          <div>
-            {/* 요약 그리드 - 데스크탑 항상 표시, 모바일 토글 */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
-              }`}>
-              <div className="grid grid-cols-2 gap-x-4 md:gap-x-16 gap-y-2 md:gap-y-4">
-                {/* 왼쪽 컬럼 */}
-                <div className="space-y-2 md:space-y-4">
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Today&apos;s P&amp;L</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(displayValues.todayPnL, 2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Open P&amp;L</span>
-                    <span className={`text-sm md:text-base font-medium ${displayValues.openPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {displayValues.openPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(displayValues.openPnL), 2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Total P&amp;L</span>
-                    <span className={`text-sm md:text-base font-medium ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {totalPnL >= 0 ? "+" : "-"}${formatNumber(Math.abs(totalPnL), 2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Net deposits</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(summary?.netDeposits || 0, 2)}
-                    </span>
-                  </div>
+          {/* 요약 섹션 - 가로 그리드 스타일 */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out md:max-h-none md:opacity-100 ${showSummary ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 md:max-h-none md:opacity-100"
+            }`}>
+            <div className="grid grid-cols-4 gap-1.5 text-center">
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Today</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(displayValues.todayPnL, 0)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Open P&L</div>
+                <div className={`text-xs font-semibold ${displayValues.openPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {displayValues.openPnL >= 0 ? "+" : ""}${formatNumber(displayValues.openPnL, 0)}
                 </div>
-
-                {/* 오른쪽 컬럼 */}
-                <div className="space-y-2 md:space-y-4">
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Total equity</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(displayValues.totalEquity, 2)} <span className="text-gray-400 text-xs">{currencyView === "combined_cad" ? "CAD" : "USD"}</span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Market value</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(displayValues.marketValue, 2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Cash</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(displayValues.cash, 2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-dotted border-gray-200">
-                    <span className="text-xs md:text-base text-gray-600">Buying power</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">
-                      ${formatNumber(Math.max(0, displayValues.cash), 2)}
-                    </span>
-                  </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Total P&L</div>
+                <div className={`text-xs font-semibold ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {totalPnL >= 0 ? "+" : ""}${formatNumber(totalPnL, 0)}
                 </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Deposits</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(summary?.netDeposits || 0, 0)}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 text-center mt-2 pt-2 border-t border-gray-100">
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Equity</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(displayValues.totalEquity, 0)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Market</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(displayValues.marketValue, 0)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Cash</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(displayValues.cash, 2)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide">Power</div>
+                <div className="text-xs font-semibold text-gray-800">${formatNumber(Math.max(0, displayValues.cash), 2)}</div>
               </div>
             </div>
           </div>
@@ -761,21 +741,27 @@ export default function HoldingsPage() {
                             <div className="flex items-start justify-between">
                               {/* 왼쪽: 아이콘 + 심볼/수량 */}
                               <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
                                   <Image
-                                    src={`https://financialmodelingprep.com/image-stock/${pos.symbolMapped.replace(".TO", "")}.png`}
+                                    src={`https://financialmodelingprep.com/image-stock/${pos.symbolMapped.endsWith('.TO') ? pos.symbolMapped : pos.symbolMapped.replace(".TO", "")}.png`}
                                     alt={pos.symbolMapped}
-                                    width={36}
-                                    height={36}
-                                    className="object-cover"
+                                    width={40}
+                                    height={40}
+                                    className="object-contain w-full h-full"
                                     onError={(e) => {
                                       const target = e.currentTarget;
+                                      // Canadian stock fallback: try without .TO
+                                      if (pos.symbolMapped.endsWith('.TO') && !target.dataset.tried) {
+                                        target.dataset.tried = 'true';
+                                        target.src = `https://financialmodelingprep.com/image-stock/${pos.symbolMapped.replace(".TO", "")}.png`;
+                                        return;
+                                      }
                                       target.style.display = 'none';
                                       const fallback = target.nextElementSibling as HTMLElement;
                                       if (fallback) fallback.style.display = 'flex';
                                     }}
                                   />
-                                  <span className="text-gray-600 font-bold text-[10px] hidden items-center justify-center w-full h-full">
+                                  <span className="text-gray-500 font-bold text-[11px] hidden items-center justify-center w-full h-full">
                                     {pos.symbolMapped.replace(".TO", "").slice(0, 4)}
                                   </span>
                                 </div>
