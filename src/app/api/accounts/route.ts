@@ -23,7 +23,7 @@ export async function GET() {
     return NextResponse.json(accounts);
   } catch (error) {
     console.error("Error fetching accounts:", error);
-    return NextResponse.json({ error: "계좌 조회 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 });
   }
 }
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!accountType) {
-      return NextResponse.json({ error: "계좌 타입이 필요합니다" }, { status: 400 });
+      return NextResponse.json({ error: "Account type is required" }, { status: 400 });
     }
 
     const created = await prisma.account.create({
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(created);
   } catch (error) {
     console.error("Error creating account:", error);
-    return NextResponse.json({ error: "계좌 생성 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
   }
 }
 
@@ -78,7 +78,7 @@ export async function PATCH(request: NextRequest) {
     } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "계좌 ID가 필요합니다" }, { status: 400 });
+      return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
 
     const updated = await prisma.account.update({
@@ -101,7 +101,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Error updating account:", error);
-    return NextResponse.json({ error: "계좌 수정 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update account" }, { status: 500 });
   }
 }
 
@@ -111,7 +111,7 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "계좌 ID가 필요합니다" }, { status: 400 });
+      return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
 
     await prisma.account.delete({
@@ -121,6 +121,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting account:", error);
-    return NextResponse.json({ error: "계좌 삭제 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
   }
 }

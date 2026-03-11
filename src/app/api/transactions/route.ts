@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
-    return NextResponse.json({ error: "트랜잭션 조회 실패" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
   }
 }
 

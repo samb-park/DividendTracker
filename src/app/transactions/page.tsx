@@ -232,7 +232,7 @@ export default function TransactionsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("이 거래를 삭제할까요?")) return;
+    if (!confirm("Delete this transaction?")) return;
     const res = await fetch(`/api/transactions?id=${id}`, { method: "DELETE" });
     if (res.ok) {
       if (editingId === id) resetForm();
@@ -249,10 +249,10 @@ export default function TransactionsPage() {
           <div>
             <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Transactions</div>
             <h1 className="text-xl md:text-2xl font-semibold text-gray-900 mt-1">Manual ledger</h1>
-            <p className="text-sm text-gray-500 mt-1">추가, 수정, 삭제까지 한 화면에서 할 수 있게 정리했어요.</p>
+            <p className="text-sm text-gray-500 mt-1">Add, edit, and delete transactions from one streamlined screen.</p>
           </div>
           <button onClick={() => setShowForm((v) => !v)} className="shrink-0 px-4 py-2 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] transition-colors">
-            {showForm ? "폼 접기" : editingId ? "수정 계속" : "거래 추가"}
+            {showForm ? "Hide form" : editingId ? "Continue editing" : "Add transaction"}
           </button>
         </div>
 
@@ -303,7 +303,7 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Filters</div>
-            <div className="text-sm text-gray-500 mt-1">계좌, 연도, 액션, 심볼별로 빠르게 좁혀볼 수 있어요.</div>
+            <div className="text-sm text-gray-500 mt-1">Filter quickly by account, year, action, and symbol.</div>
           </div>
           {hasActiveFilters && <button onClick={clearFilters} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">Clear all</button>}
         </div>
@@ -323,7 +323,7 @@ export default function TransactionsPage() {
         {loading ? (
           <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4"><Skeleton className="h-4 w-28 mb-3" /><Skeleton className="h-4 w-full mb-2" /><Skeleton className="h-4 w-2/3" /></div>)}</div>
         ) : transactions.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-500">아직 거래가 없어요. 위에서 첫 거래를 추가해보세요.</div>
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-500">No transactions yet. Add your first transaction above.</div>
         ) : (
           <>
             <div className="space-y-3 md:hidden">

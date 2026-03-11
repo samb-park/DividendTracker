@@ -21,31 +21,31 @@ const settingsItems = [
 export default function SettingsPage() {
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="border-b border-gray-200 mb-4">
+      <div className="border-b border-gray-200 dark:border-slate-800 mb-4">
         <span className="pb-2 text-xs font-semibold tracking-wider text-[#0a8043] border-b-[3px] border-[#0a8043] inline-block">
           SETTINGS
         </span>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
         {settingsItems.map((item, idx) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-4 px-4 py-4 hover:bg-gray-50 transition-colors ${
-                idx !== settingsItems.length - 1 ? "border-b border-gray-100" : ""
+              className={`flex items-center gap-4 px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
+                idx !== settingsItems.length - 1 ? "border-b border-gray-100 dark:border-slate-800" : ""
               }`}
             >
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                <Icon className="w-5 h-5 text-gray-600" />
+              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-5 h-5 text-gray-600 dark:text-slate-300" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900">{item.label}</div>
-                <div className="text-xs text-gray-500 truncate">{item.description}</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{item.description}</div>
               </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
             </Link>
           );
         })}
