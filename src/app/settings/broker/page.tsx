@@ -52,6 +52,16 @@ export default function BrokerSettingsPage() {
     }
   }
 
+  async function syncAccounts() {
+    setConnecting(true);
+    try {
+      await fetch("/api/broker/questrade/sync", { method: "POST" });
+      await loadStatus();
+    } finally {
+      setConnecting(false);
+    }
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center gap-3">
@@ -96,9 +106,14 @@ export default function BrokerSettingsPage() {
               placeholder="Paste your Questrade refresh token"
               className="min-h-[110px] w-full px-3 py-3 border border-gray-200 dark:border-slate-700 rounded-xl text-sm resize-y bg-white dark:bg-slate-950 text-gray-900 dark:text-white"
             />
-            <button type="submit" disabled={connecting} className="px-4 py-2.5 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] disabled:opacity-50">
-              {connecting ? "Checking..." : "Save token and check connection"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={connecting} className="px-4 py-2.5 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] disabled:opacity-50">
+                {connecting ? "Checking..." : "Save token and check connection"}
+              </button>
+              <button type="button" onClick={syncAccounts} disabled={connecting || !status?.hasStoredToken} className="px-4 py-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
+                Sync Questrade accounts
+              </button>
+            </div>
           </form>
         </div>
       </div>
