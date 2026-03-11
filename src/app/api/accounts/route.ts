@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { ensureBootstrapUser } from "@/lib/bootstrap-user";
 
-// 계좌 목록 조회
 export async function GET() {
   try {
+    const user = await ensureBootstrapUser();
+
     const accounts = await prisma.account.findMany({
-      orderBy: { accountType: "asc" },
+      where: { userId: user.id },
+      orderBy: [{ accountType: "asc" }, { createdAt: "asc" }],
       include: {
         _count: {
           select: { transactions: true },
+        },
+        contributionSettings: {
+          orderBy: [{ year: "desc" }],
+          take: 1,
         },
       },
     });
@@ -20,11 +27,55 @@ export async function GET() {
   }
 }
 
-// 계좌 수정 (별칭 등)
+export async function POST(request: NextRequest) {
+  try {
+    const user = await ensureBootstrapUser();
+    const body = await request.json();
+    const {
+      name,
+      accountType,
+      accountNumber,
+      baseCurrency,
+      currentContributionRoom,
+    } = body;
+
+    if (!accountType) {
+      return NextResponse.json({ error: "계좌 타입이 필요합니다" }, { status: 400 });
+    }
+
+    const created = await prisma.account.create({
+      data: {
+        userId: user.id,
+        name: name?.trim() || null,
+        accountType: accountType.trim(),
+        accountNumber: accountNumber?.trim() || null,
+        baseCurrency: baseCurrency || "CAD",
+        currentContributionRoom:
+          currentContributionRoom === "" || currentContributionRoom === null || currentContributionRoom === undefined
+            ? null
+            : Number(currentContributionRoom),
+      },
+    });
+
+    return NextResponse.json(created);
+  } catch (error) {
+    console.error("Error creating account:", error);
+    return NextResponse.json({ error: "계좌 생성 실패" }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, nickname } = body;
+    const {
+      id,
+      name,
+      accountType,
+      accountNumber,
+      baseCurrency,
+      currentContributionRoom,
+      isActive,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "계좌 ID가 필요합니다" }, { status: 400 });
@@ -32,7 +83,19 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await prisma.account.update({
       where: { id },
-      data: { nickname },
+      data: {
+        name: name === undefined ? undefined : name?.trim() || null,
+        accountType: accountType === undefined ? undefined : accountType.trim(),
+        accountNumber: accountNumber === undefined ? undefined : accountNumber?.trim() || null,
+        baseCurrency: baseCurrency || undefined,
+        isActive: typeof isActive === "boolean" ? isActive : undefined,
+        currentContributionRoom:
+          currentContributionRoom === undefined
+            ? undefined
+            : currentContributionRoom === "" || currentContributionRoom === null
+              ? null
+              : Number(currentContributionRoom),
+      },
     });
 
     return NextResponse.json(updated);
@@ -42,7 +105,6 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// 계좌 삭제 (관련 트랜잭션도 함께 삭제)
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -1,122 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { ensureBootstrapUser } from "@/lib/bootstrap-user";
+import { TransactionAction, CurrencyCode, TransactionSource } from "@prisma/client";
 
-// 트랜잭션 목록 조회 (페이지네이션 + 필터)
 export async function GET(request: NextRequest) {
   try {
+    const user = await ensureBootstrapUser();
     const { searchParams } = new URL(request.url);
-
-    const type = searchParams.get("type");
-    const accountId = searchParams.get("accountId");
-
-    // Server-side dividend aggregation (10K 레코드 대신 집계된 결과만 반환)
-    if (type === "dividendSummary") {
-      // Get FX rate for USD to CAD conversion
-      const fxCache = await prisma.fxCache.findUnique({
-        where: { pair: "USDCAD" },
-      });
-      const fxRate = fxCache?.rate || 1.44; // Default fallback
-
-      // Group by symbol AND currency to handle USD/CAD separately
-      const results = await prisma.transaction.groupBy({
-        by: ["symbolMapped", "currency"],
-        where: {
-          action: "DIV",
-          netAmount: { gt: 0 },
-          symbolMapped: { not: null },
-          ...(accountId ? { accountId } : {}),
-        },
-        _sum: { netAmount: true },
-        _count: { id: true },
-      });
-
-      // Aggregate by symbol, converting USD to CAD
-      const symbolMap = new Map<string, { amount: number; count: number }>();
-      for (const r of results) {
-        if (!r.symbolMapped) continue;
-        const existing = symbolMap.get(r.symbolMapped) || { amount: 0, count: 0 };
-        const amount = r._sum.netAmount || 0;
-        // Convert USD to CAD, keep CAD as is
-        existing.amount += r.currency === "USD" ? amount * fxRate : amount;
-        existing.count += r._count.id;
-        symbolMap.set(r.symbolMapped, existing);
-      }
-
-      const dividends = Array.from(symbolMap.entries())
-        .map(([symbol, data]) => ({
-          symbol,
-          totalAmount: data.amount,
-          currency: "CAD",
-          paymentCount: data.count,
-        }))
-        .sort((a, b) => b.totalAmount - a.totalAmount);
-
-      const totalReceived = dividends.reduce((sum, d) => sum + d.totalAmount, 0);
-
-      return NextResponse.json({
-        dividends: dividends.slice(0, 5), // Top 5
-        totalReceived,
-      });
-    }
-
-    // Debug: Net deposits calculation
-    if (type === "netDepositsDebug") {
-      const DEPOSIT_ACTIONS = ['CON', 'TFI', 'DEP'];
-      const WITHDRAWAL_ACTIONS = ['WDR', 'TFO'];
-      const ALL_ACTIONS = [...DEPOSIT_ACTIONS, ...WITHDRAWAL_ACTIONS];
-
-      const results = await prisma.transaction.groupBy({
-        by: ['action'],
-        where: {
-          action: { in: ALL_ACTIONS },
-        },
-        _sum: {
-          cadEquivalent: true,
-          netAmount: true,
-        },
-        _count: { id: true },
-      });
-
-      let totalNetDeposits = 0;
-      const details = results.map(r => {
-        const amount = r._sum.cadEquivalent ?? r._sum.netAmount ?? 0;
-        const isDeposit = DEPOSIT_ACTIONS.includes(r.action);
-        const isWithdrawal = WITHDRAWAL_ACTIONS.includes(r.action);
-        if (isDeposit) totalNetDeposits += amount;
-        if (isWithdrawal) totalNetDeposits -= Math.abs(amount);
-        return {
-          action: r.action,
-          count: r._count.id,
-          sumCadEquivalent: r._sum.cadEquivalent,
-          sumNetAmount: r._sum.netAmount,
-          effectiveAmount: amount,
-          type: isDeposit ? 'deposit' : isWithdrawal ? 'withdrawal' : 'unknown',
-        };
-      });
-
-      return NextResponse.json({
-        actions: ALL_ACTIONS,
-        results: details,
-        totalNetDeposits,
-      });
-    }
 
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
-    const year = searchParams.get("year");
+    const accountId = searchParams.get("accountId");
     const action = searchParams.get("action");
     const symbol = searchParams.get("symbol");
-    const search = searchParams.get("search");
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    const year = searchParams.get("year");
 
-    // 필터 조건 구성
-    const where: Record<string, unknown> = {};
+    const where: any = {
+      account: {
+        userId: user.id,
+      },
+    };
 
-    if (accountId) {
-      where.accountId = accountId;
+    if (accountId) where.accountId = accountId;
+    if (action) where.action = action;
+    if (symbol) {
+      where.OR = [{ symbol }, { normalizedSymbol: symbol }];
     }
-
     if (year) {
       const yearNum = parseInt(year);
       where.settlementDate = {
@@ -125,32 +34,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    if (action) {
-      where.action = action;
-    }
-
-    if (symbol) {
-      where.OR = [{ symbol }, { symbolMapped: symbol }];
-    }
-
-    if (search) {
-      where.description = { contains: search };
-    }
-
-    if (!year && (startDate || endDate)) {
-      where.settlementDate = {};
-      if (startDate) {
-        (where.settlementDate as Record<string, Date>).gte = new Date(startDate);
-      }
-      if (endDate) {
-        (where.settlementDate as Record<string, Date>).lte = new Date(endDate);
-      }
-    }
-
-    // 총 개수
     const total = await prisma.transaction.count({ where });
-
-    // 트랜잭션 조회
     const transactions = await prisma.transaction.findMany({
       where,
       orderBy: { settlementDate: "desc" },
@@ -159,9 +43,11 @@ export async function GET(request: NextRequest) {
       include: {
         account: {
           select: {
+            id: true,
+            name: true,
             accountNumber: true,
             accountType: true,
-            nickname: true,
+            baseCurrency: true,
           },
         },
       },
@@ -182,9 +68,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 트랜잭션 통계 + 수동 입력
 export async function POST(request: NextRequest) {
   try {
+    const user = await ensureBootstrapUser();
     const body = await request.json();
     const { type } = body;
 
@@ -204,36 +90,43 @@ export async function POST(request: NextRequest) {
         currency,
         activityType,
         cadEquivalent,
+        fxRateToCad,
+        notes,
       } = body;
 
-      if (!accountId || !transactionDate || !settlementDate || !action || !description || !currency || !activityType) {
+      if (!accountId || !transactionDate || !settlementDate || !action || !description || !currency) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
 
-      const normalizedSymbol = symbol?.trim() || null;
-      const txDate = new Date(transactionDate);
-      const settleDate = new Date(settlementDate);
-      const sourceRowHash = `manual:${accountId}:${txDate.toISOString()}:${settleDate.toISOString()}:${action}:${normalizedSymbol || ""}:${description}:${Date.now()}`;
+      const account = await prisma.account.findFirst({
+        where: { id: accountId, userId: user.id },
+      });
 
+      if (!account) {
+        return NextResponse.json({ error: "Invalid account" }, { status: 404 });
+      }
+
+      const normalizedSymbol = symbol?.trim()?.toUpperCase() || null;
       const created = await prisma.transaction.create({
         data: {
-          sourceRowHash,
-          transactionDate: txDate,
-          settlementDate: settleDate,
-          action,
+          accountId,
+          source: TransactionSource.manual,
+          transactionDate: new Date(transactionDate),
+          settlementDate: new Date(settlementDate),
+          action: action as TransactionAction,
+          activityType: activityType?.trim() || null,
           symbol: normalizedSymbol,
-          symbolMapped: normalizedSymbol,
-          description,
+          normalizedSymbol,
+          description: description.trim(),
           quantity: quantity ?? null,
           price: price ?? null,
           grossAmount: grossAmount ?? null,
           commission: commission ?? null,
           netAmount: netAmount ?? null,
-          currency,
-          activityType,
+          currency: currency as CurrencyCode,
+          fxRateToCad: fxRateToCad ?? null,
           cadEquivalent: cadEquivalent ?? null,
-          accountId,
-          importFileId: null,
+          notes: notes?.trim() || null,
         },
       });
 
@@ -241,8 +134,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === "actions") {
-      // 고유 액션 목록
       const actions = await prisma.transaction.findMany({
+        where: { account: { userId: user.id } },
         select: { action: true },
         distinct: ["action"],
       });
@@ -250,35 +143,33 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === "symbols") {
-      // 고유 심볼 목록
       const symbols = await prisma.transaction.findMany({
-        select: { symbolMapped: true },
-        distinct: ["symbolMapped"],
-        where: { symbolMapped: { not: null } },
+        where: {
+          account: { userId: user.id },
+          normalizedSymbol: { not: null },
+        },
+        select: { normalizedSymbol: true },
+        distinct: ["normalizedSymbol"],
       });
-      return NextResponse.json(
-        symbols.map((s) => s.symbolMapped).filter(Boolean)
-      );
+      return NextResponse.json(symbols.map((s) => s.normalizedSymbol).filter(Boolean));
     }
 
     if (type === "years") {
-      // 고유 연도 목록
       const transactions = await prisma.transaction.findMany({
+        where: { account: { userId: user.id } },
         select: { settlementDate: true },
         orderBy: { settlementDate: "desc" },
       });
       const yearsSet = new Set<number>();
       for (const tx of transactions) {
-        if (tx.settlementDate) {
-          yearsSet.add(new Date(tx.settlementDate).getFullYear());
-        }
+        yearsSet.add(new Date(tx.settlementDate).getFullYear());
       }
       return NextResponse.json(Array.from(yearsSet).sort((a, b) => b - a));
     }
 
     return NextResponse.json({ error: "Unknown type" }, { status: 400 });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error in transactions API:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
