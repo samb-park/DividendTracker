@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, User, Info, Moon, Target } from "lucide-react";
+import { ChevronRight, User, Info, Moon, Target, Cable } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const settingsItems = [
@@ -16,6 +16,12 @@ const settingsItems = [
     label: "Targets",
     description: "Set target weights, contribution amount, and dividend goals",
     icon: Target,
+  },
+  {
+    href: "/settings/broker",
+    label: "Broker connections",
+    description: "Check Questrade connection and future sync status",
+    icon: Cable,
   },
   {
     href: "/settings/about",
