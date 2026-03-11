@@ -5,7 +5,7 @@ export function SignInButton() {
     <button
       type="button"
       onClick={() => {
-        window.location.href = "/api/auth/signin/google?callbackUrl=/";
+        window.location.href = "/api/auth/signin?provider=google&callbackUrl=/";
       }}
       className="px-3 py-2 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] transition-colors"
     >
