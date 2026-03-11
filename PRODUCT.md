@@ -10,6 +10,9 @@ The app should become the source of truth for:
 - portfolio targets
 - cash movement
 - dividend tracking
+- performance metrics
+- contribution room tracking
+- authentication / user settings
 - future broker sync state
 
 Excel files are not part of the intended workflow.
@@ -38,9 +41,13 @@ Excel files are not part of the intended workflow.
 
 - Create and manage brokerage/investment accounts
 - Add, edit, and delete transactions manually
-- View holdings, cash, and dividend summaries
+- View transaction history, holdings, cash, dividend history, and projected dividends
+- Track account-level deposits and withdrawals
+- Track TFSA / RRSP / FHSA contribution room and remaining capacity
 - Set and manage target allocations
 - See allocation gaps against targets
+- View performance metrics such as return, CAGR, and MDD
+- Log in securely and manage personal settings
 - Eventually connect Questrade and sync automatically
 
 ## MVP scope
@@ -49,10 +56,16 @@ Excel files are not part of the intended workflow.
 - Account CRUD
 - Transaction CRUD
 - Holdings view
-- Dividend summaries
+- Transaction history
+- Dividend history
+- Projected dividend summaries
 - Portfolio target management
 - Allocation comparison (current vs target)
 - Net deposits / cash movement summaries
+- Account-level deposit summaries
+- Contribution room tracking for TFSA / RRSP / FHSA
+- Mobile-first dashboard / board
+- Login/authentication foundation
 - Clean rebuild of database schema
 
 ### Out for MVP
@@ -60,43 +73,61 @@ Excel files are not part of the intended workflow.
 - Excel history tracking
 - Spreadsheet compatibility features
 - Complex audit log/versioning
-- Multi-broker sync orchestration
-- Tax reporting
+- Full multi-broker sync orchestration
+- Advanced tax reporting
+- Advanced institutional-grade analytics beyond core metrics
 
 ## Main screens
 
-1. **Dashboard**
-   - portfolio value
+1. **Mobile-first Dashboard / Board**
+   - total portfolio value
    - cash by currency
-   - dividend summary
+   - dividend history summary
+   - projected dividends
    - allocation gap summary
+   - account room summary (TFSA / RRSP / FHSA)
+   - performance metrics (return / CAGR / MDD)
    - quick actions
 
 2. **Accounts**
    - list accounts
    - create/edit/delete account
    - per-account summary
+   - account-level deposits / withdrawals
+   - room tracking per registered account
 
 3. **Transactions**
    - create/edit/delete transaction
    - filter by account, date, action, symbol
+   - full transaction history
    - quick add flows for common transaction types
 
-4. **Holdings**
-   - current positions
-   - cost basis snapshot
-   - market value
-   - allocation
+4. **Dividends**
+   - dividend history
+   - monthly / yearly summaries
+   - projected dividends
 
 5. **Targets**
    - symbol targets
    - weekly contribution plan
    - compare current vs desired allocation
 
-6. **Broker Connections** (post-MVP)
+6. **Performance**
+   - total return
+   - CAGR
+   - MDD
+   - account-level and portfolio-level metrics
+
+7. **Auth / Settings**
+   - login
+   - user preferences
+   - security settings
+
+8. **Broker Connections**
    - Questrade auth
    - connection status
    - sync controls
+   - user-managed API setup flow
 
 ## Success criteria
 
@@ -105,4 +136,8 @@ The rebuild is successful when:
 - no Excel file is needed to initialize or maintain it
 - a user can fully operate it by creating accounts and adding transactions manually
 - targets and portfolio views work from app data alone
+- users can track transaction history, dividend history, projected dividends, and core performance metrics
+- users can set contribution room and see remaining room for TFSA / RRSP / FHSA
+- the mobile board is useful as a daily control surface
+- users can log in and manage their own broker/API setup
 - future Questrade API sync can plug in without redesigning the core schema

@@ -40,18 +40,21 @@ Tasks:
 Deliverable:
 - empty but coherent database model ready for app-native workflows
 
-### Phase 2 — account and transaction core
+### Phase 2 — auth, account, and transaction core
 Goal: make the app usable with no external data source.
 
 Tasks:
+- login/auth foundation
 - account create/edit/delete
 - transaction create/edit/delete
 - transaction filters and pagination
 - action-specific input UX
+- account-level deposit summaries
+- contribution room setting for TFSA / RRSP / FHSA
 - validation and error states
 
 Deliverable:
-- user can start from a blank DB and manage a portfolio manually
+- user can start from a blank DB, log in, and manage a portfolio manually
 
 ### Phase 3 — targets and planning
 Goal: replace `plan.xlsm` planning behavior inside the app.
@@ -65,18 +68,20 @@ Tasks:
 Deliverable:
 - target planning no longer depends on any spreadsheet
 
-### Phase 4 — dashboard and portfolio intelligence
+### Phase 4 — mobile board, dashboard, and portfolio intelligence
 Goal: make the app operationally useful day-to-day.
 
 Tasks:
-- clean dashboard
+- mobile-first board/dashboard
 - holdings summary
-- dividend summary
+- transaction history views
+- dividend history and projected dividend summary
 - cash and net deposits summary
 - account-level rollups
+- performance metrics such as return, CAGR, and MDD
 
 Deliverable:
-- app becomes the daily control panel
+- app becomes the daily control panel on mobile and desktop
 
 ### Phase 5 — broker sync foundation
 Goal: prepare for Questrade API without redesign.
@@ -85,10 +90,11 @@ Tasks:
 - broker_connections model
 - sync_runs model
 - token handling strategy
+- easy user-managed Questrade setup flow in settings
 - sync service boundaries
 
 Deliverable:
-- architecture ready for API integration
+- architecture ready for API integration and user self-setup
 
 ### Phase 6 — Questrade API integration
 Goal: remove manual duplication where possible.
@@ -107,12 +113,12 @@ Deliverable:
 
 If we start coding next, do this order:
 
-1. redesign Prisma schema
-2. reset DB
+1. add auth/user ownership foundation to schema
+2. add contribution-room concepts to schema
 3. rebuild account CRUD
 4. rebuild transaction CRUD properly
-5. clean targets/settings screen
-6. reconnect dashboard calculations to the new schema
+5. rebuild targets/settings and Questrade setup screens
+6. reconnect dashboard/mobile-board calculations to the new schema
 
 ## Architectural guidelines
 

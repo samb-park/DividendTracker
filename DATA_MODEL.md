@@ -9,11 +9,26 @@ This model assumes:
 
 ## Entity overview
 
-### 1. accounts
+### 1. users
+Needed when login/auth is introduced.
+
+Suggested fields:
+- `id`
+- `email`
+- `passwordHash` or external auth identifier
+- `displayName`
+- `createdAt`
+- `updatedAt`
+
+Notes:
+- Single-user support is acceptable first, but schema should not block later multi-user separation.
+
+### 2. accounts
 Represents brokerage/investment accounts.
 
 Suggested fields:
 - `id`
+- `userId`
 - `name` — optional friendly display name
 - `broker` — e.g. `manual`, `questrade`
 - `accountType` — RRSP, TFSA, Margin, FHSA, etc.
@@ -26,8 +41,9 @@ Suggested fields:
 Notes:
 - account creation must work without imported transactions
 - `name` should be preferred over nickname-only behavior
+- account type drives contribution room behavior for registered accounts
 
-### 2. transactions
+### 3. transactions
 Canonical investment ledger.
 
 Suggested fields:
@@ -71,7 +87,23 @@ Notes:
 - Avoid Excel-specific columns like row hashes as the primary design concept.
 - For broker sync, use `(source, externalId)` uniqueness when present.
 
-### 3. transaction_edits (optional, later)
+### 4. account_contribution_settings
+Tracks account-level contribution room configuration.
+
+Suggested fields:
+- `id`
+- `accountId`
+- `year` — optional if yearly room tracking is used
+- `contributionRoom`
+- `notes`
+- `createdAt`
+- `updatedAt`
+
+Notes:
+- Supports TFSA / RRSP / FHSA room tracking
+- MVP can start with current room only; later expand to yearly room records
+
+### 5. transaction_edits (optional, later)
 Useful if edit history becomes important.
 
 Suggested fields:
@@ -84,7 +116,7 @@ Suggested fields:
 
 Not required for MVP.
 
-### 4. portfolio_targets
+### 6. portfolio_targets
 Represents desired allocation targets.
 
 Suggested fields:
@@ -100,7 +132,7 @@ Notes:
 - If multiple target sets are needed later, add `targetSetId`.
 - For now, a single active target set is acceptable.
 
-### 5. portfolio_settings
+### 7. portfolio_settings
 Stores planning/settings values previously living outside the app.
 
 Suggested fields:
@@ -113,11 +145,12 @@ Suggested fields:
 
 This replaces part of what `plan.xlsm` may have been doing.
 
-### 6. broker_connections (post-MVP)
+### 8. broker_connections
 Stores Questrade connection state.
 
 Suggested fields:
 - `id`
+- `userId`
 - `broker` — `questrade`
 - `status` — connected, expired, error, disconnected
 - `accountLabel`
@@ -131,8 +164,9 @@ Suggested fields:
 Notes:
 - Secrets should not live in plaintext when avoidable.
 - This enables API sync later without reworking the rest of the app.
+- The user must be able to configure this from settings/login-connected flows.
 
-### 7. sync_runs (post-MVP)
+### 9. sync_runs
 Tracks broker sync attempts.
 
 Suggested fields:
@@ -147,12 +181,33 @@ Suggested fields:
 
 Useful for debugging sync behavior.
 
-### 8. price_cache / fx_cache
+### 10. portfolio_snapshots (recommended)
+Stores periodic portfolio equity snapshots.
+
+Suggested fields:
+- `id`
+- `userId`
+- `snapshotDate`
+- `totalEquity`
+- `totalMarketValue`
+- `totalCash`
+- `currency`
+- `createdAt`
+
+Notes:
+- This is strongly recommended for performance charts and MDD calculation.
+- Without snapshots, MDD becomes more complex and less reliable.
+
+### 11. price_cache / fx_cache
 Can remain as support tables for dashboard/holdings calculation.
 
 ## Relationships
 
+- `users 1 -> many accounts`
+- `users 1 -> many broker_connections`
+- `users 1 -> many portfolio_snapshots`
 - `accounts 1 -> many transactions`
+- `accounts 1 -> many account_contribution_settings`
 - `broker_connections 1 -> many sync_runs`
 - `portfolio_settings 1 -> many portfolio_targets` (optional), or keep target rows standalone for MVP
 
@@ -161,19 +216,30 @@ Can remain as support tables for dashboard/holdings calculation.
 These may remain computed rather than stored initially:
 - holdings by symbol
 - cash balances by account/currency
-- dividend totals
+- dividend totals and dividend history
+- projected dividends
 - allocation gaps
 - net deposits
+- account-level contribution usage
+- CAGR
+- MDD (preferably snapshot-backed)
 
 ## MVP schema recommendation
 
 For the actual rebuild, minimum required tables are:
+- `users` (or a single-user-compatible auth owner model)
 - `accounts`
 - `transactions`
+- `account_contribution_settings`
 - `portfolio_settings`
 - `portfolio_targets`
 - `price_cache`
 - `fx_cache`
+
+Strongly recommended soon after MVP:
+- `broker_connections`
+- `sync_runs`
+- `portfolio_snapshots`
 
 ## Explicitly remove from the mental model
 
