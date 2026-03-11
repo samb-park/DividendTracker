@@ -100,6 +100,12 @@ If you no longer need rollback, remove it with:
 docker volume rm dividend_sqlite-data
 ```
 
+## Security notes
+
+- Questrade refresh tokens should not be kept as a shared global runtime secret for normal user operation.
+- Prefer per-user broker connection storage inside the app, with encryption before persistence.
+- Treat broker tokens as highly sensitive credentials and avoid exposing them in UI, logs, or Git-tracked files.
+
 ## Notes
 
 - Startup uses `prisma db push --skip-generate`

@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireCurrentUser } from "@/lib/current-user";
+import { decryptSecret, encryptSecret } from "@/lib/secrets";
 
 async function getTokenResponse(refreshToken: string) {
   const url = `https://login.questrade.com/oauth2/token?grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`;
@@ -18,11 +19,12 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      connected: !!existing,
+      connected: existing?.status === "connected",
       status: existing?.status || "disconnected",
       lastSyncAt: existing?.lastSyncAt || null,
       lastSyncStatus: existing?.lastSyncStatus || null,
       accountLabel: existing?.accountLabel || null,
+      hasStoredToken: !!existing?.encryptedRefreshToken,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
@@ -32,13 +34,24 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const user = await requireCurrentUser();
-    const refreshToken = process.env.QUESTRADE_REFRESH_TOKEN;
+    const body = await request.json().catch(() => ({}));
+    const providedRefreshToken = typeof body.refreshToken === "string" ? body.refreshToken.trim() : "";
+
+    let connection = await prisma.brokerConnection.findFirst({
+      where: { userId: user.id, broker: "questrade" },
+      orderBy: { createdAt: "asc" },
+    });
+
+    let refreshToken = providedRefreshToken;
+    if (!refreshToken && connection?.encryptedRefreshToken) {
+      refreshToken = decryptSecret(connection.encryptedRefreshToken);
+    }
 
     if (!refreshToken) {
-      return NextResponse.json({ error: "QUESTRADE_REFRESH_TOKEN is not configured" }, { status: 400 });
+      return NextResponse.json({ error: "A Questrade refresh token is required" }, { status: 400 });
     }
 
     const tokenResult = await getTokenResponse(refreshToken);
@@ -48,40 +61,34 @@ export async function POST() {
       ? new Date(Date.now() + Number(tokenResult.data.access_token_expires_in) * 1000)
       : null;
 
-    const connection = await prisma.brokerConnection.upsert({
-      where: {
-        id: (await prisma.brokerConnection.findFirst({ where: { userId: user.id, broker: "questrade" }, select: { id: true } }))?.id || "__new__",
-      },
-      update: {
-        status,
-        accountLabel,
-        encryptedRefreshToken: refreshToken,
-        accessTokenExpiresAt: expiresAt,
-        lastSyncStatus: tokenResult.ok ? "Token refresh succeeded" : `Token refresh failed (${tokenResult.status})`,
-      },
-      create: {
-        userId: user.id,
-        broker: "questrade",
-        status,
-        accountLabel,
-        encryptedRefreshToken: refreshToken,
-        accessTokenExpiresAt: expiresAt,
-        lastSyncStatus: tokenResult.ok ? "Token refresh succeeded" : `Token refresh failed (${tokenResult.status})`,
-      },
-    }).catch(async () => {
-      const existing = await prisma.brokerConnection.findFirst({ where: { userId: user.id, broker: "questrade" } });
-      if (!existing) throw new Error("CONNECT_UPSERT_FAILED");
-      return prisma.brokerConnection.update({
-        where: { id: existing.id },
+    const encryptedRefreshToken = encryptSecret(refreshToken);
+
+    if (connection) {
+      connection = await prisma.brokerConnection.update({
+        where: { id: connection.id },
         data: {
           status,
           accountLabel,
-          encryptedRefreshToken: refreshToken,
+          encryptedRefreshToken,
           accessTokenExpiresAt: expiresAt,
           lastSyncStatus: tokenResult.ok ? "Token refresh succeeded" : `Token refresh failed (${tokenResult.status})`,
+          lastSyncAt: tokenResult.ok ? new Date() : connection.lastSyncAt,
         },
       });
-    });
+    } else {
+      connection = await prisma.brokerConnection.create({
+        data: {
+          userId: user.id,
+          broker: "questrade",
+          status,
+          accountLabel,
+          encryptedRefreshToken,
+          accessTokenExpiresAt: expiresAt,
+          lastSyncStatus: tokenResult.ok ? "Token refresh succeeded" : `Token refresh failed (${tokenResult.status})`,
+          lastSyncAt: tokenResult.ok ? new Date() : null,
+        },
+      });
+    }
 
     return NextResponse.json({
       connected: tokenResult.ok,
@@ -89,6 +96,7 @@ export async function POST() {
       lastSyncStatus: connection.lastSyncStatus,
       accessTokenExpiresAt: connection.accessTokenExpiresAt,
       apiBase: tokenResult.data?.api_server || null,
+      hasStoredToken: true,
     }, { status: tokenResult.ok ? 200 : 400 });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {

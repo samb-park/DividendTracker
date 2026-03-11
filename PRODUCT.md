@@ -53,6 +53,7 @@ Excel files are not part of the intended workflow.
 - See allocation gaps against targets
 - View performance metrics such as total return, CAGR, and MDD
 - Log in securely with Google and manage personal settings
+- Store broker connections per user with security-sensitive handling
 - Eventually connect Questrade and sync automatically
 
 ## MVP scope
