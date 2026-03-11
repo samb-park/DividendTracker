@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Home, Receipt, User, Settings } from "lucide-react";
+import { AuthStatus } from "@/components/auth/auth-status";
 
 const navItems = [
   { href: "/", label: "HOME", icon: Home },
@@ -23,7 +24,9 @@ export function Navigation() {
             <Link href="/" className="text-lg font-semibold text-gray-900 dark:text-white">
               DividendTracker
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-4">
+              <AuthStatus />
+              <div className="flex items-center gap-1">
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
@@ -41,6 +44,7 @@ export function Navigation() {
                   </Link>
                 );
               })}
+              </div>
             </div>
           </div>
         </div>
