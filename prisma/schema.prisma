@@ -35,18 +35,47 @@ enum TransactionAction {
   TRANSFER_OUT
 }
 
-model Account {
-  id            String        @id @default(uuid())
-  name          String?
-  broker        BrokerType    @default(manual)
-  accountType   String        @map("account_type")
-  accountNumber String?       @unique @map("account_number")
-  baseCurrency  CurrencyCode  @default(CAD) @map("base_currency")
-  isActive      Boolean       @default(true) @map("is_active")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-  transactions  Transaction[]
+enum BrokerConnectionStatus {
+  connected
+  expired
+  error
+  disconnected
+}
 
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  displayName        String?             @map("display_name")
+  googleId           String?             @unique @map("google_id")
+  image              String?
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  accounts           Account[]
+  portfolioSettings  PortfolioSettings[]
+  portfolioTargets   PortfolioTarget[]
+  brokerConnections  BrokerConnection[]
+  portfolioSnapshots PortfolioSnapshot[]
+
+  @@map("users")
+}
+
+model Account {
+  id                       String                       @id @default(uuid())
+  userId                   String                       @map("user_id")
+  name                     String?
+  broker                   BrokerType                   @default(manual)
+  accountType              String                       @map("account_type")
+  accountNumber            String?                      @unique @map("account_number")
+  baseCurrency             CurrencyCode                 @default(CAD) @map("base_currency")
+  isActive                 Boolean                      @default(true) @map("is_active")
+  currentContributionRoom  Float?                       @map("current_contribution_room")
+  createdAt                DateTime                     @default(now()) @map("created_at")
+  updatedAt                DateTime                     @updatedAt @map("updated_at")
+  user                     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions             Transaction[]
+  contributionSettings     AccountContributionSetting[]
+
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -85,28 +114,101 @@ model Transaction {
   @@map("transactions")
 }
 
+model AccountContributionSetting {
+  id               String   @id @default(uuid())
+  accountId        String   @map("account_id")
+  year             Int?
+  contributionRoom Float    @map("contribution_room")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  account          Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@unique([accountId, year])
+  @@map("account_contribution_settings")
+}
+
 model PortfolioSettings {
   id                       String        @id @default(uuid())
+  userId                   String        @map("user_id")
   weeklyContributionAmount Float         @default(0) @map("weekly_contribution_amount")
   fxFeePercent             Float         @default(1.5) @map("fx_fee_percent")
   baseCurrency             CurrencyCode  @default(CAD) @map("base_currency")
+  targetAnnualDividend     Float?        @map("target_annual_dividend")
+  targetMonthlyDividend    Float?        @map("target_monthly_dividend")
   createdAt                DateTime      @default(now()) @map("created_at")
   updatedAt                DateTime      @updatedAt @map("updated_at")
+  user                     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("portfolio_settings")
 }
 
 model PortfolioTarget {
   id           String        @id @default(uuid())
+  userId       String        @map("user_id")
   symbol       String
   targetWeight Float         @map("target_weight")
   currency     CurrencyCode
   isActive     Boolean       @default(true) @map("is_active")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([symbol])
+  @@index([userId])
+  @@unique([userId, symbol])
   @@map("portfolio_targets")
+}
+
+model BrokerConnection {
+  id                    String                 @id @default(uuid())
+  userId                String                 @map("user_id")
+  broker                BrokerType
+  status                BrokerConnectionStatus @default(disconnected)
+  accountLabel          String?                @map("account_label")
+  encryptedRefreshToken String?                @map("encrypted_refresh_token")
+  accessTokenExpiresAt  DateTime?              @map("access_token_expires_at")
+  lastSyncAt            DateTime?              @map("last_sync_at")
+  lastSyncStatus        String?                @map("last_sync_status")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncRuns              SyncRun[]
+
+  @@index([userId])
+  @@map("broker_connections")
+}
+
+model SyncRun {
+  id                 String           @id @default(uuid())
+  brokerConnectionId String           @map("broker_connection_id")
+  status             String
+  startedAt          DateTime         @default(now()) @map("started_at")
+  finishedAt         DateTime?        @map("finished_at")
+  insertedCount      Int              @default(0) @map("inserted_count")
+  updatedCount       Int              @default(0) @map("updated_count")
+  errorMessage       String?          @map("error_message")
+  brokerConnection   BrokerConnection @relation(fields: [brokerConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([brokerConnectionId])
+  @@map("sync_runs")
+}
+
+model PortfolioSnapshot {
+  id               String        @id @default(uuid())
+  userId           String        @map("user_id")
+  snapshotDate     DateTime      @map("snapshot_date")
+  totalEquity      Float         @map("total_equity")
+  totalMarketValue Float         @map("total_market_value")
+  totalCash        Float         @map("total_cash")
+  currency         CurrencyCode
+  createdAt        DateTime      @default(now()) @map("created_at")
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([userId, snapshotDate])
+  @@map("portfolio_snapshots")
 }
 
 model PriceCache {
