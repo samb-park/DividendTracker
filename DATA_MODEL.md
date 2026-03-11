@@ -25,6 +25,20 @@ Notes:
 - Google login is the intended auth path.
 - Single-user support is acceptable first, but schema should not block later multi-user separation.
 
+### 1a. user_preferences
+Stores per-user UI preferences.
+
+Suggested fields:
+- `id`
+- `userId`
+- `theme` — `light` | `dark` | `system`
+- `defaultCurrency`
+- `createdAt`
+- `updatedAt`
+
+Notes:
+- Theme preference should be stored per user, not only in browser-local state.
+
 ### 2. accounts
 Represents brokerage/investment accounts.
 

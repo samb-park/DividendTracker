@@ -129,6 +129,7 @@ Excel files are not part of the intended workflow.
 7. **Auth / Settings**
    - Google login
    - user preferences
+   - per-user theme preference (light / dark / system)
    - security settings
 
 8. **Broker Connections**

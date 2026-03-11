@@ -68,6 +68,108 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await ensureBootstrapUser();
+    const body = await request.json();
+    const {
+      id,
+      accountId,
+      transactionDate,
+      settlementDate,
+      action,
+      symbol,
+      description,
+      quantity,
+      price,
+      grossAmount,
+      commission,
+      netAmount,
+      currency,
+      activityType,
+      cadEquivalent,
+      fxRateToCad,
+      notes,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.transaction.findFirst({
+      where: { id, account: { userId: user.id } },
+      include: { account: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    let nextAccountId = existing.accountId;
+    if (accountId && accountId !== existing.accountId) {
+      const account = await prisma.account.findFirst({ where: { id: accountId, userId: user.id } });
+      if (!account) return NextResponse.json({ error: "Invalid account" }, { status: 404 });
+      nextAccountId = accountId;
+    }
+
+    const normalizedSymbol = symbol?.trim()?.toUpperCase() || null;
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data: {
+        accountId: nextAccountId,
+        transactionDate: transactionDate ? new Date(transactionDate) : undefined,
+        settlementDate: settlementDate ? new Date(settlementDate) : undefined,
+        action: action ? (action as TransactionAction) : undefined,
+        activityType: activityType === undefined ? undefined : activityType?.trim() || null,
+        symbol: symbol === undefined ? undefined : normalizedSymbol,
+        normalizedSymbol: symbol === undefined ? undefined : normalizedSymbol,
+        description: description === undefined ? undefined : description.trim(),
+        quantity: quantity === undefined ? undefined : quantity,
+        price: price === undefined ? undefined : price,
+        grossAmount: grossAmount === undefined ? undefined : grossAmount,
+        commission: commission === undefined ? undefined : commission,
+        netAmount: netAmount === undefined ? undefined : netAmount,
+        currency: currency ? (currency as CurrencyCode) : undefined,
+        fxRateToCad: fxRateToCad === undefined ? undefined : fxRateToCad,
+        cadEquivalent: cadEquivalent === undefined ? undefined : cadEquivalent,
+        notes: notes === undefined ? undefined : notes?.trim() || null,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Error updating transaction:", error);
+    return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await ensureBootstrapUser();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.transaction.findFirst({
+      where: { id, account: { userId: user.id } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    await prisma.transaction.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await ensureBootstrapUser();
