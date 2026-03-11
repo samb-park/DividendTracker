@@ -46,7 +46,7 @@ interface Pagination {
   totalPages: number;
 }
 
-const ACTION_OPTIONS = ["BUY","SELL","DIVIDEND","REINVEST","DEPOSIT","WITHDRAWAL","FEE","INTEREST","TRANSFER_IN","TRANSFER_OUT"];
+const ACTION_OPTIONS = ["BUY", "SELL", "DIVIDEND", "DRIP", "DEPOSIT", "WITHDRAWAL"];
 const CURRENCY_OPTIONS = ["CAD", "USD"];
 
 const emptyForm = (today: string) => ({
@@ -66,6 +66,14 @@ const emptyForm = (today: string) => ({
   cadEquivalent: "",
   notes: "",
 });
+
+function toApiAction(action: string) {
+  return action === "DRIP" ? "REINVEST" : action;
+}
+
+function fromApiAction(action: string) {
+  return action === "REINVEST" ? "DRIP" : action;
+}
 
 export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -98,8 +106,9 @@ export default function TransactionsPage() {
     fetchTransactions();
   }, [pagination.page, accountFilter, yearFilter, actionFilter, symbolFilter]);
 
-  const currentActionNeedsUnits = ["BUY", "SELL", "REINVEST"].includes(form.action);
-  const currentActionNeedsCashOnly = ["DIVIDEND", "DEPOSIT", "WITHDRAWAL", "FEE", "INTEREST", "TRANSFER_IN", "TRANSFER_OUT"].includes(form.action);
+  const currentActionNeedsUnits = ["BUY", "SELL", "DRIP"].includes(form.action);
+  const currentActionNeedsSymbol = ["BUY", "SELL", "DIVIDEND", "DRIP"].includes(form.action);
+  const currentActionNeedsCashOnly = ["DIVIDEND", "DEPOSIT", "WITHDRAWAL"].includes(form.action);
 
   async function fetchAccounts() {
     const res = await fetch("/api/accounts");
@@ -114,7 +123,7 @@ export default function TransactionsPage() {
       fetch("/api/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "symbols" }) }),
       fetch("/api/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "years" }) }),
     ]);
-    setActions(await actionsRes.json());
+    setActions((await actionsRes.json()).map(fromApiAction).filter((a: string) => ACTION_OPTIONS.includes(a)));
     setSymbols(await symbolsRes.json());
     setYears(await yearsRes.json());
   }
@@ -127,11 +136,12 @@ export default function TransactionsPage() {
       params.set("limit", String(pagination.limit));
       if (accountFilter !== "all") params.set("accountId", accountFilter);
       if (yearFilter !== "all") params.set("year", yearFilter);
-      if (actionFilter !== "all") params.set("action", actionFilter);
+      if (actionFilter !== "all") params.set("action", toApiAction(actionFilter));
       if (symbolFilter) params.set("symbol", symbolFilter);
       const res = await fetch(`/api/transactions?${params.toString()}`);
       const data = await res.json();
-      setTransactions(data.transactions || []);
+      const normalized = (data.transactions || []).map((tx: Transaction) => ({ ...tx, action: fromApiAction(tx.action) }));
+      setTransactions(normalized);
       setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 });
     } finally {
       setLoading(false);
@@ -150,10 +160,10 @@ export default function TransactionsPage() {
     switch (action) {
       case "BUY": return "bg-blue-50 text-blue-700 border-blue-100";
       case "SELL":
-      case "WITHDRAWAL":
-      case "FEE": return "bg-red-50 text-red-700 border-red-100";
+      case "WITHDRAWAL": return "bg-red-50 text-red-700 border-red-100";
       case "DIVIDEND":
-      case "INTEREST": return "bg-green-50 text-green-700 border-green-100";
+      case "DRIP":
+      case "DEPOSIT": return "bg-green-50 text-green-700 border-green-100";
       default: return "bg-gray-50 text-gray-700 border-gray-100";
     }
   }
@@ -169,7 +179,7 @@ export default function TransactionsPage() {
       accountId: tx.account.id,
       transactionDate: tx.transactionDate.slice(0, 10),
       settlementDate: tx.settlementDate.slice(0, 10),
-      action: tx.action,
+      action: fromApiAction(tx.action),
       symbol: tx.normalizedSymbol || tx.symbol || "",
       description: tx.description,
       quantity: tx.quantity == null ? "" : String(tx.quantity),
@@ -198,13 +208,13 @@ export default function TransactionsPage() {
         accountId: form.accountId,
         transactionDate: form.transactionDate,
         settlementDate: form.settlementDate,
-        action: form.action,
-        symbol: form.symbol,
+        action: toApiAction(form.action),
+        symbol: currentActionNeedsSymbol ? form.symbol : "",
         description: form.description,
-        quantity: form.quantity ? Number(form.quantity) : null,
-        price: form.price ? Number(form.price) : null,
+        quantity: currentActionNeedsUnits && form.quantity ? Number(form.quantity) : null,
+        price: currentActionNeedsUnits && form.price ? Number(form.price) : null,
         grossAmount: form.grossAmount ? Number(form.grossAmount) : null,
-        commission: form.commission ? Number(form.commission) : null,
+        commission: ["BUY", "SELL", "DRIP"].includes(form.action) && form.commission ? Number(form.commission) : null,
         netAmount: form.netAmount ? Number(form.netAmount) : null,
         currency: form.currency,
         activityType: form.activityType,
@@ -249,7 +259,7 @@ export default function TransactionsPage() {
           <div>
             <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Transactions</div>
             <h1 className="text-xl md:text-2xl font-semibold text-gray-900 mt-1">Manual ledger</h1>
-            <p className="text-sm text-gray-500 mt-1">Add, edit, and delete transactions from one streamlined screen.</p>
+            <p className="text-sm text-gray-500 mt-1">Keep the action list focused on what you actually use most.</p>
           </div>
           <button onClick={() => setShowForm((v) => !v)} className="shrink-0 px-4 py-2 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] transition-colors">
             {showForm ? "Hide form" : editingId ? "Continue editing" : "Add transaction"}
@@ -270,23 +280,29 @@ export default function TransactionsPage() {
               <input type="date" value={form.transactionDate} onChange={(e) => updateForm("transactionDate", e.target.value)} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" required />
               <input type="date" value={form.settlementDate} onChange={(e) => updateForm("settlementDate", e.target.value)} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" required />
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input type="text" value={form.symbol} onChange={(e) => updateForm("symbol", e.target.value.toUpperCase())} placeholder="Symbol (optional)" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              {currentActionNeedsSymbol ? (
+                <input type="text" value={form.symbol} onChange={(e) => updateForm("symbol", e.target.value.toUpperCase())} placeholder="Symbol" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              ) : (
+                <div className="h-11 px-3 border border-dashed border-gray-200 rounded-xl text-sm text-gray-400 flex items-center">No symbol needed for this action</div>
+              )}
               <Select value={form.currency} onValueChange={(value) => updateForm("currency", value)}>
                 <SelectTrigger><SelectValue placeholder="Currency" /></SelectTrigger>
                 <SelectContent>{CURRENCY_OPTIONS.map((currency) => <SelectItem key={currency} value={currency}>{currency}</SelectItem>)}</SelectContent>
               </Select>
               <input type="text" value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Description" className="h-11 px-3 border border-gray-200 rounded-xl text-sm md:col-span-2" required />
             </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <input type="number" step="any" value={form.quantity} onChange={(e) => updateForm("quantity", e.target.value)} placeholder={currentActionNeedsUnits ? "Quantity" : "Quantity (opt)"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
-              <input type="number" step="any" value={form.price} onChange={(e) => updateForm("price", e.target.value)} placeholder={currentActionNeedsUnits ? "Price" : "Price (opt)"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
-              <input type="number" step="any" value={form.grossAmount} onChange={(e) => updateForm("grossAmount", e.target.value)} placeholder={currentActionNeedsCashOnly ? "Gross amount" : "Gross amount"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
-              <input type="number" step="any" value={form.commission} onChange={(e) => updateForm("commission", e.target.value)} placeholder="Commission" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              {currentActionNeedsUnits && <input type="number" step="any" value={form.quantity} onChange={(e) => updateForm("quantity", e.target.value)} placeholder="Quantity" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />}
+              {currentActionNeedsUnits && <input type="number" step="any" value={form.price} onChange={(e) => updateForm("price", e.target.value)} placeholder="Price" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />}
+              <input type="number" step="any" value={form.grossAmount} onChange={(e) => updateForm("grossAmount", e.target.value)} placeholder={currentActionNeedsCashOnly ? "Amount" : "Gross amount"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              { ["BUY", "SELL", "DRIP"].includes(form.action) && <input type="number" step="any" value={form.commission} onChange={(e) => updateForm("commission", e.target.value)} placeholder="Commission" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" /> }
               <input type="number" step="any" value={form.netAmount} onChange={(e) => updateForm("netAmount", e.target.value)} placeholder="Net amount" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
               <input type="number" step="any" value={form.cadEquivalent} onChange={(e) => updateForm("cadEquivalent", e.target.value)} placeholder="CAD equivalent" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
-              <input type="text" value={form.activityType} onChange={(e) => updateForm("activityType", e.target.value)} placeholder="Activity type (optional)" className="h-11 px-3 border border-gray-200 rounded-xl text-sm md:col-span-2" />
             </div>
+
             <textarea value={form.notes} onChange={(e) => updateForm("notes", e.target.value)} placeholder="Notes (optional)" className="min-h-[92px] w-full px-3 py-3 border border-gray-200 rounded-xl text-sm resize-y" />
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-1">
               <div className="text-sm text-red-500 min-h-[20px]">{error || ""}</div>
@@ -303,7 +319,7 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Filters</div>
-            <div className="text-sm text-gray-500 mt-1">Filter quickly by account, year, action, and symbol.</div>
+            <div className="text-sm text-gray-500 mt-1">Filter by account, year, action, and symbol.</div>
           </div>
           {hasActiveFilters && <button onClick={clearFilters} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">Clear all</button>}
         </div>
