@@ -62,6 +62,16 @@ export default function BrokerSettingsPage() {
     }
   }
 
+  async function syncTransactions() {
+    setConnecting(true);
+    try {
+      await fetch("/api/broker/questrade/transactions", { method: "POST" });
+      await loadStatus();
+    } finally {
+      setConnecting(false);
+    }
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center gap-3">
@@ -112,6 +122,9 @@ export default function BrokerSettingsPage() {
               </button>
               <button type="button" onClick={syncAccounts} disabled={connecting || !status?.hasStoredToken} className="px-4 py-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
                 Sync Questrade accounts
+              </button>
+              <button type="button" onClick={syncTransactions} disabled={connecting || !status?.hasStoredToken} className="px-4 py-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
+                Sync Questrade transactions
               </button>
             </div>
           </form>
