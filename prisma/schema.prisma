@@ -51,9 +51,9 @@ model Transaction {
   activityType    String     @map("activity_type")
   cadEquivalent   Float?     @map("cad_equivalent")
   accountId       String     @map("account_id")
-  importFileId    String     @map("import_file_id")
+  importFileId    String?    @map("import_file_id")
   createdAt       DateTime   @default(now()) @map("created_at")
-  importFile      ImportFile @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+  importFile      ImportFile? @relation(fields: [importFileId], references: [id], onDelete: SetNull)
   account         Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])

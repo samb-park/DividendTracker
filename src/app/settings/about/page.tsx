@@ -49,7 +49,7 @@ export default function AboutSettingsPage() {
           </div>
           <div className="px-4 py-3 flex justify-between">
             <span className="text-sm text-gray-500">Data Source</span>
-            <span className="text-sm text-gray-900">Questrade Excel Export</span>
+            <span className="text-sm text-gray-900">Manual Transactions / PostgreSQL</span>
           </div>
         </div>
       </div>

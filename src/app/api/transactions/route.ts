@@ -182,11 +182,63 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 트랜잭션 통계 (필터용)
+// 트랜잭션 통계 + 수동 입력
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { type } = body;
+
+    if (type === "create") {
+      const {
+        accountId,
+        transactionDate,
+        settlementDate,
+        action,
+        symbol,
+        description,
+        quantity,
+        price,
+        grossAmount,
+        commission,
+        netAmount,
+        currency,
+        activityType,
+        cadEquivalent,
+      } = body;
+
+      if (!accountId || !transactionDate || !settlementDate || !action || !description || !currency || !activityType) {
+        return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      }
+
+      const normalizedSymbol = symbol?.trim() || null;
+      const txDate = new Date(transactionDate);
+      const settleDate = new Date(settlementDate);
+      const sourceRowHash = `manual:${accountId}:${txDate.toISOString()}:${settleDate.toISOString()}:${action}:${normalizedSymbol || ""}:${description}:${Date.now()}`;
+
+      const created = await prisma.transaction.create({
+        data: {
+          sourceRowHash,
+          transactionDate: txDate,
+          settlementDate: settleDate,
+          action,
+          symbol: normalizedSymbol,
+          symbolMapped: normalizedSymbol,
+          description,
+          quantity: quantity ?? null,
+          price: price ?? null,
+          grossAmount: grossAmount ?? null,
+          commission: commission ?? null,
+          netAmount: netAmount ?? null,
+          currency,
+          activityType,
+          cadEquivalent: cadEquivalent ?? null,
+          accountId,
+          importFileId: null,
+        },
+      });
+
+      return NextResponse.json(created);
+    }
 
     if (type === "actions") {
       // 고유 액션 목록

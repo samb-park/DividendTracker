@@ -7,7 +7,7 @@ const settingsItems = [
   {
     href: "/settings/accounts",
     label: "Accounts",
-    description: "Manage accounts and import transactions",
+    description: "Manage accounts and manually entered transactions",
     icon: User,
   },
   {
