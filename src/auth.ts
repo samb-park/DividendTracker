@@ -14,6 +14,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
+    authorized({ auth, request: { nextUrl } }) {
+      const isLoggedIn = !!auth?.user;
+      const isAuthRoute = nextUrl.pathname.startsWith("/api/auth");
+      const isLoginPage = nextUrl.pathname === "/login";
+      const isPublicAsset = nextUrl.pathname.startsWith("/_next") || nextUrl.pathname === "/favicon.ico" || nextUrl.pathname === "/manifest.webmanifest";
+
+      if (isAuthRoute || isPublicAsset) return true;
+      if (isLoginPage) return !isLoggedIn;
+      return isLoggedIn;
+    },
     async signIn({ user, account, profile }) {
       if (!user.email) return false;
 
