@@ -13,13 +13,10 @@ COPY prisma ./prisma/
 RUN npm ci
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public" npx prisma generate
 
 # Copy source code
 COPY . .
-
-# Create initial database with schema
-RUN mkdir -p /app/data && DATABASE_URL="file:/app/data/init.db" npx prisma db push
 
 # Build Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -47,7 +44,6 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/data/init.db ./init.db
 
 # Create data directory and npm cache directory
 RUN mkdir -p /app/data /app/data/.npm && chown -R nextjs:nodejs /app/data

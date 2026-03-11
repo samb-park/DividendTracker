@@ -9,17 +9,18 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=file:/app/data/questrade.db
-      - NODE_ENV=production
+      DATABASE_URL: ${DATABASE_URL}
+      NODE_ENV: production
+      HOME: /app/data
     volumes:
-      - sqlite-data:/app/data
+      - app-data:/app/data
     networks:
       - default
       - homelab
     restart: unless-stopped
 
 volumes:
-  sqlite-data:
+  app-data:
 
 networks:
   homelab:
