@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, User, Info, Moon } from "lucide-react";
+import { ChevronRight, User, Info, Moon, Target } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const settingsItems = [
@@ -10,6 +10,12 @@ const settingsItems = [
     label: "Accounts",
     description: "Manage account names and existing account records",
     icon: User,
+  },
+  {
+    href: "/settings/targets",
+    label: "Targets",
+    description: "Set target weights, contribution amount, and dividend goals",
+    icon: Target,
   },
   {
     href: "/settings/about",

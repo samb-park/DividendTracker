@@ -33,29 +33,48 @@ interface Transaction {
   };
 }
 
+interface PortfolioTarget {
+  id: string;
+  symbol: string;
+  targetWeight: number;
+  currency: "CAD" | "USD";
+}
+
+interface PortfolioSettings {
+  weeklyContributionAmount: number;
+  targetAnnualDividend: number | null;
+  targetMonthlyDividend: number | null;
+}
+
 const quickLinks = [
   { title: "Add transaction", description: "Record buys, dividends, deposits, and withdrawals.", href: "/transactions" },
   { title: "Manage accounts", description: "Update account details and contribution room.", href: "/accounts" },
-  { title: "Settings", description: "Prepare preferences, theme, and future broker connections.", href: "/settings" },
+  { title: "Set targets", description: "Define target weights and contribution goals.", href: "/settings/targets" },
 ];
 
 export default function HomePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [targets, setTargets] = useState<PortfolioTarget[]>([]);
+  const [settings, setSettings] = useState<PortfolioSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const [accountsRes, txRes] = await Promise.all([
+        const [accountsRes, txRes, targetRes] = await Promise.all([
           fetch("/api/accounts"),
           fetch("/api/transactions?page=1&limit=5"),
+          fetch("/api/targets"),
         ]);
         const accountsData = await accountsRes.json();
         const txData = await txRes.json();
+        const targetData = await targetRes.json();
         setAccounts(accountsData || []);
         setTransactions(txData.transactions || []);
+        setTargets(targetData.targets || []);
+        setSettings(targetData.settings || null);
       } finally {
         setLoading(false);
       }
@@ -71,6 +90,12 @@ export default function HomePage() {
     return { activeAccounts, totalTransactions, trackedRoom, registeredAccounts };
   }, [accounts]);
 
+  const targetSummary = useMemo(() => {
+    const totalWeight = targets.reduce((sum, target) => sum + target.targetWeight, 0);
+    const nextFocus = targets.length > 0 ? [...targets].sort((a, b) => b.targetWeight - a.targetWeight)[0] : null;
+    return { totalWeight, nextFocus };
+  }, [targets]);
+
   return (
     <div className="space-y-5 md:space-y-6">
       <section className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -78,33 +103,66 @@ export default function HomePage() {
           <div className="text-[11px] font-semibold tracking-[0.22em] text-[#0a8043] uppercase mb-2">Mobile Board</div>
           <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white">DividendTracker</h1>
           <p className="mt-3 text-sm md:text-base text-gray-600 dark:text-slate-400 max-w-2xl">
-            A clean, mobile-first board for accounts, transactions, contribution room, and dividend-focused portfolio tracking.
+            A clean, mobile-first board for accounts, transactions, contribution room, target weights, and next funding decisions.
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
             <MetricCard label="Active accounts" value={loading ? "—" : String(metrics.activeAccounts)} />
             <MetricCard label="Transactions" value={loading ? "—" : String(metrics.totalTransactions)} />
             <MetricCard label="Tracked room" value={loading ? "—" : `${metrics.trackedRoom}`} />
-            <MetricCard label="Registered accts" value={loading ? "—" : String(metrics.registeredAccounts)} />
+            <MetricCard label="Weekly contribution" value={loading ? "—" : `${settings?.weeklyContributionAmount ?? 0}`} />
           </div>
         </div>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {quickLinks.map((card) => (
-          <Link
-            key={card.href}
-            href={card.href}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-slate-700 hover:shadow-md transition-all"
-          >
+          <Link key={card.href} href={card.href} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-slate-700 hover:shadow-md transition-all">
             <div className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{card.title}</div>
             <div className="text-sm text-gray-600 dark:text-slate-400">{card.description}</div>
           </Link>
         ))}
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden xl:col-span-1">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Targets</div>
+              <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">Allocation and dividend goals</div>
+            </div>
+            <Link href="/settings/targets" className="text-sm text-emerald-700 dark:text-emerald-300 hover:underline">Open</Link>
+          </div>
+          <div className="p-4 space-y-3">
+            {loading ? (
+              <EmptyText text="Loading targets..." />
+            ) : targets.length === 0 ? (
+              <EmptyText text="No target weights yet. Add target symbols to start planning your next contribution." />
+            ) : (
+              <>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-800 p-4 bg-gray-50/60 dark:bg-slate-950/60">
+                  <div className="text-xs text-gray-400 dark:text-slate-500">Total target weight</div>
+                  <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{targetSummary.totalWeight}%</div>
+                  <div className="mt-2 text-sm text-gray-500 dark:text-slate-400">Aim for 100% across all target symbols.</div>
+                </div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-800 p-4 bg-gray-50/60 dark:bg-slate-950/60">
+                  <div className="text-xs text-gray-400 dark:text-slate-500">Next contribution focus</div>
+                  <div className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{targetSummary.nextFocus?.symbol || "—"}</div>
+                  <div className="mt-2 text-sm text-gray-500 dark:text-slate-400">
+                    Highest current target weight: {targetSummary.nextFocus ? `${targetSummary.nextFocus.targetWeight}%` : "—"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-800 p-4 bg-gray-50/60 dark:bg-slate-950/60">
+                  <div className="text-xs text-gray-400 dark:text-slate-500">Dividend goals</div>
+                  <div className="mt-2 text-sm text-gray-700 dark:text-slate-300">Annual: {settings?.targetAnnualDividend ?? "—"}</div>
+                  <div className="mt-1 text-sm text-gray-700 dark:text-slate-300">Monthly: {settings?.targetMonthlyDividend ?? "—"}</div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden xl:col-span-1">
           <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Accounts</div>
@@ -123,25 +181,13 @@ export default function HomePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">{acc.name || acc.accountType}</div>
-                      <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                        {acc.accountType}
-                        {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
-                        {` · ${acc.baseCurrency}`}
-                      </div>
+                      <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">{acc.accountType}{acc.accountNumber ? ` · ${acc.accountNumber}` : ""}{` · ${acc.baseCurrency}`}</div>
                     </div>
-                    <span className={`text-[11px] px-2.5 py-1 rounded-full border ${acc.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20" : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"}`}>
-                      {acc.isActive ? "Active" : "Inactive"}
-                    </span>
+                    <span className={`text-[11px] px-2.5 py-1 rounded-full border ${acc.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20" : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"}`}>{acc.isActive ? "Active" : "Inactive"}</span>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs text-gray-400 dark:text-slate-500">Transactions</div>
-                      <div className="font-semibold text-gray-900 dark:text-white">{acc._count?.transactions || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-400 dark:text-slate-500">Contribution room</div>
-                      <div className="font-semibold text-gray-900 dark:text-white">{acc.currentContributionRoom ?? "—"}</div>
-                    </div>
+                    <div><div className="text-xs text-gray-400 dark:text-slate-500">Transactions</div><div className="font-semibold text-gray-900 dark:text-white">{acc._count?.transactions || 0}</div></div>
+                    <div><div className="text-xs text-gray-400 dark:text-slate-500">Contribution room</div><div className="font-semibold text-gray-900 dark:text-white">{acc.currentContributionRoom ?? "—"}</div></div>
                   </div>
                 </div>
               ))
@@ -149,7 +195,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden xl:col-span-1">
           <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Recent activity</div>
@@ -170,14 +216,10 @@ export default function HomePage() {
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">{tx.normalizedSymbol || tx.symbol || tx.description}</div>
                       <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">{tx.account.name || tx.account.accountType} · {formatDate(tx.settlementDate)}</div>
                     </div>
-                    <span className="text-[11px] px-2.5 py-1 rounded-full border bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-                      {tx.action === "REINVEST" ? "DRIP" : tx.action}
-                    </span>
+                    <span className="text-[11px] px-2.5 py-1 rounded-full border bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">{tx.action === "REINVEST" ? "DRIP" : tx.action}</span>
                   </div>
                   <div className="mt-3 text-sm text-gray-600 dark:text-slate-400">{tx.description}</div>
-                  <div className="mt-3 text-sm font-semibold text-gray-900 dark:text-white">
-                    {tx.netAmount == null ? "—" : `${tx.currency} ${formatCurrency(tx.netAmount)}`}
-                  </div>
+                  <div className="mt-3 text-sm font-semibold text-gray-900 dark:text-white">{tx.netAmount == null ? "—" : `${tx.currency} ${formatCurrency(tx.netAmount)}`}</div>
                 </div>
               ))
             )}
