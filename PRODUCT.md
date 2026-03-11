@@ -58,20 +58,21 @@ Excel files are not part of the intended workflow.
 ## MVP scope
 
 ### In
-- Account CRUD
-- Transaction CRUD
-- Holdings view
-- Transaction history
+- Account CRUD (inside Settings)
+- Transaction CRUD (surfaced through portfolio symbol detail and supporting flows)
+- Portfolio view with combined/account scope
+- Symbol detail view
 - Dividend history
 - Projected dividend summaries
 - Target dividend tracking
-- Portfolio target management
+- Portfolio target management (inside Settings)
 - Allocation comparison (current vs target)
 - Net deposits / cash movement summaries
 - Account-level deposit summaries
 - Contribution room tracking for TFSA / RRSP / FHSA
-- Mobile-first dashboard / board
-- Google login/authentication foundation
+- Dashboard with graphs and income summary
+- Calendar/event view
+- Google login/authentication as the top implementation priority
 - Clean rebuild of database schema
 
 ### Out for MVP
@@ -85,10 +86,13 @@ Excel files are not part of the intended workflow.
 
 ## Main screens
 
-1. **Mobile-first Dashboard / Board**
+1. **Dashboard**
    - total portfolio value
-   - cash by currency
-   - dividend history summary
+   - asset trend graph
+   - passive income graph
+   - received income
+   - monthly income
+   - yearly income
    - projected dividends
    - target dividend progress
    - allocation gap summary
@@ -96,47 +100,30 @@ Excel files are not part of the intended workflow.
    - performance metrics (total return / CAGR / MDD)
    - quick actions
 
-2. **Accounts**
-   - list accounts
-   - create/edit/delete account
-   - per-account summary
-   - account-level deposits / withdrawals
-   - room tracking per registered account
+2. **Portfolio**
+   - combined portfolio view
+   - account switcher / filter
+   - holdings list for the selected scope
+   - symbol detail view
+   - current vs target allocation for each symbol
+   - gap-to-target and next contribution guidance
+   - transaction history in the selected symbol detail
 
-3. **Transactions**
-   - create/edit/delete transaction
-   - filter by account, date, action, symbol
-   - full transaction history
-   - quick add flows for common transaction types
+3. **Calendar**
+   - dividend ex-dates
+   - dividend payment dates
+   - earnings dates
+   - portfolio-related upcoming events
 
-4. **Dividends**
-   - dividend history
-   - monthly / yearly summaries
-   - projected dividends
-   - target dividend amount and progress
-
-5. **Targets**
-   - symbol targets
-   - weekly contribution plan
-   - compare current vs desired allocation
-
-6. **Performance**
-   - total return
-   - CAGR
-   - MDD
-   - account-level and portfolio-level metrics
-
-7. **Auth / Settings**
+4. **Settings**
+   - Accounts
+   - allocation targets
+   - dividend goals
    - Google login
    - user preferences
    - per-user theme preference (light / dark / system)
-   - security settings
-
-8. **Broker Connections**
-   - Questrade auth
-   - connection status
-   - sync controls
-   - user-managed API setup flow
+   - broker connections
+   - security/about
 
 ## Success criteria
 

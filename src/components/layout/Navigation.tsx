@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Receipt, User, Settings } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, Receipt, CalendarDays, Settings } from "lucide-react";
 import { AuthStatus } from "@/components/auth/auth-status";
 
 const navItems = [
-  { href: "/", label: "HOME", icon: Home },
+  { href: "/", label: "DASHBOARD", icon: LayoutDashboard },
+  { href: "/portfolio", label: "PORTFOLIO", icon: BriefcaseBusiness },
   { href: "/transactions", label: "TRANSACTIONS", icon: Receipt },
-  { href: "/accounts", label: "ACCOUNTS", icon: User },
+  { href: "/calendar", label: "CALENDAR", icon: CalendarDays },
   { href: "/settings", label: "SETTINGS", icon: Settings },
 ];
 
@@ -27,23 +28,23 @@ export function Navigation() {
             <div className="flex items-center gap-4">
               <AuthStatus />
               <div className="flex items-center gap-1">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-[#0a8043]/10 text-[#0a8043] dark:bg-[#0a8043]/20 dark:text-green-300"
-                        : "text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-900"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+                {navItems.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-[#0a8043]/10 text-[#0a8043] dark:bg-[#0a8043]/20 dark:text-green-300"
+                          : "text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-900"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           </div>

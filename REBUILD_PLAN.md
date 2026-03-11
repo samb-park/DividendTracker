@@ -41,21 +41,20 @@ Tasks:
 Deliverable:
 - empty but coherent database model ready for app-native workflows
 
-### Phase 2 — auth, account, and transaction core
-Goal: make the app usable with no external data source.
+### Phase 2 — login first, then account and transaction core
+Goal: make the app usable with authenticated user ownership before expanding portfolio features.
 
 Tasks:
-- Google login/auth foundation
-- account create/edit/delete
-- transaction create/edit/delete
-- transaction filters and pagination
-- action-specific input UX
+- complete Google login/auth first
+- replace bootstrap-only assumptions with authenticated user flow
+- account create/edit/delete in Settings
+- transaction create/edit/delete as supporting portfolio data flow
 - account-level deposit summaries
 - contribution room setting for TFSA / RRSP / FHSA
 - validation and error states
 
 Deliverable:
-- user can start from a blank DB, log in with Google, and manage a portfolio manually
+- user can log in with Google first, then manage portfolio data under their own account
 
 ### Phase 3 — targets and planning
 Goal: replace `plan.xlsm` planning behavior inside the app.
@@ -71,18 +70,19 @@ Tasks:
 Deliverable:
 - target planning no longer depends on any spreadsheet
 
-### Phase 4 — mobile board, dashboard, and portfolio intelligence
+### Phase 4 — dashboard, portfolio, and calendar surfaces
 Goal: make the app operationally useful day-to-day.
 
 Tasks:
-- mobile-first board/dashboard
-- holdings summary
-- transaction history views
+- dashboard with graphs for asset trend and passive income
+- portfolio combined/account switcher
+- symbol detail views
 - dividend history and projected dividend summary
 - target dividend progress
 - cash and net deposits summary
 - account-level rollups
 - performance metrics such as total return, CAGR, and MDD
+- calendar/event surface for dividend timing and related events
 
 Deliverable:
 - app becomes the daily control panel on mobile and desktop
@@ -118,12 +118,13 @@ Deliverable:
 
 If we start coding next, do this order:
 
-1. add auth/user ownership foundation to schema
-2. add contribution-room concepts to schema
-3. rebuild account CRUD
-4. rebuild transaction CRUD properly
-5. rebuild targets/settings and Questrade setup screens
-6. reconnect dashboard/mobile-board calculations to the new schema
+1. finish Google login for the real Cloudflare-served domain
+2. replace bootstrap assumptions with authenticated user flow
+3. keep Accounts and target settings inside Settings
+4. build Portfolio as the main holdings surface (combined + per-account)
+5. move transaction history into portfolio symbol detail instead of a top-level tab
+6. add Calendar as a top-level event surface
+7. reconnect dashboard calculations and later Questrade sync to the new structure
 
 ## Architectural guidelines
 

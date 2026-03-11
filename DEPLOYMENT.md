@@ -18,6 +18,28 @@ This means deployment decisions should preserve:
 - future Google OAuth callback compatibility on the Cloudflare-served domain
 - secure cookie/session behavior when proxied
 
+## Google OAuth configuration
+
+To complete Google login, configure these environment variables in the app runtime:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+AUTH_SECRET=... # or NEXTAUTH_SECRET depending on deployment preference
+AUTH_URL=https://dividend.buildwith.work
+```
+
+Google OAuth callback URL to register:
+
+```text
+https://dividend.buildwith.work/api/auth/callback/google
+```
+
+Recommended notes:
+- use the Cloudflare-served domain as the canonical auth URL
+- keep cookies secure in production
+- if proxy headers are involved, preserve host/proto correctly through Cloudflare
+
 ## Recommended compose workflow
 
 Use the repo-local `.env` file:

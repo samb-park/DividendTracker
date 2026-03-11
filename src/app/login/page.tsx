@@ -22,8 +22,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-4 text-xs text-gray-500 dark:text-slate-500">
-          For local development before Google credentials are configured, temporary bootstrap behavior may still exist in parts of the app.
+        <div className="mt-4 text-xs text-gray-500 dark:text-slate-500 space-y-1">
+          <div>Google OAuth must be configured for the Cloudflare-served domain before sign-in will fully work.</div>
+          <div>Callback URL to register: <span className="font-mono">https://dividend.buildwith.work/api/auth/callback/google</span></div>
         </div>
       </div>
     </div>
