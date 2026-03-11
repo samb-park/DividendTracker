@@ -44,7 +44,7 @@ Deliverable:
 Goal: make the app usable with no external data source.
 
 Tasks:
-- login/auth foundation
+- Google login/auth foundation
 - account create/edit/delete
 - transaction create/edit/delete
 - transaction filters and pagination
@@ -54,7 +54,7 @@ Tasks:
 - validation and error states
 
 Deliverable:
-- user can start from a blank DB, log in, and manage a portfolio manually
+- user can start from a blank DB, log in with Google, and manage a portfolio manually
 
 ### Phase 3 — targets and planning
 Goal: replace `plan.xlsm` planning behavior inside the app.
@@ -62,8 +62,10 @@ Goal: replace `plan.xlsm` planning behavior inside the app.
 Tasks:
 - settings for weekly contribution / FX fee / base assumptions
 - target allocation CRUD
+- target dividend setting (monthly / annual)
 - current vs target allocation comparison
 - investment gap / rebalance guidance
+- dividend goal progress tracking
 
 Deliverable:
 - target planning no longer depends on any spreadsheet
@@ -76,9 +78,10 @@ Tasks:
 - holdings summary
 - transaction history views
 - dividend history and projected dividend summary
+- target dividend progress
 - cash and net deposits summary
 - account-level rollups
-- performance metrics such as return, CAGR, and MDD
+- performance metrics such as total return, CAGR, and MDD
 
 Deliverable:
 - app becomes the daily control panel on mobile and desktop

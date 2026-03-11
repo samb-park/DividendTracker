@@ -10,17 +10,19 @@ This model assumes:
 ## Entity overview
 
 ### 1. users
-Needed when login/auth is introduced.
+Needed when Google login/auth is introduced.
 
 Suggested fields:
 - `id`
 - `email`
-- `passwordHash` or external auth identifier
 - `displayName`
+- `googleId` or external auth identifier
+- `image`
 - `createdAt`
 - `updatedAt`
 
 Notes:
+- Google login is the intended auth path.
 - Single-user support is acceptable first, but schema should not block later multi-user separation.
 
 ### 2. accounts
@@ -137,9 +139,12 @@ Stores planning/settings values previously living outside the app.
 
 Suggested fields:
 - `id`
+- `userId`
 - `weeklyContributionAmount`
 - `fxFeePercent`
 - `baseCurrency`
+- `targetAnnualDividend`
+- `targetMonthlyDividend`
 - `createdAt`
 - `updatedAt`
 
@@ -218,8 +223,10 @@ These may remain computed rather than stored initially:
 - cash balances by account/currency
 - dividend totals and dividend history
 - projected dividends
+- target dividend progress
 - allocation gaps
 - net deposits
+- total return
 - account-level contribution usage
 - CAGR
 - MDD (preferably snapshot-backed)

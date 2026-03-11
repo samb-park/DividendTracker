@@ -41,13 +41,14 @@ Excel files are not part of the intended workflow.
 
 - Create and manage brokerage/investment accounts
 - Add, edit, and delete transactions manually
-- View transaction history, holdings, cash, dividend history, and projected dividends
+- View transaction history, holdings, cash, dividend history, projected dividends, and target dividends
 - Track account-level deposits and withdrawals
 - Track TFSA / RRSP / FHSA contribution room and remaining capacity
 - Set and manage target allocations
+- Set and track dividend income goals
 - See allocation gaps against targets
-- View performance metrics such as return, CAGR, and MDD
-- Log in securely and manage personal settings
+- View performance metrics such as total return, CAGR, and MDD
+- Log in securely with Google and manage personal settings
 - Eventually connect Questrade and sync automatically
 
 ## MVP scope
@@ -59,13 +60,14 @@ Excel files are not part of the intended workflow.
 - Transaction history
 - Dividend history
 - Projected dividend summaries
+- Target dividend tracking
 - Portfolio target management
 - Allocation comparison (current vs target)
 - Net deposits / cash movement summaries
 - Account-level deposit summaries
 - Contribution room tracking for TFSA / RRSP / FHSA
 - Mobile-first dashboard / board
-- Login/authentication foundation
+- Google login/authentication foundation
 - Clean rebuild of database schema
 
 ### Out for MVP
@@ -84,9 +86,10 @@ Excel files are not part of the intended workflow.
    - cash by currency
    - dividend history summary
    - projected dividends
+   - target dividend progress
    - allocation gap summary
    - account room summary (TFSA / RRSP / FHSA)
-   - performance metrics (return / CAGR / MDD)
+   - performance metrics (total return / CAGR / MDD)
    - quick actions
 
 2. **Accounts**
@@ -106,6 +109,7 @@ Excel files are not part of the intended workflow.
    - dividend history
    - monthly / yearly summaries
    - projected dividends
+   - target dividend amount and progress
 
 5. **Targets**
    - symbol targets
@@ -119,7 +123,7 @@ Excel files are not part of the intended workflow.
    - account-level and portfolio-level metrics
 
 7. **Auth / Settings**
-   - login
+   - Google login
    - user preferences
    - security settings
 
@@ -136,8 +140,8 @@ The rebuild is successful when:
 - no Excel file is needed to initialize or maintain it
 - a user can fully operate it by creating accounts and adding transactions manually
 - targets and portfolio views work from app data alone
-- users can track transaction history, dividend history, projected dividends, and core performance metrics
+- users can track transaction history, dividend history, projected dividends, target dividends, and core performance metrics
 - users can set contribution room and see remaining room for TFSA / RRSP / FHSA
 - the mobile board is useful as a daily control surface
-- users can log in and manage their own broker/API setup
+- users can log in with Google and manage their own broker/API setup
 - future Questrade API sync can plug in without redesigning the core schema
