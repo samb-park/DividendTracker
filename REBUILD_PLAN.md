@@ -1,0 +1,156 @@
+# DividendTracker Rebuild Plan
+
+## Working assumption
+
+We are allowed to:
+- rebuild large parts of the codebase
+- reset the database
+- ignore backward compatibility with Excel/import workflows
+
+The goal is a clean, app-native portfolio tracker.
+
+## What stays
+
+These are worth keeping unless they get in the way:
+- Next.js app shell
+- PostgreSQL + Prisma setup
+- reusable UI components
+- some calculation logic for holdings/dividends/cash if still valid after schema cleanup
+- Docker deployment path
+
+## What should be removed or deprioritized
+
+- Excel import workflow
+- import history
+- spreadsheet-centric language and assumptions
+- schema decisions made only to support spreadsheet import
+- legacy migration scripts once rebuild is complete
+
+## Rebuild phases
+
+### Phase 1 — product and schema reset
+Goal: define the new source-of-truth model before further coding.
+
+Tasks:
+- finalize PRODUCT.md
+- finalize DATA_MODEL.md
+- replace Prisma schema with rebuild-first schema
+- reset DB with clean migration / db push
+
+Deliverable:
+- empty but coherent database model ready for app-native workflows
+
+### Phase 2 — account and transaction core
+Goal: make the app usable with no external data source.
+
+Tasks:
+- account create/edit/delete
+- transaction create/edit/delete
+- transaction filters and pagination
+- action-specific input UX
+- validation and error states
+
+Deliverable:
+- user can start from a blank DB and manage a portfolio manually
+
+### Phase 3 — targets and planning
+Goal: replace `plan.xlsm` planning behavior inside the app.
+
+Tasks:
+- settings for weekly contribution / FX fee / base assumptions
+- target allocation CRUD
+- current vs target allocation comparison
+- investment gap / rebalance guidance
+
+Deliverable:
+- target planning no longer depends on any spreadsheet
+
+### Phase 4 — dashboard and portfolio intelligence
+Goal: make the app operationally useful day-to-day.
+
+Tasks:
+- clean dashboard
+- holdings summary
+- dividend summary
+- cash and net deposits summary
+- account-level rollups
+
+Deliverable:
+- app becomes the daily control panel
+
+### Phase 5 — broker sync foundation
+Goal: prepare for Questrade API without redesign.
+
+Tasks:
+- broker_connections model
+- sync_runs model
+- token handling strategy
+- sync service boundaries
+
+Deliverable:
+- architecture ready for API integration
+
+### Phase 6 — Questrade API integration
+Goal: remove manual duplication where possible.
+
+Tasks:
+- OAuth/token flow
+- account discovery
+- transaction sync
+- dedupe and upsert rules
+- manual sync controls
+
+Deliverable:
+- Excel-free automatic sync path
+
+## Immediate implementation priorities
+
+If we start coding next, do this order:
+
+1. redesign Prisma schema
+2. reset DB
+3. rebuild account CRUD
+4. rebuild transaction CRUD properly
+5. clean targets/settings screen
+6. reconnect dashboard calculations to the new schema
+
+## Architectural guidelines
+
+### 1. Domain-first naming
+Prefer business terms over import terms.
+
+Good:
+- transaction
+- account
+- target
+- broker connection
+
+Bad:
+- import file
+- source row hash as core identity
+- excel row metadata everywhere
+
+### 2. Separate input source from ledger record
+The `transactions` table is the canonical ledger.
+Whether data came from manual entry or API sync is metadata, not the main structure.
+
+### 3. Support fresh-start UX
+The app must make sense when DB is empty.
+That means:
+- create first account
+- add first transaction
+- set first target
+
+No hidden assumption that imported data already exists.
+
+### 4. Favor deletions over compatibility hacks
+If an old pathway only exists for Excel support and adds complexity, remove it.
+
+## Definition of done for rebuild
+
+The rebuild is considered successful when:
+- DB can be reset and re-created cleanly
+- app opens on an empty DB without weird states
+- account + transaction + target flows work without Excel
+- dashboard reflects data created inside the app
+- API sync can be added on top instead of forcing another redesign

@@ -9,9 +9,12 @@ datasource db {
 
 model Account {
   id            String        @id @default(uuid())
-  accountNumber String        @unique @map("account_number")
+  name          String?
+  broker        String        @default("manual")
   accountType   String        @map("account_type")
-  nickname      String?
+  accountNumber String?       @unique @map("account_number")
+  baseCurrency  String        @default("CAD") @map("base_currency")
+  isActive      Boolean       @default(true) @map("is_active")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   transactions  Transaction[]
@@ -19,50 +22,63 @@ model Account {
   @@map("accounts")
 }
 
-model ImportFile {
-  id            String        @id @default(uuid())
-  filename      String
-  fileHash      String?       @map("file_hash")
-  rowCount      Int           @map("row_count")
-  insertedCount Int           @map("inserted_count")
-  skippedCount  Int           @map("skipped_count")
-  failedCount   Int           @map("failed_count")
-  importedAt    DateTime      @default(now()) @map("imported_at")
-  transactions  Transaction[]
-
-  @@map("import_files")
-}
-
 model Transaction {
-  id              String     @id @default(uuid())
-  sourceRowHash   String     @unique @map("source_row_hash")
-  transactionDate DateTime   @map("transaction_date")
-  settlementDate  DateTime   @map("settlement_date")
+  id              String   @id @default(uuid())
+  accountId       String   @map("account_id")
+  source          String   @default("manual")
+  externalId      String?  @map("external_id")
+  transactionDate DateTime @map("transaction_date")
+  settlementDate  DateTime @map("settlement_date")
   action          String
+  activityType    String?  @map("activity_type")
   symbol          String?
-  symbolMapped    String?    @map("symbol_mapped")
+  normalizedSymbol String? @map("normalized_symbol")
   description     String
   quantity        Float?
   price           Float?
-  grossAmount     Float?     @map("gross_amount")
+  grossAmount     Float?   @map("gross_amount")
   commission      Float?
-  netAmount       Float?     @map("net_amount")
+  netAmount       Float?   @map("net_amount")
   currency        String
-  activityType    String     @map("activity_type")
-  cadEquivalent   Float?     @map("cad_equivalent")
-  accountId       String     @map("account_id")
-  importFileId    String?    @map("import_file_id")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  importFile      ImportFile? @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  account         Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fxRateToCad     Float?   @map("fx_rate_to_cad")
+  cadEquivalent   Float?   @map("cad_equivalent")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
-  @@index([symbol])
-  @@index([symbolMapped])
   @@index([transactionDate])
   @@index([settlementDate])
   @@index([action])
+  @@index([symbol])
+  @@index([normalizedSymbol])
+  @@unique([source, externalId])
   @@map("transactions")
+}
+
+model PortfolioSettings {
+  id                       String   @id @default(uuid())
+  weeklyContributionAmount Float    @default(0) @map("weekly_contribution_amount")
+  fxFeePercent             Float    @default(1.5) @map("fx_fee_percent")
+  baseCurrency             String   @default("CAD") @map("base_currency")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("portfolio_settings")
+}
+
+model PortfolioTarget {
+  id           String   @id @default(uuid())
+  symbol       String
+  targetWeight Float    @map("target_weight")
+  currency     String
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([symbol])
+  @@map("portfolio_targets")
 }
 
 model PriceCache {
@@ -85,36 +101,4 @@ model FxCache {
   expiresAt DateTime @map("expires_at")
 
   @@map("fx_cache")
-}
-
-model SymbolMapping {
-  id           String   @id @default(uuid())
-  internalCode String   @unique @map("internal_code")
-  ticker       String
-  name         String?
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@map("symbol_mappings")
-}
-
-model PortfolioSettings {
-  id           String             @id @default(uuid())
-  weeklyAmount Float              @default(0) @map("weekly_amount")
-  fxFeePercent Float              @default(1.5) @map("fx_fee_percent")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
-  targets      AllocationTarget[]
-
-  @@map("portfolio_settings")
-}
-
-model AllocationTarget {
-  id                  String            @id @default(uuid())
-  portfolioSettingsId String            @map("portfolio_settings_id")
-  symbol              String
-  targetWeight        Float             @map("target_weight")
-  currency            String
-  settings            PortfolioSettings @relation(fields: [portfolioSettingsId], references: [id], onDelete: Cascade)
-
-  @@unique([portfolioSettingsId, symbol])
-  @@map("allocation_targets")
 }

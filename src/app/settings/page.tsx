@@ -1,37 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, User, Info, Palette, Receipt, Target } from "lucide-react";
+import { ChevronRight, User, Info } from "lucide-react";
 
 const settingsItems = [
   {
     href: "/settings/accounts",
     label: "Accounts",
-    description: "Manage accounts and manually entered transactions",
+    description: "Manage account names and existing account records",
     icon: User,
-  },
-  {
-    href: "/settings/transactions",
-    label: "Transactions",
-    description: "View all transaction history",
-    icon: Receipt,
-  },
-  {
-    href: "/settings/targets",
-    label: "Portfolio Targets",
-    description: "Set target allocations and weekly investment",
-    icon: Target,
-  },
-  {
-    href: "/settings/display",
-    label: "Display",
-    description: "Currency and display preferences",
-    icon: Palette,
   },
   {
     href: "/settings/about",
     label: "About",
-    description: "App version and information",
+    description: "Rebuild status and app information",
     icon: Info,
   },
 ];
