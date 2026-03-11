@@ -37,6 +37,10 @@ Excel files are not part of the intended workflow.
 5. **Opinionated for real investing workflows**
    - The app should help answer: what do I own, what changed, what income did I receive, and what should I buy next?
 
+6. **Deployment-compatible with existing Cloudflare access pattern**
+   - The rebuilt app must remain reachable through the Cloudflare-connected domain, similar to the previous setup.
+   - Auth, cookies, callback URLs, and proxy behavior should be designed with the Cloudflare-served domain in mind.
+
 ## Primary user jobs
 
 - Create and manage brokerage/investment accounts
@@ -144,4 +148,5 @@ The rebuild is successful when:
 - users can set contribution room and see remaining room for TFSA / RRSP / FHSA
 - the mobile board is useful as a daily control surface
 - users can log in with Google and manage their own broker/API setup
+- the rebuilt app remains reachable through the existing Cloudflare-connected domain pattern
 - future Questrade API sync can plug in without redesigning the core schema

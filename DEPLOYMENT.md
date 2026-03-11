@@ -9,6 +9,15 @@
 - Database user: `dividendtracker`
 - App runtime DB: PostgreSQL via `DATABASE_URL`
 
+## Cloudflare compatibility requirement
+
+The rebuilt app must remain accessible through the Cloudflare-connected domain, similar to the previous setup.
+This means deployment decisions should preserve:
+- stable external HTTP(S) access via Cloudflare
+- reverse-proxy compatibility
+- future Google OAuth callback compatibility on the Cloudflare-served domain
+- secure cookie/session behavior when proxied
+
 ## Recommended compose workflow
 
 Use the repo-local `.env` file:

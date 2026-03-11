@@ -17,6 +17,7 @@ These are worth keeping unless they get in the way:
 - reusable UI components
 - some calculation logic for holdings/dividends/cash if still valid after schema cleanup
 - Docker deployment path
+- compatibility with the Cloudflare-connected domain access pattern
 
 ## What should be removed or deprioritized
 
@@ -94,6 +95,7 @@ Tasks:
 - sync_runs model
 - token handling strategy
 - easy user-managed Questrade setup flow in settings
+- Cloudflare-domain-aware auth/callback planning
 - sync service boundaries
 
 Deliverable:
