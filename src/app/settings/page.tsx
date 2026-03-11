@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, User, Info } from "lucide-react";
+import { ChevronRight, User, Info, Moon } from "lucide-react";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const settingsItems = [
   {
@@ -28,6 +29,18 @@ export default function SettingsPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-4 py-4 border-b border-gray-100 dark:border-slate-800">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+              <Moon className="w-5 h-5 text-gray-600 dark:text-slate-300" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-900 dark:text-white">Appearance</div>
+              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">Choose light, dark, or system mode</div>
+            </div>
+          </div>
+          <ThemeToggle />
+        </div>
         {settingsItems.map((item, idx) => {
           const Icon = item.icon;
           return (
