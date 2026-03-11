@@ -1,21 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Account {
   id: string;
-  accountNumber: string;
+  name: string | null;
+  accountNumber: string | null;
   accountType: string;
-  nickname: string | null;
+  baseCurrency: "CAD" | "USD";
 }
 
 interface Transaction {
@@ -24,17 +19,19 @@ interface Transaction {
   settlementDate: string;
   action: string;
   symbol: string | null;
-  symbolMapped: string | null;
+  normalizedSymbol: string | null;
   description: string;
   quantity: number | null;
   price: number | null;
   netAmount: number | null;
   currency: string;
-  activityType: string;
+  activityType: string | null;
   account: {
-    accountNumber: string;
+    id: string;
+    name: string | null;
+    accountNumber: string | null;
     accountType: string;
-    nickname: string | null;
+    baseCurrency: "CAD" | "USD";
   };
 }
 
@@ -45,7 +42,18 @@ interface Pagination {
   totalPages: number;
 }
 
-const ACTION_OPTIONS = ["Buy", "Sell", "DIV", "DEP", "WDR", "REI", "INT", "FEE"];
+const ACTION_OPTIONS = [
+  "BUY",
+  "SELL",
+  "DIVIDEND",
+  "REINVEST",
+  "DEPOSIT",
+  "WITHDRAWAL",
+  "FEE",
+  "INTEREST",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+];
 const CURRENCY_OPTIONS = ["CAD", "USD"];
 
 export default function TransactionsPage() {
@@ -53,12 +61,13 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
-    limit: 50,
+    limit: 20,
     total: 0,
     totalPages: 0,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(true);
 
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
@@ -70,11 +79,13 @@ export default function TransactionsPage() {
   const [years, setYears] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const [form, setForm] = useState({
     accountId: "",
-    transactionDate: "",
-    settlementDate: "",
-    action: "Buy",
+    transactionDate: today,
+    settlementDate: today,
+    action: "BUY",
     symbol: "",
     description: "",
     quantity: "",
@@ -83,8 +94,9 @@ export default function TransactionsPage() {
     commission: "",
     netAmount: "",
     currency: "CAD",
-    activityType: "MANUAL",
+    activityType: "",
     cadEquivalent: "",
+    notes: "",
   });
 
   useEffect(() => {
@@ -96,6 +108,9 @@ export default function TransactionsPage() {
     fetchTransactions();
   }, [pagination.page, accountFilter, yearFilter, actionFilter, symbolFilter]);
 
+  const currentActionNeedsUnits = ["BUY", "SELL", "REINVEST"].includes(form.action);
+  const currentActionNeedsCashOnly = ["DIVIDEND", "DEPOSIT", "WITHDRAWAL", "FEE", "INTEREST", "TRANSFER_IN", "TRANSFER_OUT"].includes(form.action);
+
   async function fetchAccounts() {
     try {
       const res = await fetch("/api/accounts");
@@ -104,6 +119,7 @@ export default function TransactionsPage() {
       setForm((prev) => ({
         ...prev,
         accountId: prev.accountId || data[0]?.id || "",
+        currency: prev.currency || data[0]?.baseCurrency || "CAD",
       }));
     } catch (error) {
       console.error("Failed to fetch accounts:", error);
@@ -152,8 +168,8 @@ export default function TransactionsPage() {
 
       const res = await fetch(`/api/transactions?${params.toString()}`);
       const data = await res.json();
-      setTransactions(data.transactions);
-      setPagination(data.pagination);
+      setTransactions(data.transactions || []);
+      setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 });
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
     } finally {
@@ -171,15 +187,17 @@ export default function TransactionsPage() {
 
   function getActionStyle(action: string): string {
     switch (action) {
-      case "Buy":
-        return "bg-blue-100 text-blue-700";
-      case "Sell":
-        return "bg-red-100 text-red-700";
-      case "DIV":
-      case "REI":
-        return "bg-green-100 text-green-700";
+      case "BUY":
+        return "bg-blue-50 text-blue-700 border-blue-100";
+      case "SELL":
+      case "WITHDRAWAL":
+      case "FEE":
+        return "bg-red-50 text-red-700 border-red-100";
+      case "DIVIDEND":
+      case "INTEREST":
+        return "bg-green-50 text-green-700 border-green-100";
       default:
-        return "bg-gray-100 text-gray-700";
+        return "bg-gray-50 text-gray-700 border-gray-100";
     }
   }
 
@@ -212,6 +230,7 @@ export default function TransactionsPage() {
           currency: form.currency,
           activityType: form.activityType,
           cadEquivalent: form.cadEquivalent ? Number(form.cadEquivalent) : null,
+          notes: form.notes,
         }),
       });
 
@@ -230,9 +249,12 @@ export default function TransactionsPage() {
         commission: "",
         netAmount: "",
         cadEquivalent: "",
+        activityType: "",
+        notes: "",
       }));
 
-      await Promise.all([fetchTransactions(), fetchFilterOptions(), fetchAccounts()]);
+      await Promise.all([fetchTransactions(), fetchFilterOptions()]);
+      setShowForm(false);
     } catch (error) {
       console.error(error);
       setError(error instanceof Error ? error.message : "Failed to save transaction");
@@ -245,175 +267,252 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div className="border-b border-gray-200 mb-4">
-          <span className="pb-2 text-xs font-semibold tracking-wider text-[#0a8043] border-b-[3px] border-[#0a8043] inline-block">
-            ADD TRANSACTION
-          </span>
+      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-4 md:p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Transactions</div>
+            <h1 className="text-xl md:text-2xl font-semibold text-gray-900 mt-1">Manual ledger</h1>
+            <p className="text-sm text-gray-500 mt-1">빠르게 거래를 추가하고, 최근 기록을 모바일에서 바로 확인할 수 있게 정리했어요.</p>
+          </div>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="shrink-0 px-4 py-2 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] transition-colors"
+          >
+            {showForm ? "폼 접기" : "거래 추가"}
+          </button>
         </div>
 
-        <form onSubmit={handleCreateTransaction} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Select value={form.accountId} onValueChange={(value) => updateForm("accountId", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Account" />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((acc) => (
-                <SelectItem key={acc.id} value={acc.id}>
-                  {acc.nickname || `${acc.accountType} (${acc.accountNumber})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {showForm && (
+          <form onSubmit={handleCreateTransaction} className="p-4 md:p-5 space-y-4 bg-gradient-to-b from-[#f7fbf8] to-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select value={form.accountId} onValueChange={(value) => updateForm("accountId", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name || acc.accountType}
+                      {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <Select value={form.action} onValueChange={(value) => updateForm("action", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Action" />
-            </SelectTrigger>
-            <SelectContent>
-              {ACTION_OPTIONS.map((action) => (
-                <SelectItem key={action} value={action}>{action}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select value={form.action} onValueChange={(value) => updateForm("action", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Action" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTION_OPTIONS.map((action) => (
+                    <SelectItem key={action} value={action}>{action}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <input type="date" value={form.transactionDate} onChange={(e) => updateForm("transactionDate", e.target.value)} className="h-10 px-3 border border-gray-200 rounded-lg text-sm" required />
-          <input type="date" value={form.settlementDate} onChange={(e) => updateForm("settlementDate", e.target.value)} className="h-10 px-3 border border-gray-200 rounded-lg text-sm" required />
-          <input type="text" value={form.symbol} onChange={(e) => updateForm("symbol", e.target.value.toUpperCase())} placeholder="Symbol (optional)" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <Select value={form.currency} onValueChange={(value) => updateForm("currency", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Currency" />
-            </SelectTrigger>
-            <SelectContent>
-              {CURRENCY_OPTIONS.map((currency) => (
-                <SelectItem key={currency} value={currency}>{currency}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <input type="text" value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Description" className="h-10 px-3 border border-gray-200 rounded-lg text-sm md:col-span-2" required />
-          <input type="number" step="any" value={form.quantity} onChange={(e) => updateForm("quantity", e.target.value)} placeholder="Quantity" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <input type="number" step="any" value={form.price} onChange={(e) => updateForm("price", e.target.value)} placeholder="Price" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <input type="number" step="any" value={form.grossAmount} onChange={(e) => updateForm("grossAmount", e.target.value)} placeholder="Gross amount" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <input type="number" step="any" value={form.commission} onChange={(e) => updateForm("commission", e.target.value)} placeholder="Commission" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <input type="number" step="any" value={form.netAmount} onChange={(e) => updateForm("netAmount", e.target.value)} placeholder="Net amount" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
-          <input type="number" step="any" value={form.cadEquivalent} onChange={(e) => updateForm("cadEquivalent", e.target.value)} placeholder="CAD equivalent (optional)" className="h-10 px-3 border border-gray-200 rounded-lg text-sm" />
+              <input type="date" value={form.transactionDate} onChange={(e) => updateForm("transactionDate", e.target.value)} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" required />
+              <input type="date" value={form.settlementDate} onChange={(e) => updateForm("settlementDate", e.target.value)} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" required />
+            </div>
 
-          <div className="md:col-span-2 flex items-center justify-between gap-3 pt-2">
-            <div className="text-sm text-red-500">{error || ""}</div>
-            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {saving ? "Saving..." : "Add transaction"}
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input type="text" value={form.symbol} onChange={(e) => updateForm("symbol", e.target.value.toUpperCase())} placeholder="Symbol (optional)" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <Select value={form.currency} onValueChange={(value) => updateForm("currency", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((currency) => (
+                    <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="text" value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Description" className="h-11 px-3 border border-gray-200 rounded-xl text-sm md:col-span-2" required />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <input type="number" step="any" value={form.quantity} onChange={(e) => updateForm("quantity", e.target.value)} placeholder={currentActionNeedsUnits ? "Quantity" : "Quantity (opt)"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="number" step="any" value={form.price} onChange={(e) => updateForm("price", e.target.value)} placeholder={currentActionNeedsUnits ? "Price" : "Price (opt)"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="number" step="any" value={form.grossAmount} onChange={(e) => updateForm("grossAmount", e.target.value)} placeholder={currentActionNeedsCashOnly ? "Gross amount" : "Gross amount"} className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="number" step="any" value={form.commission} onChange={(e) => updateForm("commission", e.target.value)} placeholder="Commission" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="number" step="any" value={form.netAmount} onChange={(e) => updateForm("netAmount", e.target.value)} placeholder="Net amount" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="number" step="any" value={form.cadEquivalent} onChange={(e) => updateForm("cadEquivalent", e.target.value)} placeholder="CAD equivalent" className="h-11 px-3 border border-gray-200 rounded-xl text-sm" />
+              <input type="text" value={form.activityType} onChange={(e) => updateForm("activityType", e.target.value)} placeholder="Activity type (optional)" className="h-11 px-3 border border-gray-200 rounded-xl text-sm md:col-span-2" />
+            </div>
+
+            <textarea value={form.notes} onChange={(e) => updateForm("notes", e.target.value)} placeholder="Notes (optional)" className="min-h-[92px] w-full px-3 py-3 border border-gray-200 rounded-xl text-sm resize-y" />
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-1">
+              <div className="text-sm text-red-500 min-h-[20px]">{error || ""}</div>
+              <button type="submit" disabled={saving} className="px-4 py-2.5 text-sm bg-[#0a8043] text-white rounded-xl hover:bg-[#086b39] disabled:opacity-50">
+                {saving ? "Saving..." : "Add transaction"}
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      <section className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">Filters</div>
+            <div className="text-sm text-gray-500 mt-1">계좌, 연도, 액션, 심볼별로 빠르게 좁혀볼 수 있어요.</div>
           </div>
-        </form>
-      </div>
+          {hasActiveFilters && (
+            <button onClick={clearFilters} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
+              Clear all
+            </button>
+          )}
+        </div>
 
-      <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger variant="compact"><SelectValue placeholder="ACC" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Account" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">ACC</SelectItem>
-              {accounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.accountType}</SelectItem>)}
+              <SelectItem value="all">All accounts</SelectItem>
+              {accounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name || acc.accountType}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={yearFilter} onValueChange={setYearFilter}>
-            <SelectTrigger variant="compact"><SelectValue placeholder="YR" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">YR</SelectItem>
+              <SelectItem value="all">All years</SelectItem>
               {years.map((year) => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger variant="compact"><SelectValue placeholder="ACT" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Action" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">ACT</SelectItem>
+              <SelectItem value="all">All actions</SelectItem>
               {actions.map((action) => <SelectItem key={action} value={action}>{action}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={symbolFilter || "all"} onValueChange={(value) => setSymbolFilter(value === "all" ? "" : value)}>
-            <SelectTrigger variant="compact"><SelectValue placeholder="SYM" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Symbol" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">SYM</SelectItem>
+              <SelectItem value="all">All symbols</SelectItem>
               {symbols.map((symbol) => <SelectItem key={symbol} value={symbol}>{symbol}</SelectItem>)}
             </SelectContent>
           </Select>
-
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-              Clear
-            </button>
-          )}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <div className="border-b border-gray-200 mb-4 flex justify-between items-center">
-          <span className="pb-2 text-xs font-semibold tracking-wider text-[#0a8043] border-b-[3px] border-[#0a8043] inline-block">
-            TRANSACTIONS
-          </span>
-          <span className="text-sm text-gray-500">{pagination.total} total</span>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold tracking-[0.18em] text-[#0a8043] uppercase">History</div>
+            <h2 className="text-lg font-semibold text-gray-900 mt-1">Recent transactions</h2>
+          </div>
+          <div className="text-sm text-gray-500">{pagination.total} total</div>
         </div>
 
         {loading ? (
-          <div className="space-y-2">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-                <Skeleton className="h-4 w-24" />
+          <div className="space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4">
+                <Skeleton className="h-4 w-28 mb-3" />
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
               </div>
             ))}
           </div>
         ) : transactions.length === 0 ? (
-          <div className="flex items-center justify-center h-32"><div className="text-gray-500">No transactions</div></div>
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-500">
+            아직 거래가 없어요. 위에서 첫 거래를 추가해보세요.
+          </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed">
-                <thead>
-                  <tr className="border-b border-[#e8eaed]">
-                    <th className="w-24 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">Date</th>
-                    <th className="w-16 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">Account</th>
-                    <th className="w-14 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">Action</th>
-                    <th className="w-16 text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">Symbol</th>
-                    <th className="w-20 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">Qty</th>
-                    <th className="w-20 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">Price</th>
-                    <th className="w-24 text-right py-2.5 px-3 text-xs font-normal text-[#5f6368]">Amount</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-normal text-[#5f6368]">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((tx, idx) => (
-                    <tr key={tx.id} className={idx % 2 === 0 ? "bg-white" : "bg-[#f8f9fa]"}>
-                      <td className="py-3 px-3 text-sm text-[#202124] whitespace-nowrap">{formatDate(tx.settlementDate)}</td>
-                      <td className="py-3 px-3 text-sm text-[#5f6368]">{tx.account.accountType}</td>
-                      <td className="py-3 px-3"><span className={`px-2 py-0.5 text-xs rounded font-medium ${getActionStyle(tx.action)}`}>{tx.action}</span></td>
-                      <td className="py-3 px-3 font-medium text-sm text-[#202124]">{tx.symbolMapped || tx.symbol || "-"}</td>
-                      <td className="py-3 px-3 text-right text-sm text-[#202124]">{tx.quantity ? formatNumber(tx.quantity) : "-"}</td>
-                      <td className="py-3 px-3 text-right text-sm text-[#202124]">{tx.price ? formatCurrency(tx.price) : "-"}</td>
-                      <td className={`py-3 px-3 text-right text-sm font-medium ${(tx.netAmount || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>{tx.netAmount ? formatCurrency(tx.netAmount) : "-"}</td>
-                      <td className="py-3 px-3 truncate text-xs text-[#5f6368]">{tx.description}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3 md:hidden">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">{tx.normalizedSymbol || tx.symbol || tx.description}</div>
+                      <div className="text-xs text-gray-500 mt-1">{tx.account.name || tx.account.accountType} · {formatDate(tx.settlementDate)}</div>
+                    </div>
+                    <span className={`px-2.5 py-1 text-[11px] font-medium rounded-full border ${getActionStyle(tx.action)}`}>{tx.action}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
+                    <div>
+                      <div className="text-xs text-gray-400">Amount</div>
+                      <div className={`font-semibold ${(tx.netAmount || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {tx.netAmount !== null ? formatCurrency(tx.netAmount) : "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Qty / Price</div>
+                      <div className="font-medium text-gray-800">
+                        {tx.quantity !== null ? formatNumber(tx.quantity) : "-"}
+                        {tx.price !== null ? ` · ${formatCurrency(tx.price)}` : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-sm text-gray-600">{tx.description}</div>
+                </div>
+              ))}
             </div>
 
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 mt-4">
-              <div className="text-sm text-gray-500">{(pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</div>
+            <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50/80 border-b border-gray-100">
+                    <tr>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Date</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Account</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Action</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Symbol</th>
+                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Qty</th>
+                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Price</th>
+                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500">Amount</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((tx) => (
+                      <tr key={tx.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/60">
+                        <td className="py-3 px-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(tx.settlementDate)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{tx.account.name || tx.account.accountType}</td>
+                        <td className="py-3 px-4"><span className={`px-2.5 py-1 text-[11px] font-medium rounded-full border ${getActionStyle(tx.action)}`}>{tx.action}</span></td>
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{tx.normalizedSymbol || tx.symbol || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{tx.quantity !== null ? formatNumber(tx.quantity) : "-"}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{tx.price !== null ? formatCurrency(tx.price) : "-"}</td>
+                        <td className={`py-3 px-4 text-sm text-right font-semibold ${(tx.netAmount || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>{tx.netAmount !== null ? formatCurrency(tx.netAmount) : "-"}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-[280px] truncate">{tx.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 bg-white rounded-2xl border border-gray-100 p-4">
+              <div className="text-sm text-gray-500">
+                {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+              </div>
               <div className="flex gap-2">
-                <button disabled={pagination.page <= 1} onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))} className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Previous</button>
-                <button disabled={pagination.page >= pagination.totalPages} onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))} className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next</button>
+                <button
+                  disabled={pagination.page <= 1}
+                  onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-xl bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={pagination.page >= pagination.totalPages}
+                  onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-xl bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
               </div>
             </div>
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }
