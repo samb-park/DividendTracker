@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ensureBootstrapUser } from "@/lib/bootstrap-user";
+import { requireCurrentUser } from "@/lib/current-user";
 
 export async function GET() {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
 
     const accounts = await prisma.account.findMany({
       where: { userId: user.id },
@@ -23,13 +23,16 @@ export async function GET() {
     return NextResponse.json(accounts);
   } catch (error) {
     console.error("Error fetching accounts:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const body = await request.json();
     const {
       name,
@@ -60,6 +63,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(created);
   } catch (error) {
     console.error("Error creating account:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
   }
 }
@@ -101,6 +107,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Error updating account:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to update account" }, { status: 500 });
   }
 }
@@ -121,6 +130,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting account:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
   }
 }

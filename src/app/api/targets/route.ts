@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ensureBootstrapUser } from "@/lib/bootstrap-user";
+import { requireCurrentUser } from "@/lib/current-user";
 
 export async function GET() {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
 
     const [targets, settings] = await Promise.all([
       prisma.portfolioTarget.findMany({
@@ -20,13 +20,16 @@ export async function GET() {
     return NextResponse.json({ targets, settings });
   } catch (error) {
     console.error("Error fetching targets:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to fetch targets" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const body = await request.json();
     const { type } = body;
 
@@ -85,13 +88,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unknown type" }, { status: 400 });
   } catch (error) {
     console.error("Error saving targets:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to save targets" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Target ID is required" }, { status: 400 });
@@ -103,6 +109,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting target:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to delete target" }, { status: 500 });
   }
 }

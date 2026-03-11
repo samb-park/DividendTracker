@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ensureBootstrapUser } from "@/lib/bootstrap-user";
+import { requireCurrentUser } from "@/lib/current-user";
 import { TransactionAction, CurrencyCode, TransactionSource } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const { searchParams } = new URL(request.url);
 
     const page = parseInt(searchParams.get("page") || "1");
@@ -64,13 +64,16 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const body = await request.json();
     const {
       id,
@@ -139,13 +142,16 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Error updating transaction:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -166,13 +172,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting transaction:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await ensureBootstrapUser();
+    const user = await requireCurrentUser();
     const body = await request.json();
     const { type } = body;
 
@@ -272,6 +281,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unknown type" }, { status: 400 });
   } catch (error) {
     console.error("Error in transactions API:", error);
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
