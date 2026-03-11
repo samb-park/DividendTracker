@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, BriefcaseBusiness, Receipt, CalendarDays, Settings } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, CalendarDays, Settings } from "lucide-react";
 import { AuthStatus } from "@/components/auth/auth-status";
 
 const navItems = [
   { href: "/", label: "DASHBOARD", icon: LayoutDashboard },
   { href: "/portfolio", label: "PORTFOLIO", icon: BriefcaseBusiness },
-  { href: "/transactions", label: "TRANSACTIONS", icon: Receipt },
   { href: "/calendar", label: "CALENDAR", icon: CalendarDays },
   { href: "/settings", label: "SETTINGS", icon: Settings },
 ];
