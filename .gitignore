@@ -49,3 +49,5 @@ data/
 
 # Cache
 .eslintcache
+
+.secrets
