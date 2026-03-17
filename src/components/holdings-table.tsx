@@ -152,6 +152,7 @@ export function HoldingsTable({
   }, [portfolioId, fetchPrices]);
 
   useEffect(() => {
+    setHoldings(initialHoldings);
     fetchPrices(initialHoldings);
   }, [initialHoldings, fetchPrices]);
 

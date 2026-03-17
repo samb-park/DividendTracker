@@ -103,6 +103,10 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
     fetch("/api/fx").then((r) => r.json()).then((d) => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    setHoldingSummaries([]);
+  }, [selectedPortfolioId]);
+
   const displayPortfolios = useMemo(() =>
     selectedPortfolioId === "all" ? portfolios : portfolios.filter(p => p.id === selectedPortfolioId),
     [portfolios, selectedPortfolioId]
