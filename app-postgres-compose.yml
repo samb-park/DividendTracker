@@ -1,0 +1,24 @@
+services:
+  app-postgres:
+    image: postgres:16
+    container_name: app-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: 286b5ba875266dbb443fee060c47632c4d20ad55
+      PGDATA: /var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    volumes:
+      - /mnt/fast_data/docker/app-postgres:/var/lib/postgresql/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - db-net
+
+networks:
+  db-net:
+    external: true

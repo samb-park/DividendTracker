@@ -1,0 +1,431 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+interface DividendCalendarEvent {
+  ticker: string;
+  name: string;
+  exDividendDate: string | null;
+  paymentDate: string | null;
+  amountPerShare: number | null;
+  annualDividend: number | null;
+  frequency: number | null;
+  dividendYield: number | null;
+  currency: string;
+  portfolios: string[];
+}
+
+interface DayEvent {
+  ticker: string;
+  name: string;
+  type: "exdiv" | "payment";
+  amount: number | null;
+  currency: string;
+}
+
+const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const MONTHS = [
+  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
+];
+
+const FREQ_LABEL: Record<number, string> = {
+  1: "ANNUAL",
+  2: "SEMI-ANNUAL",
+  4: "QUARTERLY",
+  12: "MONTHLY",
+};
+
+/** Project future dividend dates based on frequency and a base date */
+function projectDates(baseDateStr: string, frequency: number, offsetMonths: number): string[] {
+  if (frequency <= 0) return [];
+  const intervalMonths = 12 / frequency;
+  const base = new Date(baseDateStr);
+  const dates: string[] = [];
+  // Project up to 12 months from base
+  for (let i = 0; i <= frequency; i++) {
+    const d = new Date(base);
+    d.setMonth(d.getMonth() + Math.round(i * intervalMonths) + offsetMonths);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return dates;
+}
+
+/** Build a map of date → events for the given year/month, including predictions */
+function buildEventMap(
+  events: DividendCalendarEvent[],
+  year: number,
+  month: number // 0-indexed
+): Map<string, DayEvent[]> {
+  const map = new Map<string, DayEvent[]>();
+  const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+
+  function addToMap(dateStr: string, event: DayEvent) {
+    if (!dateStr.startsWith(monthStr)) return;
+    const day = dateStr.split("T")[0];
+    if (!map.has(day)) map.set(day, []);
+    map.get(day)!.push(event);
+  }
+
+  for (const ev of events) {
+    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency };
+
+    // Ex-dividend dates (real + predicted)
+    const exDates: string[] = [];
+    if (ev.exDividendDate) {
+      exDates.push(ev.exDividendDate.split("T")[0]);
+      if (ev.frequency) {
+        exDates.push(...projectDates(ev.exDividendDate, ev.frequency, 0));
+      }
+    }
+    for (const d of exDates) addToMap(d, { ...base, type: "exdiv" });
+
+    // Payment dates (real + predicted)
+    const payDates: string[] = [];
+    if (ev.paymentDate) {
+      payDates.push(ev.paymentDate.split("T")[0]);
+      if (ev.frequency) {
+        payDates.push(...projectDates(ev.paymentDate, ev.frequency, 0));
+      }
+    }
+    for (const d of payDates) addToMap(d, { ...base, type: "payment" });
+  }
+
+  return map;
+}
+
+/** Upcoming events for the next 90 days */
+function buildUpcoming(events: DividendCalendarEvent[]): {
+  date: string;
+  event: DayEvent;
+}[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() + 90);
+
+  const upcoming: { date: string; event: DayEvent }[] = [];
+
+  for (const ev of events) {
+    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency };
+
+    const addIfUpcoming = (dateStr: string | null, type: "exdiv" | "payment") => {
+      if (!dateStr) return;
+      const allDates: string[] = [dateStr.split("T")[0]];
+      if (ev.frequency) allDates.push(...projectDates(dateStr, ev.frequency, 0));
+      for (const d of allDates) {
+        const dt = new Date(d);
+        if (dt >= today && dt <= cutoff) {
+          upcoming.push({ date: d, event: { ...base, type } });
+        }
+      }
+    };
+
+    addIfUpcoming(ev.exDividendDate, "exdiv");
+    addIfUpcoming(ev.paymentDate, "payment");
+  }
+
+  upcoming.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Dedupe
+  const seen = new Set<string>();
+  return upcoming.filter((u) => {
+    const key = `${u.date}-${u.event.ticker}-${u.event.type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function fmt2(n: number) {
+  return n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function CalendarClient() {
+  const [events, setEvents] = useState<DividendCalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/calendar")
+      .then((r) => r.json())
+      .then((data) => { setEvents(data); setLoading(false); })
+      .catch(() => { setError("Failed to load calendar data"); setLoading(false); });
+  }, []);
+
+  const prevMonth = () => {
+    if (month === 0) { setYear(y => y - 1); setMonth(11); }
+    else setMonth(m => m - 1);
+    setSelectedDay(null);
+  };
+  const nextMonth = () => {
+    if (month === 11) { setYear(y => y + 1); setMonth(0); }
+    else setMonth(m => m + 1);
+    setSelectedDay(null);
+  };
+
+  const eventMap = buildEventMap(events, year, month);
+  const upcoming = buildUpcoming(events);
+
+  // Build calendar grid
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = now.toISOString().split("T")[0];
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const selectedEvents = selectedDay ? (eventMap.get(selectedDay) ?? []) : [];
+
+  if (loading) {
+    return (
+      <div className="text-muted-foreground text-xs py-12 text-center">
+        LOADING DIVIDEND DATA...
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-negative text-xs py-8 text-center">{error}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Legend */}
+      <div className="flex gap-4 text-[10px] tracking-widest">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 cal-exdiv" />
+          EX-DIV DATE
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 cal-payment" />
+          PAYMENT DATE
+        </span>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          * PREDICTED
+        </span>
+      </div>
+
+      {/* Month navigation */}
+      <div className="flex items-center gap-4">
+        <button onClick={prevMonth} className="btn-retro p-1">
+          <ChevronLeft size={14} />
+        </button>
+        <span className="text-accent tracking-widest text-sm flex-1 text-center">
+          {MONTHS[month]} {year}
+        </span>
+        <button onClick={nextMonth} className="btn-retro p-1">
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 gap-1">
+        {DAYS.map((d) => (
+          <div key={d} className="text-center text-[9px] text-muted-foreground tracking-widest py-1">
+            {d}
+          </div>
+        ))}
+
+        {/* Calendar cells */}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`empty-${i}`} />;
+
+          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const dayEvents = eventMap.get(dateStr) ?? [];
+          const hasExDiv = dayEvents.some((e) => e.type === "exdiv");
+          const hasPayment = dayEvents.some((e) => e.type === "payment");
+          const isToday = dateStr === todayStr;
+          const isSelected = dateStr === selectedDay;
+
+          let cellClass = "cal-day relative rounded-[2px] p-1 text-center cursor-pointer transition-all min-h-[40px]";
+          if (hasExDiv && hasPayment) cellClass += " cal-both";
+          else if (hasExDiv) cellClass += " cal-exdiv";
+          else if (hasPayment) cellClass += " cal-payment";
+          else cellClass += " border border-transparent hover:border-border";
+
+          if (isSelected) cellClass += " ring-1 ring-primary";
+
+          return (
+            <div
+              key={dateStr}
+              className={cellClass}
+              onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+            >
+              <span className={`text-[11px] ${isToday ? "text-accent font-medium" : ""}`}>
+                {day}
+              </span>
+              {dayEvents.length > 0 && (
+                <div className="flex flex-wrap gap-[2px] mt-1 justify-center">
+                  {dayEvents.slice(0, 2).map((e, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[8px] leading-none tracking-tighter truncate max-w-full"
+                      style={{ color: e.type === "exdiv" ? "hsl(var(--accent))" : "hsl(var(--primary))" }}
+                    >
+                      {e.ticker}
+                    </span>
+                  ))}
+                  {dayEvents.length > 2 && (
+                    <span className="text-[8px] text-muted-foreground">+{dayEvents.length - 2}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Selected day detail */}
+      {selectedDay && selectedEvents.length > 0 && (
+        <div className="border border-border bg-card p-4 space-y-2">
+          <div className="text-accent text-xs tracking-widest mb-3">
+            {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-CA", {
+              weekday: "long", year: "numeric", month: "long", day: "numeric",
+            }).toUpperCase()}
+          </div>
+          {selectedEvents.map((e, i) => (
+            <div key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+              <div>
+                <span className="font-medium">{e.ticker}</span>
+                <span className="text-muted-foreground ml-2">{e.name}</span>
+              </div>
+              <div className="text-right">
+                <span
+                  className="text-[10px] tracking-widest px-1 py-0.5 border"
+                  style={{
+                    color: e.type === "exdiv" ? "hsl(var(--accent))" : "hsl(var(--primary))",
+                    borderColor: e.type === "exdiv" ? "hsl(var(--accent) / 0.4)" : "hsl(var(--primary) / 0.4)",
+                  }}
+                >
+                  {e.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
+                </span>
+                {e.amount && (
+                  <div className="text-muted-foreground text-[10px] mt-0.5">
+                    {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.amount)}/sh
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upcoming dividends list */}
+      <div>
+        <div className="text-xs tracking-widest text-accent mb-3">
+          UPCOMING — NEXT 90 DAYS
+        </div>
+        {upcoming.length === 0 ? (
+          <div className="text-muted-foreground text-xs text-center py-6 border border-dashed border-border">
+            NO DIVIDEND EVENTS FOUND
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th className="text-left">TICKER</th>
+                  <th className="text-left">TYPE</th>
+                  <th className="text-left">DATE</th>
+                  <th className="text-right">AMOUNT/SH</th>
+                  <th className="text-left hidden sm:table-cell">PORTFOLIO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcoming.map((u, i) => {
+                  const ev = events.find((e) => e.ticker === u.event.ticker);
+                  const portfolio = ev?.portfolios.join(", ") ?? "";
+                  return (
+                    <tr key={i}>
+                      <td className="font-medium">{u.event.ticker}</td>
+                      <td>
+                        <span
+                          className="text-[10px] tracking-widest"
+                          style={{
+                            color: u.event.type === "exdiv"
+                              ? "hsl(var(--accent))"
+                              : "hsl(var(--primary))",
+                          }}
+                        >
+                          {u.event.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
+                        </span>
+                      </td>
+                      <td className="tabular-nums">
+                        {new Date(u.date + "T12:00:00").toLocaleDateString("en-CA", {
+                          month: "short", day: "numeric",
+                        })}
+                      </td>
+                      <td className="text-right tabular-nums">
+                        {u.event.amount
+                          ? `${u.event.currency === "CAD" ? "C$" : "$"}${fmt2(u.event.amount)}`
+                          : "—"}
+                      </td>
+                      <td className="text-muted-foreground hidden sm:table-cell">
+                        {portfolio}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Summary cards */}
+      {events.length > 0 && (
+        <div>
+          <div className="text-xs tracking-widest text-accent mb-3">
+            DIVIDEND HOLDINGS — {events.length} STOCKS
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            {events
+              .filter((e) => e.annualDividend && e.annualDividend > 0)
+              .sort((a, b) => (b.dividendYield ?? 0) - (a.dividendYield ?? 0))
+              .map((e) => (
+                <div
+                  key={e.ticker}
+                  className="flex items-center justify-between border border-border bg-card px-3 py-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-xs">{e.ticker}</span>
+                    <span className="text-muted-foreground text-[11px] truncate max-w-[120px]">
+                      {e.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-right text-[11px]">
+                    {e.frequency && (
+                      <span className="text-muted-foreground hidden sm:inline">
+                        {FREQ_LABEL[e.frequency] ?? `${e.frequency}×/YR`}
+                      </span>
+                    )}
+                    {e.annualDividend && (
+                      <span className="tabular-nums">
+                        {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.annualDividend)}/yr
+                      </span>
+                    )}
+                    {e.dividendYield != null && (
+                      <span className="text-positive tabular-nums">
+                        {(e.dividendYield * 100).toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
