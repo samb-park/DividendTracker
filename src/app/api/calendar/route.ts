@@ -1,43 +1,44 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+const yahooFinance = new YahooFinance();
 
 export const dynamic = "force-dynamic";
 
 export interface DividendCalendarEvent {
   ticker: string;
   name: string;
-  exDividendDate: string | null;   // ISO string
-  paymentDate: string | null;       // ISO string
-  amountPerShare: number | null;    // per-period amount
+  exDividendDate: string | null;   // ISO string — most recent ex-div
+  paymentDate: string | null;       // estimated: exDivDate + ~15 days
+  amountPerShare: number | null;    // most recent per-period amount
   annualDividend: number | null;
   frequency: number | null;         // 1=annual, 2=semi, 4=quarterly, 12=monthly
   dividendYield: number | null;
   currency: string;
   portfolios: string[];
+  sharesHeld: number;
 }
 
 // 1-hour in-memory cache
-const cache = new Map<string, { data: Omit<DividendCalendarEvent, "portfolios">; fetchedAt: number }>();
+const cache = new Map<string, { data: Omit<DividendCalendarEvent, "portfolios" | "sharesHeld">; fetchedAt: number }>();
 const TTL = 60 * 60 * 1000;
 
-function detectFrequency(
-  annualRate: number | null | undefined,
-  trailingRate: number | null | undefined
-): number | null {
-  if (!annualRate || annualRate <= 0) return null;
-  // trailingAnnualDividendRate is the sum of the last 4 payments
-  // dividendRate is usually the projected annual rate
-  // We infer frequency from ratio if available, else default 4 (quarterly)
-  if (trailingRate && trailingRate > 0) {
-    const perPayment = trailingRate / 4; // assume 4 payments trailing
-    const ratio = annualRate / perPayment;
-    if (ratio >= 10) return 12;  // monthly
-    if (ratio >= 3.5) return 4;  // quarterly
-    if (ratio >= 1.5) return 2;  // semi-annual
-    return 1;                     // annual
+/** Detect dividend frequency from historical payment spacing */
+function detectFrequencyFromHistory(
+  dividends: Array<{ date: string | Date; amount: number }>
+): number {
+  if (dividends.length < 2) return 4;
+  const dates = dividends.map((d) => new Date(d.date).getTime());
+  const spacings: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    const monthDiff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24 * 30.5);
+    spacings.push(monthDiff);
   }
-  return 4; // default quarterly
+  const avg = spacings.reduce((a, b) => a + b, 0) / spacings.length;
+  if (avg <= 1.5) return 12;
+  if (avg <= 4) return 4;
+  if (avg <= 8) return 2;
+  return 1;
 }
 
 export async function GET() {
@@ -45,74 +46,90 @@ export async function GET() {
     include: { portfolio: true },
   });
 
-  // Group holdings by ticker, collect portfolio names
+  // Group holdings by ticker, collect portfolio names and shares (only qty > 0)
   const tickerMap = new Map<string, string[]>();
+  const tickerShares = new Map<string, number>();
   for (const h of holdings) {
+    const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
+    if (qty <= 0) continue;
     if (!tickerMap.has(h.ticker)) tickerMap.set(h.ticker, []);
     tickerMap.get(h.ticker)!.push(h.portfolio.name);
+    tickerShares.set(h.ticker, (tickerShares.get(h.ticker) ?? 0) + qty);
   }
 
   const events: DividendCalendarEvent[] = [];
 
+  // 18 months back to capture at least 4 dividends for quarterly payers
+  const period1 = new Date();
+  period1.setMonth(period1.getMonth() - 18);
+  const period1Str = period1.toISOString().split("T")[0];
+
   for (const [ticker, portfolios] of tickerMap.entries()) {
+    const sharesHeld = tickerShares.get(ticker) ?? 0;
+
     const cached = cache.get(ticker);
     if (cached && Date.now() - cached.fetchedAt < TTL) {
-      events.push({ ...cached.data, portfolios });
+      events.push({ ...cached.data, portfolios, sharesHeld });
       continue;
     }
 
     try {
-      const summary = await yahooFinance.quoteSummary(ticker, {
-        modules: ["calendarEvents", "summaryDetail", "price"],
+      const chart = await yahooFinance.chart(ticker, {
+        period1: period1Str,
+        interval: "1mo",
       });
 
-      const cal = summary.calendarEvents;
-      const detail = summary.summaryDetail;
-      const price = summary.price;
+      const dividendMap = chart.events?.dividends ?? {};
+      const dividends = Object.values(dividendMap)
+        .map((d) => ({ date: new Date(d.date).toISOString(), amount: d.amount }))
+        .sort((a, b) => a.date.localeCompare(b.date));
 
-      const annualDividend = (detail as any)?.dividendRate ?? null;
-      const trailingRate = (detail as any)?.trailingAnnualDividendRate ?? null;
-      const frequency = detectFrequency(annualDividend, trailingRate);
-      const amountPerShare =
-        annualDividend && frequency ? annualDividend / frequency : null;
+      if (dividends.length === 0) {
+        // Non-dividend stock — skip (don't add to events)
+        continue;
+      }
 
-      const data: Omit<DividendCalendarEvent, "portfolios"> = {
+      const frequency = detectFrequencyFromHistory(dividends);
+      const lastDiv = dividends[dividends.length - 1];
+      const amountPerShare = lastDiv.amount;
+      const exDividendDate = lastDiv.date;
+      const annualDividend = amountPerShare * frequency;
+
+      // Estimate payment date ~15 days after ex-div
+      const payDate = new Date(exDividendDate);
+      payDate.setDate(payDate.getDate() + 15);
+      const paymentDate = payDate.toISOString();
+
+      const currentPrice = chart.meta?.regularMarketPrice ?? null;
+      const dividendYield = currentPrice && currentPrice > 0
+        ? annualDividend / currentPrice
+        : null;
+
+      const name =
+        (chart.meta as any)?.longName ||
+        chart.meta?.shortName ||
+        ticker;
+
+      const currency = chart.meta?.currency ?? "USD";
+
+      const data: Omit<DividendCalendarEvent, "portfolios" | "sharesHeld"> = {
         ticker,
-        name: (price as any)?.longName || (price as any)?.shortName || ticker,
-        exDividendDate: (cal as any)?.exDividendDate
-          ? new Date((cal as any).exDividendDate).toISOString()
-          : null,
-        paymentDate: (cal as any)?.dividendDate
-          ? new Date((cal as any).dividendDate).toISOString()
-          : null,
+        name,
+        exDividendDate,
+        paymentDate,
         amountPerShare,
         annualDividend,
         frequency,
-        dividendYield: (detail as any)?.dividendYield ?? null,
-        currency: (price as any)?.currency ?? "USD",
+        dividendYield,
+        currency,
       };
 
       cache.set(ticker, { data, fetchedAt: Date.now() });
-      events.push({ ...data, portfolios });
+      events.push({ ...data, portfolios, sharesHeld });
     } catch {
-      // Non-dividend stock or fetch error — still include with nulls
-      events.push({
-        ticker,
-        name: ticker,
-        exDividendDate: null,
-        paymentDate: null,
-        amountPerShare: null,
-        annualDividend: null,
-        frequency: null,
-        dividendYield: null,
-        currency: "USD",
-        portfolios,
-      });
+      // Non-dividend stock or fetch error — skip
     }
   }
 
-  // Filter to only dividend-paying stocks
-  const dividendStocks = events.filter((e) => e.annualDividend && e.annualDividend > 0);
-
-  return NextResponse.json(dividendStocks);
+  return NextResponse.json(events);
 }

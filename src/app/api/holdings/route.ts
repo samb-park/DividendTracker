@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCompanyName } from "@/lib/price";
+import { getPrice } from "@/lib/price";
 
 export async function POST(req: NextRequest) {
-  const { portfolioId, ticker, currency } = await req.json();
+  const { portfolioId, ticker } = await req.json();
   if (!portfolioId || !ticker) {
     return NextResponse.json({ error: "portfolioId and ticker required" }, { status: 400 });
   }
   const upperTicker = ticker.trim().toUpperCase();
-  const name = await getCompanyName(upperTicker);
+  const priceData = await getPrice(upperTicker);
+  if (!priceData) {
+    return NextResponse.json({ error: "Ticker not found" }, { status: 404 });
+  }
+  const currency = priceData.currency === "CAD" ? "CAD" : "USD";
 
   const holding = await prisma.holding.upsert({
     where: { portfolioId_ticker: { portfolioId, ticker: upperTicker } },
@@ -16,8 +20,8 @@ export async function POST(req: NextRequest) {
     create: {
       portfolioId,
       ticker: upperTicker,
-      name,
-      currency: currency ?? "USD",
+      name: priceData.name,
+      currency,
     },
   });
   return NextResponse.json(holding);

@@ -19,11 +19,6 @@ export default async function Home() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-amber-400 font-medium tracking-widest">PORTFOLIO DASHBOARD</h1>
-        <span className="text-muted-foreground text-xs">//</span>
-        <span className="text-xs text-muted-foreground">REAL-TIME MARKET DATA</span>
-      </div>
       <DashboardClient initialPortfolios={serialized} fxRate={fxRate} />
     </div>
   );

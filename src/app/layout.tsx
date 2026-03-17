@@ -18,6 +18,8 @@ export const viewport: Viewport = {
   themeColor: "#0d0d0d",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -35,7 +37,6 @@ export default function RootLayout({
         <div className="min-h-screen flex flex-col">
           <header className="border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 safe-top">
             <span className="text-primary font-medium tracking-widest text-sm">▶ PORTFOLIO</span>
-            <span className="text-muted-foreground text-xs">TRACKER v2.0</span>
           </header>
           <main className="flex-1 px-4 py-5 pb-24">
             {children}

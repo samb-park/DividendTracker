@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AddTransactionDialog } from "./add-transaction-dialog";
 import { AddHoldingDialog } from "./add-holding-dialog";
+import { HoldingDetailPanel } from "./holding-detail-panel";
 
 interface Transaction {
   id: string;
-  action: "BUY" | "SELL";
+  action: "BUY" | "SELL" | "DIVIDEND";
   quantity: string;
   price: string;
   commission: string;
+  date?: string;
+  notes?: string | null;
 }
 
 interface Holding {
@@ -30,9 +32,15 @@ interface PriceData {
   week52Low: number;
   fromHighPct: number;
   fromLowPct: number;
+  dividendRate: number | null;
+  dividendYield: number | null;
+  trailingAnnualDividendRate: number | null;
+  trailingAnnualDividendYield: number | null;
+  exDividendDate: string | null;
+  dividendDate: string | null;
 }
 
-interface HoldingRow {
+export interface HoldingRow {
   holding: Holding;
   shares: number;
   avgCost: number;
@@ -52,11 +60,9 @@ function calcHolding(holding: Holding): Omit<HoldingRow, "price" | "marketValue"
     (s, t) => s + parseFloat(t.quantity) * parseFloat(t.price) + parseFloat(t.commission),
     0
   );
-  // Use Questrade openQuantity if available; otherwise sum transactions
   const shares = holding.quantity != null
     ? parseFloat(holding.quantity)
     : totalBought - totalSold;
-  // Use Questrade averageEntryPrice if available; otherwise derive from transactions
   const avgCost = holding.avgCost != null
     ? parseFloat(holding.avgCost)
     : (totalBought > 0 ? totalCost / totalBought : 0);
@@ -76,14 +82,28 @@ export function HoldingsTable({
   portfolioId,
   initialHoldings,
   onHoldingsChange,
+  onDetailOpen,
+  readOnly = false,
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
-  onHoldingsChange: (rows: Array<{ ticker: string; marketValue: number; unrealizedPnL: number; unrealizedPnLPct: number; currency: "USD" | "CAD" }>) => void;
+  onHoldingsChange: (rows: Array<{ ticker: string; name?: string | null; marketValue: number; costBasis: number; unrealizedPnL: number; unrealizedPnLPct: number; dayChange: number; currency: "USD" | "CAD" }>) => void;
+  onDetailOpen?: (open: boolean) => void;
+  readOnly?: boolean;
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
   const [loadingPrices, setLoadingPrices] = useState(true);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [colMode, setColMode] = useState<"usd" | "pct" | "weight">("usd");
+
+  const cycleColMode = () =>
+    setColMode(m => m === "usd" ? "pct" : m === "pct" ? "weight" : "usd");
+
+  const selectRow = useCallback((id: string | null) => {
+    setSelectedRowId(id);
+    onDetailOpen?.(id !== null);
+  }, [onDetailOpen]);
 
   const fetchPrices = useCallback(async (hs: Holding[]) => {
     const results: Record<string, PriceData | null> = {};
@@ -124,15 +144,19 @@ export function HoldingsTable({
       const unrealizedPnLPct = base.costBasis > 0 ? (unrealizedPnL / base.costBasis) * 100 : 0;
       return { ...base, price, marketValue, unrealizedPnL, unrealizedPnLPct };
     })
-    .filter((r) => r.shares > 0);
+    .filter((r) => r.shares > 0 || (r.holding.quantity === null && r.holding.transactions.length === 0));
+
+  const totalMarketValue = rows.reduce((s, r) => s + r.marketValue, 0);
 
   useEffect(() => {
     onHoldingsChange(
       rows.map((r) => ({
         ticker: r.holding.ticker,
         marketValue: r.marketValue,
+        costBasis: r.costBasis,
         unrealizedPnL: r.unrealizedPnL,
         unrealizedPnLPct: r.unrealizedPnLPct,
+        dayChange: r.price ? r.price.change * r.shares : 0,
         name: r.holding.name,
         currency: r.holding.currency,
       }))
@@ -140,103 +164,88 @@ export function HoldingsTable({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prices, holdings]);
 
-  const deleteHolding = async (id: string) => {
-    if (!confirm("Delete this holding and all its transactions?")) return;
-    await fetch(`/api/holdings/${id}`, { method: "DELETE" });
-    await refresh();
-  };
+  const selectedRow = rows.find((r) => r.holding.id === selectedRowId) ?? null;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-muted-foreground">{rows.length} POSITIONS</span>
-        <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />
-      </div>
-      {rows.length === 0 ? (
-        <div className="text-muted-foreground text-xs py-8 text-center border border-dashed border-border">
-          NO POSITIONS — ADD A STOCK TO BEGIN
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-muted-foreground">{rows.length} POSITIONS</span>
+          {!readOnly && <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />}
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>TICKER</th>
-                <th>NAME</th>
-                <th className="text-right">SHARES</th>
-                <th className="text-right">AVG COST</th>
-                <th className="text-right">PRICE</th>
-                <th className="text-right">DAY</th>
-                <th className="text-right">MKT VALUE</th>
-                <th className="text-right">P&amp;L</th>
-                <th className="text-right">52W HIGH</th>
-                <th className="text-right">FROM HIGH</th>
-                <th className="text-right">52W LOW</th>
-                <th className="text-right">FROM LOW</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.holding.id}>
-                  <td className="font-medium text-accent">{row.holding.ticker}</td>
-                  <td className="text-muted-foreground text-xs max-w-32 truncate">{row.holding.name || "—"}</td>
-                  <td className="text-right tabular-nums">{fmt(row.shares, 4)}</td>
-                  <td className="text-right tabular-nums">{row.holding.currency === "CAD" ? "C$" : "$"}{fmt(row.avgCost)}</td>
-                  <td className="text-right tabular-nums">
-                    {loadingPrices ? (
-                      <span className="text-muted-foreground">...</span>
-                    ) : row.price ? (
-                      `${row.holding.currency === "CAD" ? "C$" : "$"}${fmt(row.price.price)}`
-                    ) : "—"}
-                  </td>
-                  <td className={`text-right tabular-nums ${row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
-                    {row.price ? fmtPct(row.price.changePercent) : "—"}
-                  </td>
-                  <td className="text-right tabular-nums">
-                    {row.marketValue > 0 ? `${row.holding.currency === "CAD" ? "C$" : "$"}${fmt(row.marketValue)}` : "—"}
-                  </td>
-                  <td className={`text-right tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
-                    {row.marketValue > 0 ? (
-                      <>
-                        {row.unrealizedPnL >= 0 ? "+" : ""}${fmt(Math.abs(row.unrealizedPnL))}
-                        <br />
-                        <span className="text-xs">{fmtPct(row.unrealizedPnLPct)}</span>
-                      </>
-                    ) : "—"}
-                  </td>
-                  <td className="text-right tabular-nums text-muted-foreground">
-                    {row.price?.week52High ? `$${fmt(row.price.week52High)}` : "—"}
-                  </td>
-                  <td className={`text-right tabular-nums ${row.price && row.price.fromHighPct < -10 ? "text-negative" : "text-muted-foreground"}`}>
-                    {row.price?.fromHighPct !== undefined ? fmtPct(row.price.fromHighPct) : "—"}
-                  </td>
-                  <td className="text-right tabular-nums text-muted-foreground">
-                    {row.price?.week52Low ? `$${fmt(row.price.week52Low)}` : "—"}
-                  </td>
-                  <td className={`text-right tabular-nums ${row.price && row.price.fromLowPct > 20 ? "text-positive" : "text-muted-foreground"}`}>
-                    {row.price?.fromLowPct !== undefined ? fmtPct(row.price.fromLowPct) : "—"}
-                  </td>
-                  <td>
-                    <div className="flex gap-1 justify-end">
-                      <AddTransactionDialog
-                        holdingId={row.holding.id}
-                        ticker={row.holding.ticker}
-                        onAdd={refresh}
-                      />
-                      <button
-                        className="btn-retro text-xs text-negative border-negative/30 hover:border-negative"
-                        onClick={() => deleteHolding(row.holding.id)}
-                      >
-                        [X]
-                      </button>
-                    </div>
-                  </td>
+        {rows.length === 0 ? (
+          <div className="text-muted-foreground text-xs py-8 text-center border border-dashed border-border">
+            NO POSITIONS — ADD A STOCK TO BEGIN
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-max">
+              <thead>
+                <tr>
+                  <th className="w-20">TICKER</th>
+                  <th className="text-right w-24">SHARES</th>
+                  <th className="text-right w-24">PRICE</th>
+                  <th className="text-right w-20">DAY</th>
+                  <th className="text-right w-28">MKT</th>
+                  <th
+                    className="text-right w-28 cursor-pointer select-none"
+                    onClick={cycleColMode}
+                    title="Click to toggle"
+                  >
+                    {colMode === "usd" ? "P&L $" : colMode === "pct" ? "P&L %" : "WEIGHT"} ▾
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const cur = row.holding.currency === "CAD" ? "C$" : "$";
+                  const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
+                  return (
+                    <tr
+                      key={row.holding.id}
+                      className={`cursor-pointer ${selectedRowId === row.holding.id ? "bg-border/30" : ""}`}
+                      onClick={() => selectRow(row.holding.id)}
+                    >
+                      <td className="font-medium text-accent">{row.holding.ticker}</td>
+                      <td className="text-right tabular-nums">{fmt(row.shares, 4)}</td>
+                      <td className="text-right tabular-nums">
+                        {loadingPrices ? (
+                          <span className="text-muted-foreground">...</span>
+                        ) : row.price ? `${cur}${fmt(row.price.price)}` : "—"}
+                      </td>
+                      <td className={`text-right tabular-nums ${row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
+                        {row.price ? fmtPct(row.price.changePercent) : "—"}
+                      </td>
+                      <td className="text-right tabular-nums">
+                        {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
+                      </td>
+                      <td className={`text-right tabular-nums ${colMode !== "weight" ? (row.unrealizedPnL >= 0 ? "text-positive" : "text-negative") : "text-muted-foreground"}`}>
+                        {row.marketValue > 0 ? (
+                          colMode === "usd"
+                            ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(row.unrealizedPnL))}`
+                            : colMode === "pct"
+                            ? fmtPct(row.unrealizedPnLPct)
+                            : `${weight.toFixed(1)}%`
+                        ) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Detail panel — inline on desktop */}
+      {selectedRow && (
+        <HoldingDetailPanel
+          row={selectedRow}
+          readOnly={readOnly}
+          onClose={() => selectRow(null)}
+          onRefresh={refresh}
+          totalMarketValue={totalMarketValue}
+        />
       )}
     </div>
   );

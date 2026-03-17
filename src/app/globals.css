@@ -44,6 +44,9 @@ body {
   font-family: 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Retro scanline overlay */
@@ -177,6 +180,26 @@ input:focus, select:focus {
 .cal-both {
   background: linear-gradient(135deg, hsl(var(--accent) / 0.2) 50%, hsl(var(--primary) / 0.2) 50%);
   border: 1px solid hsl(var(--accent) / 0.5);
+}
+
+/* Slide-in panel animation */
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* Clickable table row */
+tr.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Mobile table padding */
+@media (max-width: 767px) {
+  th, td { padding: 6px 4px; font-size: 11px; }
 }
 
 /* iOS standalone: prevent content under status bar */

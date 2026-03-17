@@ -1,16 +1,19 @@
+import { prisma } from "@/lib/db";
 import { SettingsClient } from "@/components/settings-client";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const portfolios = await prisma.portfolio.findMany({
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true },
+  });
+
+  const serialized = JSON.parse(JSON.stringify(portfolios));
+
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-amber-400 font-medium tracking-widest">SETTINGS</h1>
-        <span className="text-muted-foreground text-xs">//</span>
-        <span className="text-xs text-muted-foreground">BROKER &amp; APP CONFIG</span>
-      </div>
-      <SettingsClient />
+      <SettingsClient portfolios={serialized} />
     </div>
   );
 }

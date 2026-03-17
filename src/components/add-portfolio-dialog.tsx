@@ -27,7 +27,7 @@ export function AddPortfolioDialog({ onAdd }: { onAdd: (name: string) => void })
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-card border border-border p-6 w-80">
+      <div className="bg-card border border-border p-6 w-full max-w-sm mx-4">
         <div className="text-accent text-xs tracking-widest mb-4">▶ NEW PORTFOLIO</div>
         <input
           autoFocus

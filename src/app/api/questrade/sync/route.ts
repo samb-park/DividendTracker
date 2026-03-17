@@ -5,6 +5,7 @@ import {
   getAccounts,
   getPositions,
   getActivities,
+  getBalances,
   QtActivity,
 } from "@/lib/questrade";
 
@@ -25,10 +26,17 @@ function portfolioName(accountType: string, accountNumber: string): string {
 }
 
 // Map Questrade activity action to our TransactionAction
-function mapAction(action: string): "BUY" | "SELL" | null {
+function mapAction(action: string, type: string): "BUY" | "SELL" | "DIVIDEND" | null {
   if (action === "Buy") return "BUY";
   if (action === "Sell") return "SELL";
-  return null; // Dividends, deposits, fees — skip for now
+  if (
+    type === "Dividends" ||
+    action === "Dividends" ||
+    action === "Dividend" ||
+    action === "DIV" ||
+    action === "XDIV"
+  ) return "DIVIDEND";
+  return null; // deposits, fees, etc. — skip
 }
 
 export interface SyncResult {
@@ -93,6 +101,22 @@ export async function POST() {
 
       result.accountsSynced++;
 
+      // Sync balances (cash)
+      try {
+        const balances = await getBalances(activeServer, access_token, account.number);
+        const cadBal = balances.find((b) => b.currency === "CAD");
+        const usdBal = balances.find((b) => b.currency === "USD");
+        await prisma.portfolio.update({
+          where: { id: portfolio.id },
+          data: {
+            cashCAD: cadBal?.cash ?? 0,
+            cashUSD: usdBal?.cash ?? 0,
+          },
+        });
+      } catch (e: unknown) {
+        result.errors.push(`balances ${account.number}: ${e instanceof Error ? e.message : e}`);
+      }
+
       // Sync positions (current holdings)
       try {
         const positions = await getPositions(activeServer, access_token, account.number);
@@ -151,8 +175,11 @@ export async function POST() {
         }
 
         for (const act of activities) {
-          const action = mapAction(act.action);
-          if (!action || !act.symbol || act.quantity === 0) continue;
+          const action = mapAction(act.action, act.type);
+          if (!action || !act.symbol) continue;
+          // For BUY/SELL, quantity must be non-zero; for DIVIDEND, netAmount must be non-zero
+          if (action !== "DIVIDEND" && act.quantity === 0) continue;
+          if (action === "DIVIDEND" && act.netAmount <= 0) continue;
 
           // Find or create holding
           const holding = await prisma.holding.upsert({
@@ -171,15 +198,19 @@ export async function POST() {
             },
           });
 
-          // Dedupe: skip if a transaction with same date+qty+price+action exists
           const txDate = new Date(act.tradeDate);
+          const isDividend = action === "DIVIDEND";
+          const txQuantity = isDividend ? 1 : Math.abs(act.quantity);
+          const txPrice = isDividend ? Math.abs(act.netAmount) : Math.abs(act.price);
+
+          // Dedupe: skip if a transaction with same date+action+price exists
           const existing = await prisma.transaction.findFirst({
             where: {
               holdingId: holding.id,
               action,
               date: txDate,
-              quantity: Math.abs(act.quantity),
-              price: Math.abs(act.price),
+              quantity: txQuantity,
+              price: txPrice,
             },
           });
 
@@ -189,9 +220,9 @@ export async function POST() {
                 holdingId: holding.id,
                 action,
                 date: txDate,
-                quantity: Math.abs(act.quantity),
-                price: Math.abs(act.price),
-                commission: Math.abs(act.commission ?? 0),
+                quantity: txQuantity,
+                price: txPrice,
+                commission: isDividend ? 0 : Math.abs(act.commission ?? 0),
                 notes: act.description || null,
               },
             });

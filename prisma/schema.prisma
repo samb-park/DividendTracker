@@ -10,6 +10,8 @@ datasource db {
 model Portfolio {
   id        String    @id @default(cuid())
   name      String
+  cashCAD   Decimal?  @db.Decimal(18, 2)
+  cashUSD   Decimal?  @db.Decimal(18, 2)
   createdAt DateTime  @default(now())
   holdings  Holding[]
 }
@@ -45,6 +47,7 @@ model Transaction {
 enum TransactionAction {
   BUY
   SELL
+  DIVIDEND
 }
 
 enum Currency {

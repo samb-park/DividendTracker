@@ -15,7 +15,29 @@
       "Bash(lsof:*)",
       "Bash(npx ts-node:*)",
       "Bash(xargs kill:*)",
-      "Bash(npx next build:*)"
+      "Bash(npx next build:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ssh:*)",
+      "Bash(PGPASSWORD=XUfJetPEG7AC22f0i_GXkZKLe3dTn-b9 psql -h 100.88.130.67 -U dividendtracker -d dividendtracker -c \"\nSELECT h.ticker, h.currency, h.quantity, h.\\\\\"avgCost\\\\\", p.name as portfolio,\n       \\(SELECT COALESCE\\(SUM\\(t.quantity\\), 0\\) FROM \\\\\"Transaction\\\\\" t WHERE t.\\\\\"holdingId\\\\\" = h.id AND t.action = 'BUY'\\) as total_bought,\n       \\(SELECT COALESCE\\(SUM\\(t.quantity\\), 0\\) FROM \\\\\"Transaction\\\\\" t WHERE t.\\\\\"holdingId\\\\\" = h.id AND t.action = 'SELL'\\) as total_sold\nFROM \\\\\"Holding\\\\\" h\nJOIN \\\\\"Portfolio\\\\\" p ON p.id = h.\\\\\"portfolioId\\\\\"\nORDER BY p.name, h.ticker;\n\")",
+      "Bash(brew list:*)",
+      "Bash(npx tsx:*)",
+      "Bash(for ticker:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $ticker ===\")",
+      "Bash(done)",
+      "Bash(npm ls:*)",
+      "Bash(ls:*)",
+      "Bash(npm run:*)",
+      "Bash(grep -r [ALL] /Users/sangbong/Code/DividendTracker/.next/static/)",
+      "Bash(node -e \":*)",
+      "Bash(grep -r \"dividend\\\\|yield\\\\|paymentDate\\\\|exDate\" /Users/sangbong/Code/DividendTracker/node_modules/yahoo-finance2 --include=*.d.ts)",
+      "Bash(node:*)",
+      "Bash(grep -r \"DIV\\\\|XDIV\\\\|action.*value\\\\|questrade.*dividend\" /Users/sangbong/Code/DividendTracker --include=*.md --include=*.ts --include=*.tsx -i)",
+      "Bash(source .env)",
+      "Bash(psql \"$DATABASE_URL\" -c \"\\\\dT+ \"\"TransactionAction\"\"\")",
+      "Bash(1:*)",
+      "Bash(prisma db:*)"
     ]
   }
 }

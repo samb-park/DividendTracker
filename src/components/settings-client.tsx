@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
+import { AddPortfolioDialog } from "./add-portfolio-dialog";
 
 interface TokenStatus {
   hasToken: boolean;
@@ -18,8 +19,14 @@ interface SyncResult {
   errors: string[];
 }
 
-export function SettingsClient() {
+interface PortfolioItem {
+  id: string;
+  name: string;
+}
+
+export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: PortfolioItem[] }) {
   const router = useRouter();
+  const [portfolios, setPortfolios] = useState(initialPortfolios);
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,6 +35,14 @@ export function SettingsClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [tickers, setTickers] = useState<string[]>([]);
+  const [contribFreq, setContribFreq] = useState<"weekly" | "biweekly" | "monthly">("monthly");
+  const [contribAmount, setContribAmount] = useState("");
+  const [contribCurrency, setContribCurrency] = useState<"USD" | "CAD">("CAD");
+  const [targets, setTargets] = useState<Record<string, { pct: string }>>({});
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [savingTarget, setSavingTarget] = useState<string | null>(null);
+
   const loadStatus = async () => {
     const res = await fetch("/api/questrade/token");
     const data = await res.json();
@@ -35,6 +50,22 @@ export function SettingsClient() {
   };
 
   useEffect(() => { loadStatus(); }, []);
+
+  useEffect(() => {
+    fetch("/api/settings/investment").then(r => r.json()).then(data => {
+      setTickers(data.tickers ?? []);
+      if (data.contribution) {
+        setContribFreq(data.contribution.frequency);
+        setContribAmount(String(data.contribution.amount));
+        setContribCurrency(data.contribution.currency);
+      }
+      const t: Record<string, { pct: string }> = {};
+      for (const [tk, v] of Object.entries(data.targets ?? {})) {
+        t[tk] = { pct: String((v as any).pct) };
+      }
+      setTargets(t);
+    });
+  }, []);
 
   const handleSave = async () => {
     if (!tokenInput.trim()) return;
@@ -71,7 +102,6 @@ export function SettingsClient() {
       setSyncResult(data.result);
       if (data.ok) {
         await loadStatus();
-        router.push("/");
       } else {
         setError(data.error ?? "Sync completed with errors");
         await loadStatus();
@@ -83,7 +113,7 @@ export function SettingsClient() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeleteToken = async () => {
     if (!confirm("Remove Questrade token?")) return;
     await fetch("/api/questrade/token", { method: "DELETE" });
     setSyncResult(null);
@@ -92,8 +122,47 @@ export function SettingsClient() {
     await loadStatus();
   };
 
+  const refreshPortfolios = async () => {
+    const res = await fetch("/api/portfolios");
+    const data = await res.json();
+    setPortfolios(data.map((p: any) => ({ id: p.id, name: p.name })));
+  };
+
+  const deletePortfolio = async (id: string) => {
+    if (!confirm("Delete this portfolio and all its holdings?")) return;
+    await fetch(`/api/portfolios/${id}`, { method: "DELETE" });
+    await refreshPortfolios();
+  };
+
   return (
     <div className="space-y-8">
+      {/* Portfolio Management */}
+      <div>
+        <div className="text-accent text-xs tracking-widest mb-4">
+          PORTFOLIO MANAGEMENT
+        </div>
+        <div className="border border-border bg-card p-4 space-y-3">
+          {portfolios.length === 0 ? (
+            <div className="text-muted-foreground text-xs text-center py-4">NO PORTFOLIOS</div>
+          ) : (
+            portfolios.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm">
+                <span>{p.name}</span>
+                <button
+                  onClick={() => deletePortfolio(p.id)}
+                  className="btn-retro text-negative border-negative/30 hover:border-negative p-1"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))
+          )}
+          <div className="pt-2 border-t border-border">
+            <AddPortfolioDialog onAdd={async () => { await refreshPortfolios(); router.refresh(); }} />
+          </div>
+        </div>
+      </div>
+
       {/* Questrade Section */}
       <div>
         <div className="text-accent text-xs tracking-widest mb-4">
@@ -133,7 +202,7 @@ export function SettingsClient() {
               )}
             </div>
             <button
-              onClick={handleDelete}
+              onClick={handleDeleteToken}
               className="btn-retro text-negative border-negative/30 hover:border-negative p-1"
             >
               <Trash2 size={14} />
@@ -192,7 +261,7 @@ export function SettingsClient() {
         {syncResult && (
           <div className="border border-border bg-card p-4 mt-4 text-xs space-y-2">
             <div className="text-accent tracking-widest mb-2">SYNC RESULT</div>
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-lg font-medium tabular-nums text-primary">
                   {syncResult.accountsSynced}
@@ -229,6 +298,86 @@ export function SettingsClient() {
           </div>
         )}
       </div>
+
+      {/* Contribution Plan */}
+      <div>
+        <div className="text-accent text-xs tracking-widest mb-4">CONTRIBUTION PLAN</div>
+        <div className="border border-border bg-card p-4 space-y-4">
+          <div>
+            <div className="text-[10px] tracking-widest text-muted-foreground mb-2">FREQUENCY</div>
+            <div className="flex gap-2">
+              {(["weekly", "biweekly", "monthly"] as const).map(f => (
+                <button key={f}
+                  className={`btn-retro text-xs ${contribFreq === f ? "btn-retro-primary" : ""}`}
+                  onClick={() => setContribFreq(f)}>
+                  [{f === "biweekly" ? "BI-WEEKLY" : f.toUpperCase()}]
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min="0" step="any"
+              value={contribAmount} onChange={e => setContribAmount(e.target.value)}
+              placeholder="500" className="flex-1" />
+            {(["USD", "CAD"] as const).map(c => (
+              <button key={c}
+                className={`btn-retro text-xs ${contribCurrency === c ? "btn-retro-primary" : ""}`}
+                onClick={() => setContribCurrency(c)}>[{c}]</button>
+            ))}
+          </div>
+          <button
+            disabled={savingPlan || !contribAmount}
+            onClick={async () => {
+              setSavingPlan(true);
+              await fetch("/api/settings/investment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "contribution", frequency: contribFreq, amount: parseFloat(contribAmount), currency: contribCurrency }),
+              });
+              setSavingPlan(false);
+            }}
+            className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40">
+            {savingPlan ? "SAVING..." : "[ SAVE PLAN ]"}
+          </button>
+        </div>
+      </div>
+
+      {/* Ticker Targets */}
+      {tickers.length > 0 && (
+        <div>
+          <div className="text-accent text-xs tracking-widest mb-4">TICKER TARGETS</div>
+          <div className="border border-border bg-card p-4 space-y-3">
+            <div className="text-[10px] text-muted-foreground mb-1">ALLOCATION TARGET (%) — MUST SUM TO 100</div>
+            {tickers.map(ticker => {
+              const t = targets[ticker] ?? { pct: "" };
+              return (
+                <div key={ticker} className="flex items-center gap-2">
+                  <span className="text-xs font-medium w-16 shrink-0">{ticker}</span>
+                  <input type="number" min="0" max="100" step="any" placeholder="0"
+                    value={t.pct}
+                    onChange={e => setTargets(prev => ({ ...prev, [ticker]: { pct: e.target.value } }))}
+                    className="flex-1 !py-1" />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <button
+                    disabled={savingTarget === ticker || !t.pct}
+                    className="btn-retro text-[10px] disabled:opacity-40"
+                    onClick={async () => {
+                      setSavingTarget(ticker);
+                      await fetch("/api/settings/investment", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(t.pct) }),
+                      });
+                      setSavingTarget(null);
+                    }}>
+                    {savingTarget === ticker ? "..." : "[SAVE]"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* App Info */}
       <div>

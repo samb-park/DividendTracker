@@ -55,6 +55,26 @@ export interface QtActivity {
   type: string;          // "Trades", "Dividends", etc.
 }
 
+export interface QtBalance {
+  currency: string;
+  cash: number;
+  marketValue: number;
+  totalEquity: number;
+}
+
+export async function getBalances(
+  apiServer: string,
+  accessToken: string,
+  accountNumber: string
+): Promise<QtBalance[]> {
+  const res = await fetch(`${apiServer}v1/accounts/${accountNumber}/balances`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`getBalances failed: ${res.status}`);
+  const data = await res.json();
+  return data.perCurrencyBalances ?? [];
+}
+
 export async function exchangeRefreshToken(refreshToken: string): Promise<QtTokenResponse> {
   const url = `https://login.questrade.com/oauth2/token?grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`;
   const res = await fetch(url, { method: "POST" });

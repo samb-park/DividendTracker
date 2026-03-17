@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface DividendCalendarEvent {
@@ -14,6 +14,7 @@ interface DividendCalendarEvent {
   dividendYield: number | null;
   currency: string;
   portfolios: string[];
+  sharesHeld: number;
 }
 
 interface DayEvent {
@@ -22,6 +23,7 @@ interface DayEvent {
   type: "exdiv" | "payment";
   amount: number | null;
   currency: string;
+  sharesHeld: number;
 }
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -37,17 +39,29 @@ const FREQ_LABEL: Record<number, string> = {
   12: "MONTHLY",
 };
 
-/** Project future dividend dates based on frequency and a base date */
-function projectDates(baseDateStr: string, frequency: number, offsetMonths: number): string[] {
+/** Project dividend dates anchored to today so future dates are always generated */
+function projectDates(baseDateStr: string, frequency: number, windowDays = 120): string[] {
   if (frequency <= 0) return [];
   const intervalMonths = 12 / frequency;
-  const base = new Date(baseDateStr);
+  const base = new Date(baseDateStr + "T12:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + windowDays);
+
+  // Fast-forward base to the first occurrence on or after today
+  const d = new Date(base);
+  while (d < today) {
+    d.setMonth(d.getMonth() + intervalMonths);
+  }
+  // Step back one interval to include the most recent past occurrence too
+  d.setMonth(d.getMonth() - intervalMonths);
+
   const dates: string[] = [];
-  // Project up to 12 months from base
-  for (let i = 0; i <= frequency; i++) {
-    const d = new Date(base);
-    d.setMonth(d.getMonth() + Math.round(i * intervalMonths) + offsetMonths);
-    dates.push(d.toISOString().split("T")[0]);
+  const cur = new Date(d);
+  while (cur <= windowEnd) {
+    dates.push(cur.toISOString().split("T")[0]);
+    cur.setMonth(cur.getMonth() + intervalMonths);
   }
   return dates;
 }
@@ -69,14 +83,14 @@ function buildEventMap(
   }
 
   for (const ev of events) {
-    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency };
+    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency, sharesHeld: ev.sharesHeld };
 
     // Ex-dividend dates (real + predicted)
     const exDates: string[] = [];
     if (ev.exDividendDate) {
       exDates.push(ev.exDividendDate.split("T")[0]);
       if (ev.frequency) {
-        exDates.push(...projectDates(ev.exDividendDate, ev.frequency, 0));
+        exDates.push(...projectDates(ev.exDividendDate.split("T")[0], ev.frequency));
       }
     }
     for (const d of exDates) addToMap(d, { ...base, type: "exdiv" });
@@ -86,7 +100,7 @@ function buildEventMap(
     if (ev.paymentDate) {
       payDates.push(ev.paymentDate.split("T")[0]);
       if (ev.frequency) {
-        payDates.push(...projectDates(ev.paymentDate, ev.frequency, 0));
+        payDates.push(...projectDates(ev.paymentDate.split("T")[0], ev.frequency));
       }
     }
     for (const d of payDates) addToMap(d, { ...base, type: "payment" });
@@ -108,12 +122,12 @@ function buildUpcoming(events: DividendCalendarEvent[]): {
   const upcoming: { date: string; event: DayEvent }[] = [];
 
   for (const ev of events) {
-    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency };
+    const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency, sharesHeld: ev.sharesHeld };
 
     const addIfUpcoming = (dateStr: string | null, type: "exdiv" | "payment") => {
       if (!dateStr) return;
       const allDates: string[] = [dateStr.split("T")[0]];
-      if (ev.frequency) allDates.push(...projectDates(dateStr, ev.frequency, 0));
+      if (ev.frequency) allDates.push(...projectDates(dateStr.split("T")[0], ev.frequency));
       for (const d of allDates) {
         const dt = new Date(d);
         if (dt >= today && dt <= cutoff) {
@@ -152,11 +166,53 @@ export function CalendarClient() {
   const [month, setMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
   useEffect(() => {
     fetch("/api/calendar")
       .then((r) => r.json())
       .then((data) => { setEvents(data); setLoading(false); })
       .catch(() => { setError("Failed to load calendar data"); setLoading(false); });
+  }, []);
+
+  // Swipe to change month
+  useEffect(() => {
+    const el = calendarRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      touchStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStartRef.current) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStartRef.current.x;
+      const dy = t.clientY - touchStartRef.current.y;
+      touchStartRef.current = null;
+
+      if (Math.abs(dx) < 50) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+      if (dx < 0) {
+        // Swipe left → next month
+        setMonth(m => { if (m === 11) { setYear(y => y + 1); return 0; } return m + 1; });
+        setSelectedDay(null);
+      } else {
+        // Swipe right → previous month
+        setMonth(m => { if (m === 0) { setYear(y => y - 1); return 11; } return m - 1; });
+        setSelectedDay(null);
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
   }, []);
 
   const prevMonth = () => {
@@ -200,7 +256,7 @@ export function CalendarClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={calendarRef} className="space-y-6">
       {/* Legend */}
       <div className="flex gap-4 text-[10px] tracking-widest">
         <span className="flex items-center gap-1">
@@ -315,6 +371,11 @@ export function CalendarClient() {
                     {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.amount)}/sh
                   </div>
                 )}
+                {e.type === "payment" && e.amount && e.sharesHeld > 0 && (
+                  <div className="text-primary tabular-nums text-xs mt-1">
+                    TOTAL: {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.amount * e.sharesHeld)}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -339,6 +400,7 @@ export function CalendarClient() {
                   <th className="text-left">TYPE</th>
                   <th className="text-left">DATE</th>
                   <th className="text-right">AMOUNT/SH</th>
+                  <th className="text-right hidden sm:table-cell">TOTAL</th>
                   <th className="text-left hidden sm:table-cell">PORTFOLIO</th>
                 </tr>
               </thead>
@@ -369,6 +431,11 @@ export function CalendarClient() {
                       <td className="text-right tabular-nums">
                         {u.event.amount
                           ? `${u.event.currency === "CAD" ? "C$" : "$"}${fmt2(u.event.amount)}`
+                          : "—"}
+                      </td>
+                      <td className="text-right tabular-nums text-primary hidden sm:table-cell">
+                        {u.event.amount && u.event.sharesHeld > 0
+                          ? `${u.event.currency === "CAD" ? "C$" : "$"}${fmt2(u.event.amount * u.event.sharesHeld)}`
                           : "—"}
                       </td>
                       <td className="text-muted-foreground hidden sm:table-cell">

@@ -1,11 +1,12 @@
 "use client";
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -19,6 +20,26 @@ interface HoldingData {
   marketValue: number;
   unrealizedPnL: number;
   unrealizedPnLPct: number;
+  currency: "USD" | "CAD";
+}
+
+interface Transaction {
+  id: string;
+  action: "BUY" | "SELL";
+  quantity: string;
+  price: string;
+  commission: string;
+  date: string;
+}
+
+interface HoldingWithTxn {
+  id: string;
+  ticker: string;
+  name: string | null;
+  currency: "USD" | "CAD";
+  quantity: string | null;
+  avgCost: string | null;
+  transactions: Transaction[];
 }
 
 const COLORS = [
@@ -39,7 +60,68 @@ const RETRO_TOOLTIP_STYLE = {
   color: "#e8e6d9",
 };
 
-export function PortfolioCharts({ holdings }: { holdings: HoldingData[] }) {
+const RANGES = ["1M", "3M", "6M", "1Y", "ALL"] as const;
+
+function fmt(n: number) {
+  return n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+interface EquityPoint {
+  date: string;
+  value: number;
+  cost: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+  const value = payload.find((p: any) => p.dataKey === "value")?.value ?? 0;
+  const cost = payload.find((p: any) => p.dataKey === "cost")?.value ?? 0;
+  const pnl = value - cost;
+  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+  return (
+    <div style={RETRO_TOOLTIP_STYLE} className="p-2">
+      <div style={{ color: "#888", marginBottom: 4 }}>{label}</div>
+      <div>Value: <span style={{ color: "hsl(142,69%,58%)" }}>${fmt(value)}</span></div>
+      <div>Cost: <span style={{ color: "#888" }}>${fmt(cost)}</span></div>
+      <div style={{ borderTop: "1px solid #333", marginTop: 4, paddingTop: 4, color: pnl >= 0 ? "hsl(142,69%,58%)" : "hsl(0,70%,60%)" }}>
+        P&L: {pnl >= 0 ? "+" : ""}${fmt(Math.abs(pnl))} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+      </div>
+    </div>
+  );
+}
+
+function useChartHeight(mobile: number, desktop: number) {
+  const [h, setH] = useState(desktop);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 768px)");
+    const update = () => setH(mql.matches ? desktop : mobile);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, [mobile, desktop]);
+  return h;
+}
+
+export function PortfolioCharts({
+  holdings,
+  holdingsWithTransactions,
+  fxRate,
+  showAllocation = false,
+  totalCashCAD = 0,
+}: {
+  holdings: HoldingData[];
+  holdingsWithTransactions?: HoldingWithTxn[];
+  fxRate?: number;
+  showAllocation?: boolean;
+  totalCashCAD?: number;
+}) {
+  const [range, setRange] = useState<(typeof RANGES)[number]>("3M");
+  const [equityData, setEquityData] = useState<EquityPoint[]>([]);
+  const [loadingPnl, setLoadingPnl] = useState(false);
+  const lineChartHeight = useChartHeight(160, 220);
+  const pieChartHeight = useChartHeight(160, 200);
+
   const pieData = holdings
     .filter((h) => h.marketValue > 0)
     .map((h) => ({
@@ -47,21 +129,182 @@ export function PortfolioCharts({ holdings }: { holdings: HoldingData[] }) {
       value: Math.round(h.marketValue * 100) / 100,
     }));
 
-  const barData = holdings
-    .filter((h) => h.marketValue > 0)
-    .sort((a, b) => b.unrealizedPnLPct - a.unrealizedPnLPct)
-    .map((h) => ({
-      ticker: h.ticker,
-      pnl: Math.round(h.unrealizedPnLPct * 100) / 100,
-    }));
+  const fetchEquityData = useCallback(async () => {
+    if (!holdingsWithTransactions || holdingsWithTransactions.length === 0) return;
+    setLoadingPnl(true);
+
+    const fx = fxRate ?? 1;
+
+    // For ALL, find the earliest BUY transaction date across all holdings
+    let queryParam: string;
+    if (range === "ALL") {
+      const earliest = holdingsWithTransactions
+        .flatMap(h => h.transactions.filter(t => t.action === "BUY"))
+        .map(t => t.date?.slice(0, 10) ?? "")
+        .filter(Boolean)
+        .sort()[0];
+      queryParam = earliest ? `from=${earliest}` : `range=1y`;
+    } else {
+      queryParam = `range=${range.toLowerCase()}`;
+    }
+
+    // Fetch historical prices for all tickers
+    const histories: Record<string, { date: string; close: number }[]> = {};
+    await Promise.all(
+      holdingsWithTransactions.map(async (h) => {
+        try {
+          const res = await fetch(`/api/price/${h.ticker}/history?${queryParam}`);
+          if (res.ok) {
+            histories[h.ticker] = await res.json();
+          }
+        } catch {
+          // skip
+        }
+      })
+    );
+
+    // Collect all chart dates
+    const dateSet = new Set<string>();
+    for (const hist of Object.values(histories)) {
+      for (const point of hist) {
+        dateSet.add(point.date);
+      }
+    }
+    const dates = Array.from(dateSet).sort();
+
+    const result = dates.map((date) => {
+      let totalValue = 0;
+      let totalCost = 0;
+
+      for (const h of holdingsWithTransactions) {
+        const hist = histories[h.ticker];
+        if (!hist) continue;
+
+        const point = hist.filter((p) => p.date <= date).pop();
+        if (!point) continue;
+
+        const currentQty = h.quantity != null ? parseFloat(h.quantity) : 0;
+        const avgCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
+        const currencyMult = h.currency === "USD" ? fx : 1;
+        const txns = h.transactions;
+
+        // Compute shares held at this date by undoing transactions after this date
+        let sharesAtDate = currentQty;
+        if (txns && txns.length > 0) {
+          for (const txn of txns) {
+            const txnDate = txn.date ? txn.date.slice(0, 10) : "";
+            if (txnDate > date) {
+              const qty = parseFloat(txn.quantity);
+              if (txn.action === "BUY") {
+                sharesAtDate -= qty;
+              } else if (txn.action === "SELL") {
+                sharesAtDate += qty;
+              }
+              // DIVIDEND transactions are skipped — they don't affect share count
+            }
+          }
+        }
+        if (sharesAtDate < 0) sharesAtDate = 0;
+
+        totalValue += sharesAtDate * point.close * currencyMult;
+        totalCost += sharesAtDate * avgCost * currencyMult;
+      }
+
+      return {
+        date,
+        value: Math.round((totalValue + totalCashCAD) * 100) / 100,
+        cost: Math.round(totalCost * 100) / 100,
+      };
+    });
+
+    setEquityData(result);
+    setLoadingPnl(false);
+  }, [holdingsWithTransactions, fxRate, range]);
+
+  useEffect(() => {
+    fetchEquityData();
+  }, [fetchEquityData]);
 
   if (holdings.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 gap-4 mt-6">
-      <div className="border border-border p-4 bg-card">
-        <div className="text-accent text-xs tracking-widest mb-4">▶ ALLOCATION</div>
-        <ResponsiveContainer width="100%" height={200}>
+    <div className="mb-6 space-y-4">
+      {/* Total Equity Chart */}
+      {holdingsWithTransactions && holdingsWithTransactions.length > 0 && (
+        <div className="border border-border p-4 bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-accent text-xs tracking-widest">&#9654; TOTAL EQUITY</div>
+            <div className="flex gap-1">
+              {RANGES.map((r) => (
+                <button
+                  key={r}
+                  className={`btn-retro text-[10px] px-2 py-0.5 ${range === r ? "btn-retro-primary" : ""}`}
+                  onClick={() => setRange(r)}
+                >
+                  [{r}]
+                </button>
+              ))}
+            </div>
+          </div>
+          {loadingPnl ? (
+            <div className="text-muted-foreground text-xs text-center py-8">Loading...</div>
+          ) : equityData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={lineChartHeight}>
+                <LineChart data={equityData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="#222" />
+                  <XAxis
+                    dataKey="date"
+                    tick={false}
+                    axisLine={{ stroke: "#333" }}
+                    height={4}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: "#666", fontFamily: "monospace" }}
+                    axisLine={{ stroke: "#333" }}
+                    tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="#666"
+                    strokeDasharray="4 3"
+                    strokeWidth={1}
+                    dot={false}
+                    activeDot={{ r: 2, fill: "#666" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="hsl(142, 69%, 58%)"
+                    strokeWidth={1.5}
+                    dot={false}
+                    activeDot={{ r: 3, fill: "hsl(142, 69%, 58%)" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="flex gap-4 mt-2 ml-1">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px solid hsl(142,69%,58%)" }} />
+                  TOTAL VALUE
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px dashed #666" }} />
+                  COST BASIS
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-muted-foreground text-xs text-center py-8">NO DATA</div>
+          )}
+        </div>
+      )}
+
+      {/* Allocation Pie Chart */}
+      {showAllocation && <div className="border border-border p-4 bg-card">
+        <div className="text-accent text-xs tracking-widest mb-4">&#9654; ALLOCATION</div>
+        <ResponsiveContainer width="100%" height={pieChartHeight}>
           <PieChart>
             <Pie
               data={pieData}
@@ -85,37 +328,7 @@ export function PortfolioCharts({ holdings }: { holdings: HoldingData[] }) {
             />
           </PieChart>
         </ResponsiveContainer>
-      </div>
-      <div className="border border-border p-4 bg-card">
-        <div className="text-accent text-xs tracking-widest mb-4">▶ P&amp;L %</div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="2 2" stroke="#222" />
-            <XAxis
-              dataKey="ticker"
-              tick={{ fontSize: 9, fill: "#666", fontFamily: "monospace" }}
-              axisLine={{ stroke: "#333" }}
-            />
-            <YAxis
-              tick={{ fontSize: 9, fill: "#666", fontFamily: "monospace" }}
-              axisLine={{ stroke: "#333" }}
-              tickFormatter={(v) => `${v}%`}
-            />
-            <Tooltip
-              contentStyle={RETRO_TOOLTIP_STYLE}
-              formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v.toFixed(2)}%`, "P&L"]}
-            />
-            <Bar dataKey="pnl" maxBarSize={40} radius={[0, 0, 0, 0]}>
-              {barData.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.pnl >= 0 ? "hsl(142, 69%, 58%)" : "hsl(0, 70%, 70%)"}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -52,7 +52,7 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-card border border-border p-6 w-96">
+      <div className="bg-card border border-border p-6 w-full max-w-md mx-4">
         <div className="text-accent text-xs tracking-widest mb-4">▶ ADD TRANSACTION — {ticker}</div>
         <div className="flex gap-2 mb-4">
           {(["BUY", "SELL"] as const).map((a) => (

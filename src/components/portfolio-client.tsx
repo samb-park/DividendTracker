@@ -3,11 +3,10 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
-import { DividendIncomeChart } from "./dividend-income-chart";
 
 interface Transaction {
   id: string;
-  action: "BUY" | "SELL";
+  action: "BUY" | "SELL" | "DIVIDEND";
   quantity: string;
   price: string;
   commission: string;
@@ -47,6 +46,10 @@ function fmt(n: number, d = 2) {
   return n.toLocaleString("en-CA", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
+function fmtPct(n: number) {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
 function mergeHoldings(portfolios: Portfolio[]): Holding[] {
   const map = new Map<string, Holding>();
   for (const p of portfolios) {
@@ -75,27 +78,29 @@ function mergeHoldings(portfolios: Portfolio[]): Holding[] {
   return Array.from(map.values());
 }
 
-export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
-  const [portfolios] = useState(initialPortfolios);
+export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number; }) {
+  const [portfolios, setPortfolios] = useState(initialPortfolios);
+  const [activeTab, setActiveTab] = useState<"all" | string>("all");
   const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<"all" | string>("all");
-  const [divAnnual, setDivAnnual] = useState<number | null>(null);
-  const [divMonthly, setDivMonthly] = useState<number | null>(null);
-  const [divShowMonthly, setDivShowMonthly] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/fx").then((r) => r.json()).then((d) => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
   }, []);
 
-  const displayPortfolios = useMemo(() =>
-    selectedPortfolioId === "all" ? portfolios : portfolios.filter(p => p.id === selectedPortfolioId),
-    [portfolios, selectedPortfolioId]
-  );
+  const isAllMode = activeTab === "all";
+  const activePortfolio = isAllMode ? null : portfolios.find((p) => p.id === activeTab) ?? null;
 
-  const allHoldings = useMemo(() => mergeHoldings(displayPortfolios), [displayPortfolios]);
+  const displayHoldings = useMemo(() => {
+    if (isAllMode) return mergeHoldings(portfolios);
+    return activePortfolio?.holdings ?? [];
+  }, [isAllMode, activePortfolio, portfolios]);
 
+  const displayPortfolioId = isAllMode ? "all" : activePortfolio?.id ?? "";
+
+  // Convert a value in its native currency to display currency
   const toDisplay = useCallback((value: number, currency: "USD" | "CAD") => {
     if (displayCurrency === "CAD") {
       return currency === "USD" ? value * fxRate : value;
@@ -106,21 +111,25 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
 
+  // Cash from relevant portfolios
   const totalCash = useMemo(() => {
-    return displayPortfolios.reduce((sum, p) => {
+    const sources = isAllMode ? portfolios : activePortfolio ? [activePortfolio] : [];
+    return sources.reduce((sum, p) => {
       const cad = parseFloat(p.cashCAD ?? "0") || 0;
       const usd = parseFloat(p.cashUSD ?? "0") || 0;
       return sum + toDisplay(cad, "CAD") + toDisplay(usd, "USD");
     }, 0);
-  }, [displayPortfolios, toDisplay]);
+  }, [isAllMode, portfolios, activePortfolio, toDisplay]);
 
+  // Cash in CAD for chart (chart uses CAD as base, USD * fxRate)
   const totalCashCAD = useMemo(() => {
-    return displayPortfolios.reduce((sum, p) => {
+    const sources = isAllMode ? portfolios : activePortfolio ? [activePortfolio] : [];
+    return sources.reduce((sum, p) => {
       const cad = parseFloat(p.cashCAD ?? "0") || 0;
       const usd = parseFloat(p.cashUSD ?? "0") || 0;
       return sum + cad + usd * fxRate;
     }, 0);
-  }, [displayPortfolios, fxRate]);
+  }, [isAllMode, portfolios, activePortfolio, fxRate]);
 
   const holdingsValue = holdingSummaries.reduce((s, h) => s + toDisplay(h.marketValue, h.currency), 0);
   const totalValue = holdingsValue + totalCash;
@@ -131,22 +140,22 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const todayPnLPct = holdingsValue > 0 ? (todayPnL / (holdingsValue - todayPnL)) * 100 : 0;
 
   return (
-    <div>
-      {/* Account selector + currency toggle */}
+    <div className={`transition-[padding] duration-200 ${detailOpen ? "md:pr-[29rem] lg:pr-[33rem] xl:pr-[50%]" : ""}`}>
+      {/* Portfolio tabs + currency toggle */}
       <div className="flex flex-wrap items-center gap-2 mb-6 border-b border-border pb-3">
         <button
-          className={`btn-retro text-xs ${selectedPortfolioId === "all" ? "btn-retro-primary" : ""}`}
-          onClick={() => setSelectedPortfolioId("all")}
+          className={`btn-retro text-xs ${isAllMode ? "btn-retro-primary" : ""}`}
+          onClick={() => { setActiveTab("all"); setHoldingSummaries([]); }}
         >
           [ALL]
         </button>
         {portfolios.map((p) => (
           <button
             key={p.id}
-            className={`btn-retro text-xs ${selectedPortfolioId === p.id ? "btn-retro-primary" : ""}`}
-            onClick={() => setSelectedPortfolioId(p.id)}
+            className={`btn-retro text-xs ${activeTab === p.id ? "btn-retro-primary" : ""}`}
+            onClick={() => { setActiveTab(p.id); setHoldingSummaries([]); }}
           >
-            [{p.name}]
+            {`[${p.name.toUpperCase()}]`}
           </button>
         ))}
         <div className="ml-auto flex gap-1">
@@ -165,7 +174,19 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         </div>
       </div>
 
-      {/* Summary grid */}
+
+      {/* P&L Line Chart */}
+      {holdingSummaries.length > 0 && (
+        <PortfolioCharts
+          holdings={holdingSummaries}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          holdingsWithTransactions={displayHoldings as any}
+          fxRate={fxRate}
+          totalCashCAD={totalCashCAD}
+        />
+      )}
+
+      {/* Summary bar between chart and positions */}
       {holdingSummaries.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-px border border-border bg-border mb-6">
           <div className="bg-card p-3">
@@ -196,52 +217,24 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               <span className="text-xs ml-1">({todayPnL >= 0 ? "+" : ""}{todayPnLPct.toFixed(2)}%)</span>
             </div>
           </div>
-          <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
-            {divAnnual !== null && (
-              <div>
-                <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
-                  {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
-                </div>
-                <div className="text-sm font-medium tabular-nums text-primary">
-                  {currencySymbol}{fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
-      {/* Charts */}
-      {holdingSummaries.length > 0 && (
-        <PortfolioCharts
-          holdings={holdingSummaries}
-          holdingsWithTransactions={allHoldings}
-          fxRate={fxRate}
-          showAllocation
-          totalCashCAD={totalCashCAD}
-        />
-      )}
-
-      {/* Dividend Income Chart */}
-      <DividendIncomeChart
-        selectedPortfolioId={selectedPortfolioId}
-        fxRate={fxRate}
-        displayCurrency={displayCurrency}
-        onCurrentYearSummary={(annual, monthly) => {
-          setDivAnnual(annual);
-          setDivMonthly(monthly);
-        }}
-      />
-
-      {/* Hidden table just to fetch prices and compute summaries */}
-      <div className="hidden">
+      {/* Holdings table */}
+      {displayHoldings.length > 0 || portfolios.length > 0 ? (
         <HoldingsTable
-          portfolioId="all"
-          initialHoldings={allHoldings}
+          key={displayPortfolioId}
+          portfolioId={displayPortfolioId}
+          initialHoldings={displayHoldings}
           onHoldingsChange={setHoldingSummaries}
-          readOnly
+          onDetailOpen={setDetailOpen}
+          readOnly={isAllMode}
         />
-      </div>
+      ) : (
+        <div className="text-muted-foreground text-xs py-12 text-center border border-dashed border-border">
+          NO PORTFOLIOS — CREATE ONE IN SETTINGS
+        </div>
+      )}
     </div>
   );
 }
