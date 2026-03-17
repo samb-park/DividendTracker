@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -11,6 +11,7 @@ import {
   Cell,
 } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { fmt } from "@/lib/utils";
 
 interface DividendItem {
   ticker: string;
@@ -40,14 +41,14 @@ const RETRO_TOOLTIP_STYLE = {
   color: "#e8e6d9",
 };
 
-function fmt(n: number) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function toDisplayAmt(amount: number, currency: string, displayCurrency: "CAD" | "USD", fxRate: number) {
   if (displayCurrency === "CAD") return currency === "USD" ? amount * fxRate : amount;
   return currency === "CAD" ? amount / fxRate : amount;
 }
+
+const _NOW = new Date();
+const CURRENT_YEAR = _NOW.getFullYear();
+const CURRENT_MONTH = _NOW.toISOString().slice(0, 7); // "YYYY-MM"
 
 export function DividendIncomeChart({
   selectedPortfolioId,
@@ -60,9 +61,6 @@ export function DividendIncomeChart({
   displayCurrency: "CAD" | "USD";
   onCurrentYearSummary?: (annualTotal: number, monthlyAvg: number) => void;
 }) {
-  const NOW = new Date();
-  const CURRENT_YEAR = NOW.getFullYear();
-  const CURRENT_MONTH = NOW.toISOString().slice(0, 7); // "YYYY-MM"
 
   const [showNet, setShowNet] = useState(false);
   const [netDropdownOpen, setNetDropdownOpen] = useState(false);
@@ -175,14 +173,13 @@ export function DividendIncomeChart({
         month: MONTH_LABELS[idx],
         monthStr: m.month,
         value: monthValue,
-        rawMonthly: monthValue,
       };
     });
   }, [mergedMonths, showNet, displayCurrency, fxRate]);
 
   const { annualTotal, monthlyAvg } = useMemo(() => {
-    const activeMonths = chartData.filter((d) => d.rawMonthly > 0);
-    const total = activeMonths.reduce((s, d) => s + d.rawMonthly, 0);
+    const activeMonths = chartData.filter((d) => d.value > 0);
+    const total = activeMonths.reduce((s, d) => s + d.value, 0);
     const avg = activeMonths.length > 0 ? total / activeMonths.length : 0;
     return { annualTotal: total, monthlyAvg: avg };
   }, [chartData]);

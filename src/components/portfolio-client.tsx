@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { DividendIncomeChart } from "./dividend-income-chart";
+import { fmt, fmtPct } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -41,14 +42,6 @@ interface HoldingSummary {
   unrealizedPnLPct: number;
   dayChange: number;
   currency: "USD" | "CAD";
-}
-
-function fmt(n: number, d = 2) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: d, maximumFractionDigits: d });
-}
-
-function fmtPct(n: number) {
-  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
 function mergeHoldings(portfolios: Portfolio[]): Holding[] {
@@ -280,10 +273,10 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
           selectedPortfolioId={isAllMode ? "all" : activeTab}
           fxRate={fxRate}
           displayCurrency={displayCurrency}
-          onCurrentYearSummary={(annual, monthly) => {
+          onCurrentYearSummary={useCallback((annual: number, monthly: number) => {
             setDivAnnual(annual);
             setDivMonthly(monthly);
-          }}
+          }, [])}
         />
       </div>
 

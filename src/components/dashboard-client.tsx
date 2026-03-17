@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { DividendIncomeChart } from "./dividend-income-chart";
+import { fmt } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -41,10 +42,6 @@ interface HoldingSummary {
   unrealizedPnLPct: number;
   dayChange: number;
   currency: "USD" | "CAD";
-}
-
-function fmt(n: number, d = 2) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 function mergeHoldings(portfolios: Portfolio[]): Holding[] {
@@ -265,10 +262,10 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         selectedPortfolioId={selectedPortfolioId}
         fxRate={fxRate}
         displayCurrency={displayCurrency}
-        onCurrentYearSummary={(annual, monthly) => {
+        onCurrentYearSummary={useCallback((annual: number, monthly: number) => {
           setDivAnnual(annual);
           setDivMonthly(monthly);
-        }}
+        }, [])}
       />
 
       {/* Hidden table just to fetch prices and compute summaries */}
