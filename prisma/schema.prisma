@@ -8,12 +8,13 @@ datasource db {
 }
 
 model Portfolio {
-  id        String    @id @default(cuid())
-  name      String
-  cashCAD   Decimal?  @db.Decimal(18, 2)
-  cashUSD   Decimal?  @db.Decimal(18, 2)
-  createdAt DateTime  @default(now())
-  holdings  Holding[]
+  id               String            @id @default(cuid())
+  name             String
+  cashCAD          Decimal?          @db.Decimal(18, 2)
+  cashUSD          Decimal?          @db.Decimal(18, 2)
+  createdAt        DateTime          @default(now())
+  holdings         Holding[]
+  cashTransactions CashTransaction[]
 }
 
 model Holding {
@@ -44,10 +45,27 @@ model Transaction {
   createdAt  DateTime          @default(now())
 }
 
+model CashTransaction {
+  id          String     @id @default(cuid())
+  portfolioId String
+  action      CashAction
+  date        DateTime
+  amount      Decimal    @db.Decimal(18, 2)
+  currency    Currency   @default(CAD)
+  notes       String?
+  portfolio   Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+}
+
 enum TransactionAction {
   BUY
   SELL
   DIVIDEND
+}
+
+enum CashAction {
+  DEPOSIT
+  WITHDRAWAL
 }
 
 enum Currency {
