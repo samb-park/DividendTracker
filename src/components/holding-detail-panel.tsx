@@ -75,18 +75,42 @@ export function HoldingDetailPanel({
   onClose,
   onRefresh,
   totalMarketValue = 0,
+  displayCurrency,
+  allocAmount = 0,
+  contribCAD = 0,
+  fxRateForAlloc = 1.37,
 }: {
   row: HoldingRow;
   readOnly: boolean;
   onClose: () => void;
   onRefresh: () => void;
   totalMarketValue?: number;
+  displayCurrency?: "USD" | "CAD";
+  allocAmount?: number;
+  contribCAD?: number;
+  fxRateForAlloc?: number;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const curDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
-  const [displayCur, setDisplayCur] = useState<"USD" | "CAD">(row.holding.currency);
+  const [displayCur, setDisplayCur] = useState<"USD" | "CAD">(displayCurrency ?? row.holding.currency);
+  const [curDropdownOpen, setCurDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (displayCurrency) setDisplayCur(displayCurrency);
+  }, [displayCurrency]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (curDropdownRef.current && !curDropdownRef.current.contains(e.target as Node)) {
+        setCurDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const today = new Date().toISOString().split("T")[0];
   const oneYearAgo = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
@@ -184,17 +208,6 @@ export function HoldingDetailPanel({
     onClose();
   };
 
-  const CurrencyToggle = () => (
-    <div className="flex gap-1">
-      {(["USD", "CAD"] as const).map(c => (
-        <button key={c} onClick={() => setDisplayCur(c)}
-          className={`btn-retro text-[10px] ${displayCur === c ? "btn-retro-primary" : ""}`}>
-          [{c}]
-        </button>
-      ))}
-    </div>
-  );
-
   return (
     <div
       ref={panelRef}
@@ -203,20 +216,35 @@ export function HoldingDetailPanel({
       {/* Mobile header */}
       <div className="flex items-center justify-between p-3 border-b border-border md:hidden">
         <span className="text-xs text-muted-foreground tracking-widest">DETAIL</span>
-        <div className="flex items-center gap-2">
-          <CurrencyToggle />
-          <button className="btn-retro p-1" onClick={onClose}><X size={16} /></button>
-        </div>
+        <button className="btn-retro p-1" onClick={onClose}><X size={16} /></button>
       </div>
       <div className="p-6">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <div className="text-accent text-lg font-medium">{row.holding.ticker}</div>
-            <div className="text-muted-foreground text-xs">{row.holding.name || "—"}</div>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <div className="text-accent text-lg font-medium">{row.holding.ticker}</div>
           <div className="flex items-center gap-2">
-            <CurrencyToggle />
+            <div className="relative" ref={curDropdownRef}>
+              <button
+                className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
+                onClick={() => setCurDropdownOpen((v) => !v)}
+              >
+                <span className="flex-1 text-left">{displayCur}</span>
+                <span className="text-muted-foreground">▾</span>
+              </button>
+              {curDropdownOpen && (
+                <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+                  {(["CAD", "USD"] as const).map((c) => (
+                    <button
+                      key={c}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${displayCur === c ? "text-accent" : ""}`}
+                      onClick={() => { setDisplayCur(c); setCurDropdownOpen(false); }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className="btn-retro p-1 hidden md:block" onClick={onClose}>
               <X size={16} />
             </button>
@@ -332,16 +360,20 @@ export function HoldingDetailPanel({
               const gapNative = totalMarketValue > 0 ? (gapPct / 100) * totalMarketValue : 0;
               const gapDisplay = convertCurrency(gapNative, row.holding.currency, displayCur, fxRate);
               const FREQ_LABEL = { weekly: "WK", biweekly: "BW", monthly: "MO" } as const;
-
+              const allocDisplay = convertCurrency(allocAmount, row.holding.currency, displayCur, fxRate);
+              const postMktValue = row.marketValue + allocAmount;
+              const postTotal = totalMarketValue + contribCAD / fxRateForAlloc;
+              const postPct = postTotal > 0 ? (postMktValue / postTotal) * 100 : 0;
+              const contribDisplay = investPlan.contribution
+                ? convertCurrency(investPlan.contribution.amount, investPlan.contribution.currency, displayCur, fxRate)
+                : 0;
+              const periods = (!reached && contribDisplay > 0) ? Math.ceil(gapDisplay / contribDisplay) : 0;
+              const fl = investPlan.contribution ? FREQ_LABEL[investPlan.contribution.frequency] : "BW";
               return (
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground">TARGET</div>
                     <div className="tabular-nums">{targetPct.toFixed(1)}%</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">CURRENT</div>
-                    <div className="tabular-nums">{currentPct.toFixed(1)}%</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">GAP</div>
@@ -351,23 +383,22 @@ export function HoldingDetailPanel({
                       <div className="tabular-nums">-{gapPct.toFixed(1)}% ({sym}{fmt(gapDisplay)})</div>
                     )}
                   </div>
-                  {!reached && investPlan.contribution && (() => {
-                    const contribDisplay = convertCurrency(
-                      investPlan.contribution.amount,
-                      investPlan.contribution.currency,
-                      displayCur, fxRate
-                    );
-                    const periods = Math.ceil(gapDisplay / contribDisplay);
-                    const fl = FREQ_LABEL[investPlan.contribution.frequency];
-                    return (
-                      <div>
-                        <div className="text-xs text-muted-foreground">TO FILL GAP</div>
-                        <div className="tabular-nums text-primary">
-                          {periods} {fl} ({sym}{fmt(contribDisplay)}/{fl})
-                        </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">FUNDS</div>
+                    <div className="tabular-nums text-primary">{sym}{fmt(allocDisplay)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">POST %</div>
+                    <div className="tabular-nums">{postPct.toFixed(2)}%</div>
+                  </div>
+                  {!reached && periods > 0 && (
+                    <div className="col-span-2">
+                      <div className="text-xs text-muted-foreground">TO FILL GAP</div>
+                      <div className="tabular-nums text-primary">
+                        {periods} {fl} ({sym}{fmt(contribDisplay)}/{fl})
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
                 </div>
               );
             })()}

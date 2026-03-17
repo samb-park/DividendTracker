@@ -81,7 +81,7 @@ export async function GET() {
 
       const dividendMap = chart.events?.dividends ?? {};
       const dividends = Object.values(dividendMap)
-        .map((d) => ({ date: new Date(d.date).toISOString(), amount: d.amount }))
+        .map((d) => { const item = d as { date: number | string; amount: number }; return { date: new Date(item.date).toISOString(), amount: item.amount }; })
         .sort((a, b) => a.date.localeCompare(b.date));
 
       if (dividends.length === 0) {

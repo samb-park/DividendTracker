@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -65,6 +65,18 @@ export function DividendIncomeChart({
   const CURRENT_MONTH = NOW.toISOString().slice(0, 7); // "YYYY-MM"
 
   const [showNet, setShowNet] = useState(false);
+  const [netDropdownOpen, setNetDropdownOpen] = useState(false);
+  const netDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (netDropdownRef.current && !netDropdownRef.current.contains(e.target as Node)) {
+        setNetDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
   const [year, setYear] = useState(CURRENT_YEAR);
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
   const [futureData, setFutureData] = useState<DividendIncomeData | null>(null);
@@ -188,51 +200,42 @@ export function DividendIncomeChart({
 
   return (
     <div ref={containerRef} className="border border-border bg-card p-4 mb-6">
-      {/* Header row */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="flex items-center gap-3">
-          <div className="text-accent text-xs tracking-widest">&#9654; DIVIDEND INCOME</div>
-          <div className="flex items-center gap-1">
-            <button className="btn-retro p-0.5" onClick={() => setYear((y) => y - 1)}>
-              <ChevronLeft size={11} />
-            </button>
-            <span className="text-accent text-xs tabular-nums w-10 text-center">{year}</span>
-            <button className="btn-retro p-0.5" onClick={() => setYear((y) => y + 1)}>
-              <ChevronRight size={11} />
-            </button>
-          </div>
+      {/* Header: line 1 — title */}
+      <div className="text-accent text-xs tracking-widest mb-2">&#9654; DIVIDEND INCOME</div>
+      {/* Header: line 2 — year nav + dropdown */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1">
+          <button className="btn-retro p-0.5" onClick={() => setYear((y) => y - 1)}>
+            <ChevronLeft size={11} />
+          </button>
+          <span className="text-accent text-xs tabular-nums w-10 text-center">{year}</span>
+          <button className="btn-retro p-0.5" onClick={() => setYear((y) => y + 1)}>
+            <ChevronRight size={11} />
+          </button>
         </div>
-        <div className="ml-auto flex gap-1">
+        <div className="relative" ref={netDropdownRef}>
           <button
-            className={`btn-retro text-[10px] px-2 py-0.5 ${!showNet ? "btn-retro-primary" : ""}`}
-            onClick={() => setShowNet(false)}
+            className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1.5"
+            onClick={() => setNetDropdownOpen((v) => !v)}
           >
-            [GROSS]
+            <span className="flex-1 text-left">{showNet ? "NET" : "GROSS"}</span>
+            <span className="text-muted-foreground">▾</span>
           </button>
-          <button
-            className={`btn-retro text-[10px] px-2 py-0.5 ${showNet ? "btn-retro-primary" : ""}`}
-            onClick={() => setShowNet(true)}
-          >
-            [NET]
-          </button>
+          {netDropdownOpen && (
+            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              {([["GROSS", false], ["NET", true]] as const).map(([label, val]) => (
+                <button
+                  key={label}
+                  className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${showNet === val ? "text-accent" : ""}`}
+                  onClick={() => { setShowNet(val); setNetDropdownOpen(false); }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Summary stats */}
-      {!loading && (
-        <div className="flex gap-6 mb-3">
-          <div>
-            <div className="text-muted-foreground text-[10px] tracking-widest">ANNUAL</div>
-            <div className="text-primary tabular-nums font-medium">
-              {currencySymbol}{fmt(annualTotal)}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground text-[10px] tracking-widest">MONTHLY AVG</div>
-            <div className="tabular-nums">{currencySymbol}{fmt(monthlyAvg)}</div>
-          </div>
-        </div>
-      )}
 
       {/* Bar Chart */}
       {loading ? (

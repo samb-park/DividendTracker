@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { DividendIncomeChart } from "./dividend-income-chart";
@@ -81,6 +81,23 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<"all" | string>("all");
+  const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
+  const [curDropdownOpen, setCurDropdownOpen] = useState(false);
+  const acctDropdownRef = useRef<HTMLDivElement>(null);
+  const curDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (acctDropdownRef.current && !acctDropdownRef.current.contains(e.target as Node)) {
+        setAcctDropdownOpen(false);
+      }
+      if (curDropdownRef.current && !curDropdownRef.current.contains(e.target as Node)) {
+        setCurDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
   const [divAnnual, setDivAnnual] = useState<number | null>(null);
   const [divMonthly, setDivMonthly] = useState<number | null>(null);
   const [divShowMonthly, setDivShowMonthly] = useState(false);
@@ -133,35 +150,60 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   return (
     <div>
       {/* Account selector + currency toggle */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 border-b border-border pb-3">
-        <button
-          className={`btn-retro text-xs ${selectedPortfolioId === "all" ? "btn-retro-primary" : ""}`}
-          onClick={() => setSelectedPortfolioId("all")}
-        >
-          [ALL]
-        </button>
-        {portfolios.map((p) => (
+      <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
+        <div className="relative" ref={acctDropdownRef}>
           <button
-            key={p.id}
-            className={`btn-retro text-xs ${selectedPortfolioId === p.id ? "btn-retro-primary" : ""}`}
-            onClick={() => setSelectedPortfolioId(p.id)}
+            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            onClick={() => setAcctDropdownOpen((v) => !v)}
           >
-            [{p.name}]
+            <span className="flex-1 text-left">
+              {selectedPortfolioId === "all"
+                ? "ALL"
+                : portfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "ALL"}
+            </span>
+            <span className="text-muted-foreground">▾</span>
           </button>
-        ))}
-        <div className="ml-auto flex gap-1">
+          {acctDropdownOpen && (
+            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              <button
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === "all" ? "text-accent" : ""}`}
+                onClick={() => { setSelectedPortfolioId("all"); setAcctDropdownOpen(false); }}
+              >
+                ALL
+              </button>
+              {portfolios.map((p) => (
+                <button
+                  key={p.id}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === p.id ? "text-accent" : ""}`}
+                  onClick={() => { setSelectedPortfolioId(p.id); setAcctDropdownOpen(false); }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="ml-auto relative" ref={curDropdownRef}>
           <button
-            className={`btn-retro text-xs ${displayCurrency === "CAD" ? "btn-retro-primary" : ""}`}
-            onClick={() => setDisplayCurrency("CAD")}
+            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            onClick={() => setCurDropdownOpen((v) => !v)}
           >
-            [CAD]
+            <span className="flex-1 text-left">{displayCurrency}</span>
+            <span className="text-muted-foreground">▾</span>
           </button>
-          <button
-            className={`btn-retro text-xs ${displayCurrency === "USD" ? "btn-retro-primary" : ""}`}
-            onClick={() => setDisplayCurrency("USD")}
-          >
-            [USD]
-          </button>
+          {curDropdownOpen && (
+            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              {(["CAD", "USD"] as const).map((c) => (
+                <button
+                  key={c}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${displayCurrency === c ? "text-accent" : ""}`}
+                  onClick={() => { setDisplayCurrency(c); setCurDropdownOpen(false); }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -197,16 +239,12 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           </div>
           <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
-            {divAnnual !== null && (
-              <div>
-                <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
-                  {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
-                </div>
-                <div className="text-sm font-medium tabular-nums text-primary">
-                  {currencySymbol}{fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}
-                </div>
-              </div>
-            )}
+            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
+              {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
+            </div>
+            <div className="text-sm font-medium tabular-nums text-primary">
+              {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}
+            </div>
           </div>
         </div>
       )}
@@ -240,6 +278,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           initialHoldings={allHoldings}
           onHoldingsChange={setHoldingSummaries}
           readOnly
+          displayCurrency={displayCurrency}
         />
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
+import { DividendIncomeChart } from "./dividend-income-chart";
 
 interface Transaction {
   id: string;
@@ -81,6 +82,26 @@ function mergeHoldings(portfolios: Portfolio[]): Holding[] {
 export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number; }) {
   const [portfolios, setPortfolios] = useState(initialPortfolios);
   const [activeTab, setActiveTab] = useState<"all" | string>("all");
+  const [divAnnual, setDivAnnual] = useState<number | null>(null);
+  const [divMonthly, setDivMonthly] = useState<number | null>(null);
+  const [divShowMonthly, setDivShowMonthly] = useState(false);
+  const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
+  const [curDropdownOpen, setCurDropdownOpen] = useState(false);
+  const acctDropdownRef = useRef<HTMLDivElement>(null);
+  const curDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (acctDropdownRef.current && !acctDropdownRef.current.contains(e.target as Node)) {
+        setAcctDropdownOpen(false);
+      }
+      if (curDropdownRef.current && !curDropdownRef.current.contains(e.target as Node)) {
+        setCurDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
   const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
@@ -142,35 +163,60 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
   return (
     <div className={`transition-[padding] duration-200 ${detailOpen ? "md:pr-[29rem] lg:pr-[33rem] xl:pr-[50%]" : ""}`}>
       {/* Portfolio tabs + currency toggle */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 border-b border-border pb-3">
-        <button
-          className={`btn-retro text-xs ${isAllMode ? "btn-retro-primary" : ""}`}
-          onClick={() => { setActiveTab("all"); setHoldingSummaries([]); }}
-        >
-          [ALL]
-        </button>
-        {portfolios.map((p) => (
+      <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
+        <div className="relative" ref={acctDropdownRef}>
           <button
-            key={p.id}
-            className={`btn-retro text-xs ${activeTab === p.id ? "btn-retro-primary" : ""}`}
-            onClick={() => { setActiveTab(p.id); setHoldingSummaries([]); }}
+            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            onClick={() => setAcctDropdownOpen((v) => !v)}
           >
-            {`[${p.name.toUpperCase()}]`}
+            <span className="flex-1 text-left">
+              {isAllMode
+                ? "ALL"
+                : portfolios.find((p) => p.id === activeTab)?.name ?? "ALL"}
+            </span>
+            <span className="text-muted-foreground">▾</span>
           </button>
-        ))}
-        <div className="ml-auto flex gap-1">
+          {acctDropdownOpen && (
+            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              <button
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${isAllMode ? "text-accent" : ""}`}
+                onClick={() => { setActiveTab("all"); setHoldingSummaries([]); setAcctDropdownOpen(false); }}
+              >
+                ALL
+              </button>
+              {portfolios.map((p) => (
+                <button
+                  key={p.id}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${activeTab === p.id ? "text-accent" : ""}`}
+                  onClick={() => { setActiveTab(p.id); setHoldingSummaries([]); setAcctDropdownOpen(false); }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="ml-auto relative" ref={curDropdownRef}>
           <button
-            className={`btn-retro text-xs ${displayCurrency === "CAD" ? "btn-retro-primary" : ""}`}
-            onClick={() => setDisplayCurrency("CAD")}
+            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            onClick={() => setCurDropdownOpen((v) => !v)}
           >
-            [CAD]
+            <span className="flex-1 text-left">{displayCurrency}</span>
+            <span className="text-muted-foreground">▾</span>
           </button>
-          <button
-            className={`btn-retro text-xs ${displayCurrency === "USD" ? "btn-retro-primary" : ""}`}
-            onClick={() => setDisplayCurrency("USD")}
-          >
-            [USD]
-          </button>
+          {curDropdownOpen && (
+            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              {(["CAD", "USD"] as const).map((c) => (
+                <button
+                  key={c}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${displayCurrency === c ? "text-accent" : ""}`}
+                  onClick={() => { setDisplayCurrency(c); setCurDropdownOpen(false); }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -217,8 +263,29 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
               <span className="text-xs ml-1">({todayPnL >= 0 ? "+" : ""}{todayPnLPct.toFixed(2)}%)</span>
             </div>
           </div>
+          <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
+            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
+              {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
+            </div>
+            <div className="text-sm font-medium tabular-nums text-primary">
+              {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Hidden — fetch dividend data for summary tile only */}
+      <div className="hidden">
+        <DividendIncomeChart
+          selectedPortfolioId={isAllMode ? "all" : activeTab}
+          fxRate={fxRate}
+          displayCurrency={displayCurrency}
+          onCurrentYearSummary={(annual, monthly) => {
+            setDivAnnual(annual);
+            setDivMonthly(monthly);
+          }}
+        />
+      </div>
 
       {/* Holdings table */}
       {displayHoldings.length > 0 || portfolios.length > 0 ? (
@@ -229,6 +296,7 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
           onHoldingsChange={setHoldingSummaries}
           onDetailOpen={setDetailOpen}
           readOnly={isAllMode}
+          displayCurrency={displayCurrency}
         />
       ) : (
         <div className="text-muted-foreground text-xs py-12 text-center border border-dashed border-border">

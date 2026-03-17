@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   PieChart,
   Pie,
@@ -117,6 +117,18 @@ export function PortfolioCharts({
   totalCashCAD?: number;
 }) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("3M");
+  const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
+  const rangeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (rangeDropdownRef.current && !rangeDropdownRef.current.contains(e.target as Node)) {
+        setRangeDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
   const [equityData, setEquityData] = useState<EquityPoint[]>([]);
   const [loadingPnl, setLoadingPnl] = useState(false);
   const lineChartHeight = useChartHeight(160, 220);
@@ -234,16 +246,27 @@ export function PortfolioCharts({
         <div className="border border-border p-4 bg-card">
           <div className="flex items-center justify-between mb-4">
             <div className="text-accent text-xs tracking-widest">&#9654; TOTAL EQUITY</div>
-            <div className="flex gap-1">
-              {RANGES.map((r) => (
-                <button
-                  key={r}
-                  className={`btn-retro text-[10px] px-2 py-0.5 ${range === r ? "btn-retro-primary" : ""}`}
-                  onClick={() => setRange(r)}
-                >
-                  [{r}]
-                </button>
-              ))}
+            <div className="relative" ref={rangeDropdownRef}>
+              <button
+                className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1.5 min-w-[4rem]"
+                onClick={() => setRangeDropdownOpen((v) => !v)}
+              >
+                <span className="flex-1 text-left">{range}</span>
+                <span className="text-muted-foreground">▾</span>
+              </button>
+              {rangeDropdownOpen && (
+                <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+                  {RANGES.map((r) => (
+                    <button
+                      key={r}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${range === r ? "text-accent" : ""}`}
+                      onClick={() => { setRange(r); setRangeDropdownOpen(false); }}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           {loadingPnl ? (

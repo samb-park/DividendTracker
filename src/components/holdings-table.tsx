@@ -84,21 +84,41 @@ export function HoldingsTable({
   onHoldingsChange,
   onDetailOpen,
   readOnly = false,
+  displayCurrency,
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
   onHoldingsChange: (rows: Array<{ ticker: string; name?: string | null; marketValue: number; costBasis: number; unrealizedPnL: number; unrealizedPnLPct: number; dayChange: number; currency: "USD" | "CAD" }>) => void;
   onDetailOpen?: (open: boolean) => void;
   readOnly?: boolean;
+  displayCurrency?: "USD" | "CAD";
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [colMode, setColMode] = useState<"usd" | "pct" | "weight">("usd");
+  const [colMode, setColMode] = useState<"usd" | "pct">("usd");
+  const [priceMode, setPriceMode] = useState<"price" | "avg">("price");
+  const [mktMode, setMktMode] = useState<"mkt" | "cost">("mkt");
+  const [wgtMode, setWgtMode] = useState<"pct" | "alloc">("pct");
+  const [w52Mode, setW52Mode] = useState<"high" | "low">("high");
+  const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
+  const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
+  const [fxRate, setFxRate] = useState(1.37);
 
-  const cycleColMode = () =>
-    setColMode(m => m === "usd" ? "pct" : m === "pct" ? "weight" : "usd");
+  useEffect(() => {
+    fetch("/api/settings/investment").then(r => r.json()).then(d => {
+      const targets: Record<string, number> = {};
+      for (const [ticker, val] of Object.entries(d.targets ?? {})) {
+        targets[ticker] = (val as { pct: number }).pct;
+      }
+      setInvestTargets(targets);
+      if (d.contribution) setInvestContrib({ amount: d.contribution.amount, currency: d.contribution.currency });
+    }).catch(() => {});
+    fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
+  }, []);
+
+  const cycleColMode = () => setColMode(m => m === "usd" ? "pct" : "usd");
 
   const selectRow = useCallback((id: string | null) => {
     setSelectedRowId(id);
@@ -148,6 +168,31 @@ export function HoldingsTable({
 
   const totalMarketValue = rows.reduce((s, r) => s + r.marketValue, 0);
 
+  // Contribution allocation (Excel Funds column logic)
+  // contrib is always in CAD; convert to each stock's native currency
+  const contribCAD = investContrib
+    ? (investContrib.currency === "CAD" ? investContrib.amount : investContrib.amount * fxRate)
+    : 0;
+
+  const totalPositiveGapPct = rows.reduce((sum, r) => {
+    const w = totalMarketValue > 0 ? (r.marketValue / totalMarketValue) * 100 : 0;
+    const targetPct = investTargets[r.holding.ticker] ?? 0;
+    return sum + Math.max(0, targetPct - w);
+  }, 0);
+
+  // Map ticker → alloc amount in stock's native currency
+  const allocMap: Record<string, number> = {};
+  if (contribCAD > 0 && totalPositiveGapPct > 0) {
+    for (const r of rows) {
+      const w = totalMarketValue > 0 ? (r.marketValue / totalMarketValue) * 100 : 0;
+      const targetPct = investTargets[r.holding.ticker] ?? 0;
+      const gap = Math.max(0, targetPct - w);
+      const allocCAD = (gap / totalPositiveGapPct) * contribCAD;
+      // Convert to stock's native currency
+      allocMap[r.holding.ticker] = r.holding.currency === "USD" ? allocCAD / fxRate : allocCAD;
+    }
+  }
+
   useEffect(() => {
     onHoldingsChange(
       rows.map((r) => ({
@@ -169,10 +214,11 @@ export function HoldingsTable({
   return (
     <div>
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-muted-foreground">{rows.length} POSITIONS</span>
-          {!readOnly && <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />}
-        </div>
+        {!readOnly && (
+          <div className="flex items-center justify-end mb-3">
+            <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />
+          </div>
+        )}
         {rows.length === 0 ? (
           <div className="text-muted-foreground text-xs py-8 text-center border border-dashed border-border">
             NO POSITIONS — ADD A STOCK TO BEGIN
@@ -183,16 +229,43 @@ export function HoldingsTable({
               <thead>
                 <tr>
                   <th className="w-20">TICKER</th>
+                  <th className="text-left w-32 hidden lg:table-cell">NAME</th>
                   <th className="text-right w-24">SHARES</th>
-                  <th className="text-right w-24">PRICE</th>
-                  <th className="text-right w-20">DAY</th>
-                  <th className="text-right w-28">MKT</th>
+                  <th
+                    className="text-right w-24 cursor-pointer select-none"
+                    onClick={() => setPriceMode(m => m === "price" ? "avg" : "price")}
+                    title="Click to toggle"
+                  >
+                    {priceMode === "price" ? "PRICE" : "AVG"} ▾
+                  </th>
+                  <th className="text-right w-20 hidden sm:table-cell">DAY</th>
+                  <th
+                    className="text-right w-28 cursor-pointer select-none"
+                    onClick={() => setMktMode(m => m === "mkt" ? "cost" : "mkt")}
+                    title="Click to toggle"
+                  >
+                    {mktMode === "mkt" ? "MKT" : "COST"} ▾
+                  </th>
+                  <th
+                    className="text-right w-16 cursor-pointer select-none"
+                    onClick={() => setWgtMode(m => m === "pct" ? "alloc" : "pct")}
+                    title="Click to toggle"
+                  >
+                    {wgtMode === "pct" ? "WGT" : "ALLOC"} ▾
+                  </th>
                   <th
                     className="text-right w-28 cursor-pointer select-none"
                     onClick={cycleColMode}
                     title="Click to toggle"
                   >
-                    {colMode === "usd" ? "P&L $" : colMode === "pct" ? "P&L %" : "WEIGHT"} ▾
+                    {colMode === "usd" ? "P&L $" : "P&L %"} ▾
+                  </th>
+                  <th
+                    className="text-right w-24 cursor-pointer select-none"
+                    onClick={() => setW52Mode(m => m === "high" ? "low" : "high")}
+                    title="Click to toggle"
+                  >
+                    {w52Mode === "high" ? "52W H" : "52W L"} ▾
                   </th>
                 </tr>
               </thead>
@@ -207,26 +280,50 @@ export function HoldingsTable({
                       onClick={() => selectRow(row.holding.id)}
                     >
                       <td className="font-medium text-accent">{row.holding.ticker}</td>
-                      <td className="text-right tabular-nums">{fmt(row.shares, 4)}</td>
+                      <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
+                        {row.holding.name || "—"}
+                      </td>
+                      <td className="text-right tabular-nums">
+                        {fmt(row.shares, 4)}
+                      </td>
                       <td className="text-right tabular-nums">
                         {loadingPrices ? (
                           <span className="text-muted-foreground">...</span>
-                        ) : row.price ? `${cur}${fmt(row.price.price)}` : "—"}
+                        ) : priceMode === "price"
+                          ? (row.price ? `${cur}${fmt(row.price.price)}` : "—")
+                          : (row.avgCost > 0 ? `${cur}${fmt(row.avgCost)}` : "—")}
                       </td>
-                      <td className={`text-right tabular-nums ${row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
+                      <td className={`text-right tabular-nums hidden sm:table-cell ${row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
                         {row.price ? fmtPct(row.price.changePercent) : "—"}
                       </td>
                       <td className="text-right tabular-nums">
-                        {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
+                        {mktMode === "mkt"
+                          ? (row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—")
+                          : (row.costBasis > 0 ? `${cur}${fmt(row.costBasis)}` : "—")}
                       </td>
-                      <td className={`text-right tabular-nums ${colMode !== "weight" ? (row.unrealizedPnL >= 0 ? "text-positive" : "text-negative") : "text-muted-foreground"}`}>
+                      <td className="text-right tabular-nums text-muted-foreground">
+                        {wgtMode === "pct"
+                          ? (totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—")
+                          : (() => {
+                              const alloc = allocMap[row.holding.ticker] ?? 0;
+                              return `${cur}${fmt(alloc)}`;
+                            })()}
+                      </td>
+                      <td className={`text-right tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
                         {row.marketValue > 0 ? (
                           colMode === "usd"
                             ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(row.unrealizedPnL))}`
-                            : colMode === "pct"
-                            ? fmtPct(row.unrealizedPnLPct)
-                            : `${weight.toFixed(1)}%`
+                            : fmtPct(row.unrealizedPnLPct)
                         ) : "—"}
+                      </td>
+                      <td className={`text-right tabular-nums ${
+                        w52Mode === "high"
+                          ? (row.price && row.price.fromHighPct < -10 ? "text-negative" : "text-muted-foreground")
+                          : (row.price && row.price.fromLowPct > 30 ? "text-positive" : "text-muted-foreground")
+                      }`}>
+                        {w52Mode === "high"
+                          ? (row.price?.week52High ? `${cur}${fmt(row.price.week52High)} (${fmtPct(row.price.fromHighPct)})` : "—")
+                          : (row.price?.week52Low ? `${cur}${fmt(row.price.week52Low)} (${fmtPct(row.price.fromLowPct)})` : "—")}
                       </td>
                     </tr>
                   );
@@ -245,6 +342,10 @@ export function HoldingsTable({
           onClose={() => selectRow(null)}
           onRefresh={refresh}
           totalMarketValue={totalMarketValue}
+          displayCurrency={displayCurrency}
+          allocAmount={allocMap[selectedRow.holding.ticker] ?? 0}
+          contribCAD={contribCAD}
+          fxRateForAlloc={fxRate}
         />
       )}
     </div>
