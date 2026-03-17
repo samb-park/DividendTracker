@@ -2,12 +2,13 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, TrendingUp, CalendarDays, Settings } from "lucide-react";
+import { LayoutDashboard, TrendingUp, CalendarDays, Layers, Settings } from "lucide-react";
 
 export const tabs = [
   { href: "/",          label: "DASHBOARD", icon: LayoutDashboard },
   { href: "/portfolio", label: "PORTFOLIO",  icon: TrendingUp },
   { href: "/calendar",  label: "CALENDAR",   icon: CalendarDays },
+  { href: "/more",      label: "MORE",       icon: Layers },
   { href: "/settings",  label: "SETTINGS",   icon: Settings },
 ];
 
