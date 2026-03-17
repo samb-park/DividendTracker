@@ -46,8 +46,10 @@ function parseAccountType(portfolioName: string): string {
 }
 
 function netFactor(accountType: string, currency: string): number {
-  if (accountType === "RRSP") return 1.0;
-  if (accountType === "TFSA") return currency === "USD" ? 0.85 : 1.0;
+  if (accountType === "RRSP") return 1.0; // Canada-US treaty Article XXI(7) exempts RRSP
+  if (accountType === "TFSA") return currency === "USD" ? 0.85 : 1.0; // TFSA not treaty-exempt
+  if (accountType === "FHSA") return currency === "USD" ? 0.85 : 1.0; // FHSA not treaty-exempt
+  if (accountType === "RESP") return currency === "USD" ? 0.85 : 1.0; // RESP not treaty-exempt
   return 1.0; // Margin/Cash — return gross (personal tax handled separately)
 }
 
