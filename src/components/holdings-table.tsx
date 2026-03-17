@@ -17,6 +17,8 @@ interface Holding {
   ticker: string;
   name: string | null;
   currency: "USD" | "CAD";
+  quantity: string | null;
+  avgCost: string | null;
   transactions: Transaction[];
 }
 
@@ -46,12 +48,18 @@ function calcHolding(holding: Holding): Omit<HoldingRow, "price" | "marketValue"
   const sells = holding.transactions.filter((t) => t.action === "SELL");
   const totalBought = buys.reduce((s, t) => s + parseFloat(t.quantity), 0);
   const totalSold = sells.reduce((s, t) => s + parseFloat(t.quantity), 0);
-  const shares = totalBought - totalSold;
   const totalCost = buys.reduce(
     (s, t) => s + parseFloat(t.quantity) * parseFloat(t.price) + parseFloat(t.commission),
     0
   );
-  const avgCost = totalBought > 0 ? totalCost / totalBought : 0;
+  // Use Questrade openQuantity if available; otherwise sum transactions
+  const shares = holding.quantity != null
+    ? parseFloat(holding.quantity)
+    : totalBought - totalSold;
+  // Use Questrade averageEntryPrice if available; otherwise derive from transactions
+  const avgCost = holding.avgCost != null
+    ? parseFloat(holding.avgCost)
+    : (totalBought > 0 ? totalCost / totalBought : 0);
   const costBasis = avgCost * shares;
   return { holding, shares, avgCost, costBasis };
 }
@@ -71,7 +79,7 @@ export function HoldingsTable({
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
-  onHoldingsChange: (rows: Array<{ ticker: string; marketValue: number; unrealizedPnL: number; unrealizedPnLPct: number }>) => void;
+  onHoldingsChange: (rows: Array<{ ticker: string; marketValue: number; unrealizedPnL: number; unrealizedPnLPct: number; currency: "USD" | "CAD" }>) => void;
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
@@ -126,6 +134,7 @@ export function HoldingsTable({
         unrealizedPnL: r.unrealizedPnL,
         unrealizedPnLPct: r.unrealizedPnLPct,
         name: r.holding.name,
+        currency: r.holding.currency,
       }))
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps

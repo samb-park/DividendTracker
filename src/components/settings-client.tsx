@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
 
 interface TokenStatus {
@@ -18,6 +19,7 @@ interface SyncResult {
 }
 
 export function SettingsClient() {
+  const router = useRouter();
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -67,9 +69,13 @@ export function SettingsClient() {
       const data = await res.json();
       if (!res.ok && !data.result) throw new Error(data.error ?? "Sync failed");
       setSyncResult(data.result);
-      if (data.ok) setSuccess("Sync complete!");
-      else setError(data.error ?? "Sync completed with errors");
-      await loadStatus();
+      if (data.ok) {
+        await loadStatus();
+        router.push("/");
+      } else {
+        setError(data.error ?? "Sync completed with errors");
+        await loadStatus();
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {

@@ -16,7 +16,7 @@ export default async function TransactionsPage() {
         <span className="text-muted-foreground text-xs">//</span>
         <span className="text-xs text-muted-foreground">{transactions.length} RECORDS</span>
       </div>
-      <TransactionsClient initialTransactions={transactions} />
+      <TransactionsClient initialTransactions={JSON.parse(JSON.stringify(transactions))} />
     </div>
   );
 }

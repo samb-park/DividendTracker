@@ -20,6 +20,8 @@ model Holding {
   ticker       String
   name         String?
   currency     Currency      @default(USD)
+  quantity     Decimal?      @db.Decimal(18, 6)
+  avgCost      Decimal?      @db.Decimal(18, 4)
   portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   createdAt    DateTime      @default(now())

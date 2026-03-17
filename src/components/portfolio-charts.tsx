@@ -15,7 +15,7 @@ import {
 
 interface HoldingData {
   ticker: string;
-  name: string | null;
+  name?: string | null;
   marketValue: number;
   unrealizedPnL: number;
   unrealizedPnLPct: number;

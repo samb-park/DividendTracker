@@ -19,6 +19,8 @@ interface Holding {
   ticker: string;
   name: string | null;
   currency: "USD" | "CAD";
+  quantity: string | null;
+  avgCost: string | null;
   transactions: Transaction[];
 }
 
@@ -34,6 +36,7 @@ interface HoldingSummary {
   marketValue: number;
   unrealizedPnL: number;
   unrealizedPnLPct: number;
+  currency: "USD" | "CAD";
 }
 
 function fmt(n: number, d = 2) {
@@ -44,7 +47,7 @@ function fmtPct(n: number) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-export function DashboardClient({ initialPortfolios }: { initialPortfolios: Portfolio[] }) {
+export function DashboardClient({ initialPortfolios, fxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
   const router = useRouter();
   const [portfolios, setPortfolios] = useState(initialPortfolios);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -66,8 +69,8 @@ export function DashboardClient({ initialPortfolios }: { initialPortfolios: Port
     setActiveIdx(Math.min(activeIdx, updated.length - 1));
   };
 
-  const totalValue = holdingSummaries.reduce((s, h) => s + h.marketValue, 0);
-  const totalPnL = holdingSummaries.reduce((s, h) => s + h.unrealizedPnL, 0);
+  const totalValue = holdingSummaries.reduce((s, h) => s + (h.currency === "USD" ? h.marketValue * fxRate : h.marketValue), 0);
+  const totalPnL = holdingSummaries.reduce((s, h) => s + (h.currency === "USD" ? h.unrealizedPnL * fxRate : h.unrealizedPnL), 0);
   const totalCostBasis = totalValue - totalPnL;
   const totalPnLPct = totalCostBasis > 0 ? (totalPnL / totalCostBasis) * 100 : 0;
 
@@ -116,6 +119,7 @@ export function DashboardClient({ initialPortfolios }: { initialPortfolios: Port
       {activePortfolio ? (
         <>
           <HoldingsTable
+            key={activePortfolio.id}
             portfolioId={activePortfolio.id}
             initialHoldings={activePortfolio.holdings}
             onHoldingsChange={setHoldingSummaries}

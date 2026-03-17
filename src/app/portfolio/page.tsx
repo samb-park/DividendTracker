@@ -13,6 +13,9 @@ export default async function PortfolioPage() {
     },
   });
 
+  const fxRate = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
+  const serialized = JSON.parse(JSON.stringify(portfolios));
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -20,7 +23,7 @@ export default async function PortfolioPage() {
         <span className="text-muted-foreground text-xs">//</span>
         <span className="text-xs text-muted-foreground">HOLDINGS &amp; POSITIONS</span>
       </div>
-      <DashboardClient initialPortfolios={portfolios} />
+      <DashboardClient initialPortfolios={serialized} fxRate={fxRate} />
     </div>
   );
 }

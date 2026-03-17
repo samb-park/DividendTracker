@@ -96,6 +96,8 @@ export async function POST() {
       // Sync positions (current holdings)
       try {
         const positions = await getPositions(activeServer, access_token, account.number);
+        const syncedTickers = new Set<string>();
+
         for (const pos of positions) {
           if (!pos.symbol || pos.openQuantity <= 0) continue;
 
@@ -107,15 +109,30 @@ export async function POST() {
                 ticker: pos.symbol,
               },
             },
-            update: { name: pos.symbol },
+            update: { name: pos.symbol, quantity: pos.openQuantity, avgCost: pos.averageEntryPrice },
             create: {
               portfolioId: portfolio.id,
               ticker: pos.symbol,
               name: pos.symbol,
               currency,
+              quantity: pos.openQuantity,
+              avgCost: pos.averageEntryPrice,
             },
           });
           result.holdingsSynced++;
+          syncedTickers.add(pos.symbol);
+        }
+
+        // Mark holdings no longer in current positions as closed (quantity=0).
+        // This handles positions sold before the 365-day activity window (e.g. TLT).
+        if (syncedTickers.size > 0) {
+          await prisma.holding.updateMany({
+            where: {
+              portfolioId: portfolio.id,
+              ticker: { notIn: [...syncedTickers] },
+            },
+            data: { quantity: 0 },
+          });
         }
       } catch (e: unknown) {
         result.errors.push(`positions ${account.number}: ${e instanceof Error ? e.message : e}`);
