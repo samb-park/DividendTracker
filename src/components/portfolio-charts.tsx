@@ -25,7 +25,7 @@ interface HoldingData {
 
 interface Transaction {
   id: string;
-  action: "BUY" | "SELL";
+  action: "BUY" | "SELL" | "DIVIDEND";
   quantity: string;
   price: string;
   commission: string;
@@ -188,35 +188,49 @@ export function PortfolioCharts({
       let totalValue = 0;
       let totalCost = 0;
 
+      // Reconstruct cash at this historical date by undoing post-date transactions.
+      // totalCashCAD is the current balance; we reverse BUY/SELL/DIVIDEND that happened
+      // after `date` to avoid the dip artifact caused by static current-cash being
+      // added to pre-sell share values.
+      let cashAtDate = totalCashCAD;
+
       for (const h of holdingsWithTransactions) {
         const hist = histories[h.ticker];
-        if (!hist) continue;
-
-        const point = hist.filter((p) => p.date <= date).pop();
-        if (!point) continue;
-
+        const currencyMult = h.currency === "USD" ? fx : 1;
         const currentQty = h.quantity != null ? parseFloat(h.quantity) : 0;
         const avgCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
-        const currencyMult = h.currency === "USD" ? fx : 1;
         const txns = h.transactions;
 
-        // Compute shares held at this date by undoing transactions after this date
+        // Reconstruct shares and cash at this date
         let sharesAtDate = currentQty;
         if (txns && txns.length > 0) {
           for (const txn of txns) {
             const txnDate = txn.date ? txn.date.slice(0, 10) : "";
             if (txnDate > date) {
               const qty = parseFloat(txn.quantity);
+              const price = parseFloat(txn.price);
+              const commission = parseFloat(txn.commission ?? "0");
               if (txn.action === "BUY") {
                 sharesAtDate -= qty;
+                // Undo buy: cash was spent, so restore it
+                cashAtDate += (qty * price + commission) * currencyMult;
               } else if (txn.action === "SELL") {
                 sharesAtDate += qty;
+                // Undo sell: cash was received, so remove it
+                cashAtDate -= (qty * price - commission) * currencyMult;
+              } else if (txn.action === "DIVIDEND") {
+                // Undo dividend receipt (price field stores netAmount for dividends)
+                cashAtDate -= price * currencyMult;
               }
-              // DIVIDEND transactions are skipped — they don't affect share count
             }
           }
         }
         if (sharesAtDate < 0) sharesAtDate = 0;
+        if (cashAtDate < 0) cashAtDate = 0;
+
+        if (!hist) continue;
+        const point = hist.filter((p) => p.date <= date).pop();
+        if (!point) continue;
 
         totalValue += sharesAtDate * point.close * currencyMult;
         totalCost += sharesAtDate * avgCost * currencyMult;
@@ -224,7 +238,7 @@ export function PortfolioCharts({
 
       return {
         date,
-        value: Math.round((totalValue + totalCashCAD) * 100) / 100,
+        value: Math.round((totalValue + cashAtDate) * 100) / 100,
         cost: Math.round(totalCost * 100) / 100,
       };
     });
