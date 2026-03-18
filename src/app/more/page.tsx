@@ -88,6 +88,7 @@ export default function MorePage() {
   const [loading, setLoading] = useState(false);
   const [selectedPortfolio, setSelectedPortfolio] = useState("");
   const [selectedTicker, setSelectedTicker] = useState("");
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   useEffect(() => {
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
@@ -106,6 +107,11 @@ export default function MorePage() {
   // reset ticker when portfolio changes
   useEffect(() => { setSelectedTicker(""); }, [selectedPortfolio]);
 
+  const yearOptions = useMemo(() =>
+    [...new Set((txns ?? []).map(t => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a)),
+    [txns]
+  );
+
   const portfolioOptions = useMemo(() =>
     [...new Set((txns ?? []).map(t => t.holding.portfolio.name))].sort(),
     [txns]
@@ -119,6 +125,7 @@ export default function MorePage() {
   }, [txns, selectedPortfolio]);
 
   const filtered = (txns ?? []).filter(t =>
+    (!selectedYear || t.date.startsWith(selectedYear)) &&
     (!selectedPortfolio || t.holding.portfolio.name === selectedPortfolio) &&
     (!selectedTicker || t.holding.ticker === selectedTicker)
   );
@@ -146,6 +153,12 @@ export default function MorePage() {
       {(activeTab === "transactions" || activeTab === "dividends") && (
         <>
           <div className="flex items-center gap-2 mb-4">
+            <Dropdown
+              value={selectedYear}
+              options={yearOptions}
+              onChange={setSelectedYear}
+              placeholder="YEAR"
+            />
             <Dropdown
               value={selectedPortfolio}
               options={portfolioOptions}
