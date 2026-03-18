@@ -17,6 +17,9 @@ export async function GET() {
     ? JSON.parse(settings.find(s => s.key === "investment:contribution")!.value)
     : null;
 
+  const incomeGoalSetting = settings.find(s => s.key === "investment:income_goal");
+  const incomeGoal = incomeGoalSetting ? JSON.parse(incomeGoalSetting.value) : null;
+
   const targets: Record<string, { pct: number }> = {};
   for (const s of settings) {
     if (s.key.startsWith("investment:target:")) {
@@ -27,6 +30,7 @@ export async function GET() {
 
   return NextResponse.json({
     contribution,
+    incomeGoal,
     targets,
     tickers: holdings.map(h => h.ticker),
   });
@@ -48,6 +52,13 @@ export async function POST(req: Request) {
       where: { key },
       update: { value: JSON.stringify({ pct }) },
       create: { key, value: JSON.stringify({ pct }) },
+    });
+  } else if (body.type === "income_goal") {
+    const { annualTarget, currency } = body;
+    await prisma.setting.upsert({
+      where: { key: "investment:income_goal" },
+      update: { value: JSON.stringify({ annualTarget, currency }) },
+      create: { key: "investment:income_goal", value: JSON.stringify({ annualTarget, currency }) },
     });
   }
   return NextResponse.json({ ok: true });

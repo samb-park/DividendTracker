@@ -36,6 +36,13 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [divAnnual, setDivAnnual] = useState<number | null>(null);
   const [divMonthly, setDivMonthly] = useState<number | null>(null);
   const [divShowMonthly, setDivShowMonthly] = useState(false);
+  const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/investment").then(r => r.json()).then(d => {
+      if (d.incomeGoal) setIncomeGoal(d.incomeGoal);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/fx").then((r) => r.json()).then((d) => {
@@ -172,7 +179,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
       {/* Summary grid */}
       {holdingSummaries.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-px border border-border bg-border mb-6">
+        <div className="grid grid-cols-3 gap-px border border-border bg-border mb-6">
           <div className="bg-card p-3">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL ASSETS</div>
             <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalValue)}</div>
@@ -217,6 +224,24 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                 {((divAnnual / holdingsValue) * 100).toFixed(2)}% yield
               </div>
             )}
+            {incomeGoal && divAnnual !== null && (() => {
+              const goalInDisplay = incomeGoal.currency === displayCurrency
+                ? incomeGoal.annualTarget
+                : displayCurrency === "CAD"
+                  ? incomeGoal.annualTarget * fxRate
+                  : incomeGoal.annualTarget / fxRate;
+              const pct = Math.min((divAnnual / goalInDisplay) * 100, 100);
+              return (
+                <div className="mt-1.5">
+                  <div className="h-1 bg-border rounded-full overflow-hidden">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[9px] text-muted-foreground mt-0.5 tabular-nums">
+                    {pct.toFixed(0)}% of {currencySymbol}{fmt(goalInDisplay)} goal
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

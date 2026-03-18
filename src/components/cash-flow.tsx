@@ -208,7 +208,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
                     className={`btn-retro text-xs flex-1 ${form.action === a ? "btn-retro-primary" : ""}`}
                     onClick={() => setForm(f => ({ ...f, action: a }))}
                   >
-                    {a === "DEPOSIT" ? "DEPOSIT" : "WITHDRAWAL"}
+                    {a === "DEPOSIT" ? "DEPOSIT" : "WITHDRAW"}
                   </button>
                 ))}
               </div>

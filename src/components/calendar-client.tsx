@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface DividendCalendarEvent {
@@ -234,8 +234,8 @@ export function CalendarClient() {
     setSelectedDay(null);
   };
 
-  const eventMap = buildEventMap(events, year, month);
-  const upcoming = buildUpcoming(events);
+  const eventMap = useMemo(() => buildEventMap(events, year, month), [events, year, month]);
+  const upcoming = useMemo(() => buildUpcoming(events), [events]);
 
   // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay();

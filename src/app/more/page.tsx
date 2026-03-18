@@ -124,14 +124,17 @@ export default function MorePage() {
     return [...new Set(base.map(t => t.holding.ticker))].sort();
   }, [txns, selectedPortfolio]);
 
-  const filtered = (txns ?? []).filter(t =>
-    (!selectedYear || t.date.startsWith(selectedYear)) &&
-    (!selectedPortfolio || t.holding.portfolio.name === selectedPortfolio) &&
-    (!selectedTicker || t.holding.ticker === selectedTicker)
+  const filtered = useMemo(() =>
+    (txns ?? []).filter(t =>
+      (!selectedYear || t.date.startsWith(selectedYear)) &&
+      (!selectedPortfolio || t.holding.portfolio.name === selectedPortfolio) &&
+      (!selectedTicker || t.holding.ticker === selectedTicker)
+    ),
+    [txns, selectedYear, selectedPortfolio, selectedTicker]
   );
 
-  const tradeTxns = filtered.filter(t => t.action === "BUY" || t.action === "SELL");
-  const divTxns = filtered.filter(t => t.action === "DIVIDEND");
+  const tradeTxns = useMemo(() => filtered.filter(t => t.action === "BUY" || t.action === "SELL"), [filtered]);
+  const divTxns = useMemo(() => filtered.filter(t => t.action === "DIVIDEND"), [filtered]);
 
   return (
     <div>

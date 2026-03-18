@@ -101,7 +101,7 @@ export function AllocationBars({
   // Portfolio Allocation by market value
   const allocEntries = useMemo((): BarEntry[] => {
     return holdings
-      .map((h, i) => ({
+      .map((h) => ({
         ticker: h.ticker,
         value: toDisplay(h.marketValue, h.currency, displayCurrency, fxRate),
         color: tickerColor(h.ticker),
@@ -115,7 +115,7 @@ export function AllocationBars({
   // Dividend Distribution by annual payout
   const divEntries = useMemo((): BarEntry[] => {
     return holdings
-      .map((h, i) => ({
+      .map((h) => ({
         ticker: h.ticker,
         value: toDisplay(h.annualDividend ?? 0, h.currency, displayCurrency, fxRate),
         color: tickerColor(h.ticker),

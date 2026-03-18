@@ -43,6 +43,9 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [targets, setTargets] = useState<Record<string, { pct: string }>>({});
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTargets, setSavingTargets] = useState(false);
+  const [goalAmount, setGoalAmount] = useState("");
+  const [goalCurrency, setGoalCurrency] = useState<"CAD" | "USD">("CAD");
+  const [savingGoal, setSavingGoal] = useState(false);
   const [confirmDeletePortfolioId, setConfirmDeletePortfolioId] = useState<string | null>(null);
   const [confirmDeleteToken, setConfirmDeleteToken] = useState(false);
 
@@ -61,6 +64,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         setContribFreq(data.contribution.frequency);
         setContribAmount(String(data.contribution.amount));
         setContribCurrency(data.contribution.currency);
+      }
+      if (data.incomeGoal) {
+        setGoalAmount(String(data.incomeGoal.annualTarget));
+        setGoalCurrency(data.incomeGoal.currency);
       }
       const t: Record<string, { pct: string }> = {};
       for (const [tk, v] of Object.entries(data.targets ?? {})) {
@@ -355,6 +362,38 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             }}
             className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40">
             {savingPlan ? "SAVING..." : "[ SAVE PLAN ]"}
+          </button>
+        </div>
+      </div>
+
+      {/* Income Goal */}
+      <div>
+        <div className="text-accent text-xs tracking-wide mb-4">INCOME GOAL</div>
+        <div className="border border-border bg-card p-4 space-y-4">
+          <div className="text-[10px] text-muted-foreground">Annual dividend income target</div>
+          <div className="flex items-center gap-2">
+            <input type="number" min="0" step="any"
+              value={goalAmount} onChange={e => setGoalAmount(e.target.value)}
+              placeholder="12000" className="flex-1" />
+            {(["CAD", "USD"] as const).map(c => (
+              <button key={c}
+                className={`btn-retro text-xs ${goalCurrency === c ? "btn-retro-primary" : ""}`}
+                onClick={() => setGoalCurrency(c)}>[{c}]</button>
+            ))}
+          </div>
+          <button
+            disabled={savingGoal || !goalAmount}
+            onClick={async () => {
+              setSavingGoal(true);
+              await fetch("/api/settings/investment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "income_goal", annualTarget: parseFloat(goalAmount), currency: goalCurrency }),
+              });
+              setSavingGoal(false);
+            }}
+            className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40">
+            {savingGoal ? "SAVING..." : "[ SAVE GOAL ]"}
           </button>
         </div>
       </div>
