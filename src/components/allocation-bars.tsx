@@ -100,6 +100,7 @@ export function AllocationBars({
   const [allocShowPct, setAllocShowPct] = useState(true);
   const [divShowPct, setDivShowPct] = useState(true);
   const [sectorMap, setSectorMap] = useState<SectorMap>({});
+  const [sectorError, setSectorError] = useState(false);
 
   useEffect(() => {
     fetch("/api/sector")
@@ -109,7 +110,7 @@ export function AllocationBars({
         for (const item of d.sectors ?? []) map[item.ticker] = item.sector;
         setSectorMap(map);
       })
-      .catch(() => {});
+      .catch(() => { setSectorError(true); });
   }, []);
 
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
@@ -187,7 +188,13 @@ export function AllocationBars({
       </div>
 
       {/* Sector Allocation */}
-      {Object.keys(sectorMap).length > 0 && (() => {
+      {sectorError && (
+        <div className="border border-border bg-card p-4">
+          <div className="text-accent text-xs tracking-wide mb-2">&#9654; SECTOR ALLOCATION</div>
+          <div className="text-[10px] text-negative">SECTOR DATA UNAVAILABLE</div>
+        </div>
+      )}
+      {!sectorError && Object.keys(sectorMap).length > 0 && (() => {
         // Group holdings by sector, sum market value
         const sectorValues = new Map<string, number>();
         for (const h of holdings) {

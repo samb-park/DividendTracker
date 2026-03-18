@@ -362,6 +362,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           holdingsWithTransactions={allHoldings}
           fxRate={fxRate}
           totalCashCAD={totalCashCAD}
+          displayCurrency={displayCurrency}
         />
       )}
 

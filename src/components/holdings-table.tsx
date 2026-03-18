@@ -108,7 +108,7 @@ export function HoldingsTable({
   const [dayMode, setDayMode] = useState<"day" | "yld">("day");
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
-  const [fxRate, setFxRate] = useState(1.37);
+  const [fxRate, setFxRate] = useState(1.35);
 
   useEffect(() => {
     fetch("/api/settings/investment").then(r => r.json()).then(d => {
@@ -298,7 +298,61 @@ export function HoldingsTable({
             NO POSITIONS — ADD A STOCK TO BEGIN
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile card list (< sm) */}
+          <div className="sm:hidden space-y-2">
+            {sortedRows.map((row) => {
+              const cur = row.holding.currency === "CAD" ? "C$" : "$";
+              const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
+              const priceUnavailable = !loadingPrices && !row.price;
+              return (
+                <div
+                  key={row.holding.id}
+                  className={`border border-border p-3 cursor-pointer active:bg-border/20 ${selectedRowId === row.holding.id ? "bg-border/30 border-accent" : "bg-card"}`}
+                  onClick={() => selectRow(row.holding.id)}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
+                      {row.holding.name && (
+                        <div className="text-muted-foreground text-[10px] mt-0.5 truncate">{row.holding.name}</div>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {loadingPrices ? (
+                        <span className="text-muted-foreground text-xs">...</span>
+                      ) : priceUnavailable ? (
+                        <span className="text-negative text-xs font-medium">PRICE N/A</span>
+                      ) : (
+                        <span className="text-sm tabular-nums font-medium">{cur}{fmt(row.price!.price)}</span>
+                      )}
+                      {row.price && (
+                        <div className={`text-[10px] tabular-nums ${row.price.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
+                          {fmtPct(row.price.changePercent)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] gap-2">
+                    <span className="text-muted-foreground tabular-nums">
+                      {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
+                    </span>
+                    <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
+                      {row.marketValue > 0
+                        ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(row.unrealizedPnL))} (${fmtPct(row.unrealizedPnLPct)})`
+                        : "—"}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums flex-shrink-0">
+                      {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table (sm+) */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-max">
               <thead>
                 <tr>
@@ -370,7 +424,7 @@ export function HoldingsTable({
                         {loadingPrices ? (
                           <span className="text-muted-foreground">...</span>
                         ) : priceMode === "price"
-                          ? (row.price ? `${cur}${fmt(row.price.price)}` : "—")
+                          ? (row.price ? `${cur}${fmt(row.price.price)}` : <span className="text-negative text-[10px]">PRICE N/A</span>)
                           : (row.avgCost > 0 ? `${cur}${fmt(row.avgCost)}` : "—")}
                       </td>
                       <td className={`text-right tabular-nums hidden sm:table-cell ${
@@ -440,6 +494,7 @@ export function HoldingsTable({
               )}
             </table>
           </div>
+          </>
         )}
       </div>
 

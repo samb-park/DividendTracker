@@ -62,19 +62,20 @@ interface EquityPoint {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, currencySymbol }: any) {
   if (!active || !payload || payload.length === 0) return null;
   const value = payload.find((p: any) => p.dataKey === "value")?.value ?? 0;
   const cost = payload.find((p: any) => p.dataKey === "cost")?.value ?? 0;
+  const sym = currencySymbol ?? "$";
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
   return (
     <div style={RETRO_TOOLTIP_STYLE} className="p-2">
       <div style={{ color: "#888", marginBottom: 4 }}>{label}</div>
-      <div>Value: <span style={{ color: "hsl(142,69%,58%)" }}>${fmt(value)}</span></div>
-      <div>Cost: <span style={{ color: "#888" }}>${fmt(cost)}</span></div>
+      <div>Value: <span style={{ color: "hsl(142,69%,58%)" }}>{sym}{fmt(value)}</span></div>
+      <div>Cost: <span style={{ color: "#888" }}>{sym}{fmt(cost)}</span></div>
       <div style={{ borderTop: "1px solid #333", marginTop: 4, paddingTop: 4, color: pnl >= 0 ? "hsl(142,69%,58%)" : "hsl(0,70%,60%)" }}>
-        P&L: {pnl >= 0 ? "+" : ""}${fmt(Math.abs(pnl))} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+        P&L: {pnl >= 0 ? "+" : ""}{sym}{fmt(Math.abs(pnl))} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
       </div>
     </div>
   );
@@ -97,11 +98,13 @@ export function PortfolioCharts({
   holdingsWithTransactions,
   fxRate,
   totalCashCAD = 0,
+  displayCurrency = "CAD",
 }: {
   holdings: HoldingData[];
   holdingsWithTransactions?: HoldingWithTxn[];
   fxRate?: number;
   totalCashCAD?: number;
+  displayCurrency?: "CAD" | "USD";
 }) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("3M");
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
@@ -118,11 +121,14 @@ export function PortfolioCharts({
   }, []);
   const [equityData, setEquityData] = useState<EquityPoint[]>([]);
   const [loadingPnl, setLoadingPnl] = useState(false);
+  const [equityError, setEquityError] = useState(false);
   const lineChartHeight = useChartHeight(160, 220);
+  const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
 
   const fetchEquityData = useCallback(async () => {
     if (!holdingsWithTransactions || holdingsWithTransactions.length === 0) return;
     setLoadingPnl(true);
+    setEquityError(false);
 
     const fx = fxRate ?? 1;
 
@@ -142,11 +148,12 @@ export function PortfolioCharts({
     // Fetch historical prices for all tickers and cash transactions in parallel
     const histories: Record<string, { date: string; close: number }[]> = {};
     let cashTxns: { date: string; action: "DEPOSIT" | "WITHDRAWAL"; amount: number; currency: "CAD" | "USD" }[] = [];
+    let successCount = 0;
     await Promise.all([
       ...holdingsWithTransactions.map(async (h) => {
         try {
           const res = await fetch(`/api/price/${h.ticker}/history?${queryParam}`);
-          if (res.ok) histories[h.ticker] = await res.json();
+          if (res.ok) { histories[h.ticker] = await res.json(); successCount++; }
         } catch {
           // skip
         }
@@ -232,6 +239,9 @@ export function PortfolioCharts({
       };
     });
 
+    if (holdingsWithTransactions.length > 0 && successCount === 0) {
+      setEquityError(true);
+    }
     setEquityData(result);
     setLoadingPnl(false);
   }, [holdingsWithTransactions, fxRate, range]);
@@ -273,7 +283,12 @@ export function PortfolioCharts({
             </div>
           </div>
           {loadingPnl ? (
-            <div className="text-muted-foreground text-xs text-center py-8">Loading...</div>
+            <div className="text-muted-foreground text-xs text-center py-8">LOADING...</div>
+          ) : equityError ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-2 border border-dashed border-border text-xs">
+              <span className="text-negative">FAILED TO LOAD PRICE HISTORY</span>
+              <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setEquityError(false); fetchEquityData(); }}>RETRY</button>
+            </div>
           ) : equityData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={lineChartHeight}>
@@ -288,9 +303,9 @@ export function PortfolioCharts({
                   <YAxis
                     tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
                     axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                    tickFormatter={(v) => `${currencySymbol}${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
                   <Line
                     type="monotone"
                     dataKey="cost"

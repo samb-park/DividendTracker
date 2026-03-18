@@ -56,6 +56,7 @@ export function PerformanceChart() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [benchmark, setBenchmark] = useState<BenchmarkPoint[]>([]);
   const [showBenchmark, setShowBenchmark] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
@@ -76,10 +77,11 @@ export function PerformanceChart() {
 
   useEffect(() => {
     if (!showBenchmark) return;
+    setBenchmarkError(false);
     fetch(`/api/benchmarks?range=${range}`)
       .then((r) => r.json())
       .then((d) => setBenchmark(d.prices ?? []))
-      .catch(() => setBenchmark([]));
+      .catch(() => { setBenchmark([]); setBenchmarkError(true); });
   }, [range, showBenchmark]);
 
   const { cagr, mdd, totalReturn, chartData } = useMemo(() => {
@@ -201,7 +203,11 @@ export function PerformanceChart() {
                 <span className="inline-block w-3 border-t border-dashed border-accent" />
                 SPY
               </span>
-              <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
+              {benchmarkError ? (
+                <span className="ml-auto text-[9px] text-negative">SPY DATA UNAVAILABLE</span>
+              ) : (
+                <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
+              )}
             </div>
           )}
           <div className="h-36">
