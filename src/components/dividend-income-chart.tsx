@@ -117,6 +117,7 @@ export function DividendIncomeChart({
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
   const [futureData, setFutureData] = useState<DividendIncomeData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,9 +140,10 @@ export function DividendIncomeChart({
       .then(([past, future]) => {
         setPastData(past);
         setFutureData(future);
+        setFetchError(false);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setFetchError(true); setLoading(false); });
   }, [year, selectedPortfolioId, CURRENT_YEAR]);
 
   // Swipe left/right to navigate years
@@ -261,7 +263,7 @@ export function DividendIncomeChart({
       <div className="flex items-center justify-between mb-3">
         <YearDropdown
           value={year}
-          options={Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + 2 - i)}
+          options={Array.from({ length: 16 }, (_, i) => CURRENT_YEAR + 10 - i)}
           onChange={setYear}
         />
         <div className="relative" ref={netDropdownRef}>
@@ -291,6 +293,11 @@ export function DividendIncomeChart({
       {/* Bar Chart */}
       {loading ? (
         <div className="text-muted-foreground text-xs text-center py-8">LOADING...</div>
+      ) : fetchError ? (
+        <div className="flex flex-col items-center justify-center text-xs space-y-2 py-8 border border-dashed border-border">
+          <span className="text-negative">FAILED TO LOAD DIVIDEND DATA</span>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); }}>RETRY</button>
+        </div>
       ) : (
         <>
           <ResponsiveContainer width="100%" height={180}>
@@ -429,11 +436,14 @@ export function DividendIncomeChart({
         </div>
       )}
 
-      {!loading && chartData.every((d) => d.value === 0) && (
+      {!loading && !fetchError && chartData.every((d) => d.value === 0) && (
         <div className="text-muted-foreground text-xs text-center py-4">
           NO DIVIDEND DATA FOR {year}
         </div>
       )}
+      <div className="text-[9px] text-muted-foreground/40 mt-3 text-right">
+        For reference only — consult a tax professional
+      </div>
     </div>
   );
 }

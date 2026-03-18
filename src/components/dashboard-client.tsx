@@ -66,9 +66,9 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   }, []);
 
   // Compute market-value-weighted portfolio dividend CAGR
-  // Re-runs when holdingSummaries (prices) load so weights reflect actual position sizes
+  // Only runs after prices are loaded so weights reflect actual position sizes (not equal-weight)
   useEffect(() => {
-    if (!growthTickers.length) return;
+    if (!growthTickers.length || loadingData) return;
 
     const cadValueByTicker: Record<string, number> = {};
     for (const s of holdingSummaries) {
@@ -222,8 +222,9 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         </div>
       </div>
       {fxFallback && (
-        <div className="text-[10px] text-negative/70 text-right -mt-3 mb-2">
-          FX rate unavailable — using fallback
+        <div className="flex items-center gap-2 border border-yellow-600/40 bg-yellow-900/10 text-yellow-500 text-[10px] px-3 py-2 mb-3">
+          <span className="font-bold">!</span>
+          <span>FX rate unavailable — using fallback rate. Currency conversions may be inaccurate.</span>
         </div>
       )}
 
@@ -258,7 +259,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         <div className="grid grid-cols-3 gap-px border border-border bg-border mb-6">
           <div className="bg-card p-3">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL ASSETS</div>
-            <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalValue)}</div>
+            <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalValue)} <span className="text-[9px] font-normal text-muted-foreground/60">{displayCurrency}</span></div>
           </div>
           <div className="bg-card p-3">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MARKET VALUE</div>
@@ -280,7 +281,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           </div>
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L <span className="text-[9px] opacity-50">vs PREV CLOSE</span></div>
             <div className={`text-xs font-medium tabular-nums truncate ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
               {todayPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(todayPnL))}
             </div>
@@ -326,18 +327,24 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               aria-label="Income goal progress"
               className="h-1 bg-border rounded-full overflow-hidden mb-1.5"
             >
-              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+              <div className={`h-full rounded-full transition-all ${pct >= 100 ? "bg-positive" : "bg-primary"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] tabular-nums text-muted-foreground">
                 {currencySymbol}{fmt(divAnnual)} / {currencySymbol}{fmt(goalInDisplay)}
               </div>
               <div className="flex items-center gap-2 text-[10px] tabular-nums min-w-0">
-                <span className="text-primary/80 shrink-0">{pct.toFixed(0)}%</span>
-                {yearsToGoal !== null && divPortfolioCagr !== null && (
-                  <span className="text-muted-foreground truncate min-w-0">
-                    · ≈ {yearsToGoal} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
-                  </span>
+                {pct >= 100 ? (
+                  <span className="text-positive shrink-0 font-medium">GOAL REACHED</span>
+                ) : (
+                  <>
+                    <span className="text-primary/80 shrink-0">{pct.toFixed(0)}%</span>
+                    {yearsToGoal !== null && divPortfolioCagr !== null && (
+                      <span className="text-muted-foreground truncate min-w-0">
+                        · ≈ {yearsToGoal} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -57,11 +57,13 @@ export function PerformanceChart() {
   const [benchmark, setBenchmark] = useState<BenchmarkPoint[]>([]);
   const [showBenchmark, setShowBenchmark] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
 
   useEffect(() => {
     if (range === "all" && allLoaded) return;
     setLoading(true);
+    setFetchError(false);
     fetch(`/api/snapshots?range=${range}`)
       .then((r) => r.json())
       .then((d) => {
@@ -69,7 +71,7 @@ export function PerformanceChart() {
         if (range === "all") setAllLoaded(true);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setFetchError(true); setLoading(false); });
   }, [range, allLoaded]);
 
   useEffect(() => {
@@ -150,20 +152,20 @@ export function PerformanceChart() {
       {/* Metrics row */}
       {hasSufficientData && (
         <div className="grid grid-cols-3 gap-px bg-border border border-border mb-4">
-          <div className="bg-card p-2">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAGR</div>
+          <div className="bg-card p-2" title="Compound Annual Growth Rate — annualized return of your portfolio over the selected period">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAGR <span className="opacity-50">?</span></div>
             <div className={`text-sm font-medium tabular-nums ${cagr !== null && cagr >= 0 ? "text-positive" : "text-negative"}`}>
               {cagr !== null ? `${cagr >= 0 ? "+" : ""}${cagr.toFixed(2)}%` : "—"}
             </div>
           </div>
-          <div className="bg-card p-2">
+          <div className="bg-card p-2" title="Total Return — overall gain or loss from start to end of the selected period">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL RETURN</div>
             <div className={`text-sm font-medium tabular-nums ${totalReturn !== null && totalReturn >= 0 ? "text-positive" : "text-negative"}`}>
               {totalReturn !== null ? `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%` : "—"}
             </div>
           </div>
-          <div className="bg-card p-2">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MAX DRAWDOWN</div>
+          <div className="bg-card p-2" title="Maximum Drawdown — largest peak-to-trough decline over the selected period. Values below −5% are highlighted.">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MAX DD <span className="opacity-50">?</span></div>
             <div className={`text-sm font-medium tabular-nums ${mdd !== null && mdd < -5 ? "text-negative" : "text-muted-foreground"}`}>
               {mdd !== null ? `${mdd.toFixed(2)}%` : "—"}
             </div>
@@ -174,6 +176,11 @@ export function PerformanceChart() {
       {/* Chart */}
       {loading ? (
         <div className="h-36 flex items-center justify-center text-muted-foreground text-xs">LOADING...</div>
+      ) : fetchError ? (
+        <div className="h-36 flex flex-col items-center justify-center text-xs space-y-2 border border-dashed border-border">
+          <span className="text-negative">FAILED TO LOAD PERFORMANCE DATA</span>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); setAllLoaded(false); }}>RETRY</button>
+        </div>
       ) : !hasSufficientData ? (
         <div className="h-36 flex flex-col items-center justify-center text-muted-foreground text-xs space-y-1 border border-dashed border-border">
           <span>NOT ENOUGH DATA YET</span>

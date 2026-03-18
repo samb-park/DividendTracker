@@ -45,11 +45,19 @@ function parseAccountType(portfolioName: string): string {
   return match ? match[1].toUpperCase() : "MARGIN";
 }
 
-function netFactor(accountType: string, currency: string): number {
+// Heuristic: US-listed tickers have no exchange suffix (e.g. AAPL, VTI)
+// Canadian tickers use .TO, .V, etc. Foreign ADRs in USD may have different rates.
+function isUSListed(ticker: string): boolean {
+  return !ticker.includes(".");
+}
+
+function netFactor(accountType: string, currency: string, ticker: string): number {
+  // Only apply US 15% NRA withholding if the stock is US-listed (heuristic: no exchange suffix)
+  const applyUSWithholding = currency === "USD" && isUSListed(ticker);
   if (accountType === "RRSP") return 1.0; // Canada-US treaty Article XXI(7) exempts RRSP
-  if (accountType === "TFSA") return currency === "USD" ? 0.85 : 1.0; // TFSA not treaty-exempt
-  if (accountType === "FHSA") return currency === "USD" ? 0.85 : 1.0; // FHSA not treaty-exempt
-  if (accountType === "RESP") return currency === "USD" ? 0.85 : 1.0; // RESP not treaty-exempt
+  if (accountType === "TFSA") return applyUSWithholding ? 0.85 : 1.0; // TFSA not treaty-exempt
+  if (accountType === "FHSA") return applyUSWithholding ? 0.85 : 1.0; // FHSA not treaty-exempt
+  if (accountType === "RESP") return applyUSWithholding ? 0.85 : 1.0; // RESP not treaty-exempt
   return 1.0; // Margin/Cash — return gross (personal tax handled separately)
 }
 
@@ -171,7 +179,7 @@ export async function GET(req: Request) {
       if (!divData) continue;
 
       const accountType = parseAccountType(h.portfolio.name);
-      const factor = netFactor(accountType, divData.currency);
+      const factor = netFactor(accountType, divData.currency, ticker);
       const grossAmount = divData.amountPerShare * qty;
       const netAmount = grossAmount * factor;
 
