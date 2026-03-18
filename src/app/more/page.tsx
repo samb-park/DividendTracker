@@ -136,7 +136,7 @@ export default function MorePage() {
   return (
     <div>
       {/* Top tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-border pb-3">
+      <div className="flex gap-1 mb-6 border-b border-border pb-3 overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -207,7 +207,7 @@ export default function MorePage() {
                         <td className={`text-xs ${t.action === "BUY" ? "text-positive" : "text-negative"}`}>
                           {t.action}
                         </td>
-                        <td className="text-right tabular-nums">{fmt(qty, 4)}</td>
+                        <td className="text-right tabular-nums">{Number.isInteger(qty) ? fmt(qty, 0) : fmt(qty, qty < 10 ? 4 : 2)}</td>
                         <td className="text-right tabular-nums">{sym(t.holding.currency)}{fmt(price)}</td>
                         <td className="hidden sm:table-cell text-right tabular-nums text-muted-foreground">
                           {comm > 0 ? `$${fmt(comm)}` : "—"}

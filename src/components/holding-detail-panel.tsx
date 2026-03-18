@@ -351,7 +351,7 @@ const [showHistory, setShowHistory] = useState(false);
           <div className="text-[10px] text-muted-foreground tracking-widest mb-2">PRICE</div>
           {p ? (
             <>
-              <div className="flex items-baseline gap-3 mb-3">
+              <div className="flex flex-wrap items-baseline gap-3 mb-3">
                 <span className="text-2xl font-medium tabular-nums">{sym}{fmt(toDisp(p.price))}</span>
                 <span className={`text-sm tabular-nums ${p.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
                   {p.changePercent >= 0 ? "+" : ""}{sym}{fmt(toDisp(Math.abs(p.change)))} ({fmtPct(p.changePercent)})
@@ -593,7 +593,7 @@ const [showHistory, setShowHistory] = useState(false);
               )}
             </div>
             {buysSells.length > 0 && (
-              <div className="flex items-center gap-2 mb-3 text-[10px]">
+              <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px]">
                 <span className="text-muted-foreground">FROM</span>
                 <input
                   type="date"
