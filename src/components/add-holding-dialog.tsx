@@ -104,7 +104,7 @@ export function AddHoldingDialog({ portfolioId, onAdd }: Props) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
       <div className="bg-card border border-border p-6 w-full max-w-sm mx-4">
-        <div className="text-accent text-xs tracking-widest mb-4">&#9654; ADD STOCK</div>
+        <div className="text-accent text-xs tracking-wide mb-4">&#9654; ADD STOCK</div>
         <div className="mb-4 relative">
           <label className="text-xs text-muted-foreground block mb-1">TICKER</label>
           <input

@@ -139,7 +139,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
     <div className="space-y-8">
       {/* Portfolio Management */}
       <div>
-        <div className="text-accent text-xs tracking-widest mb-4">
+        <div className="text-accent text-xs tracking-wide mb-4">
           PORTFOLIO MANAGEMENT
         </div>
         <div className="border border-border bg-card p-4 space-y-3">
@@ -166,13 +166,13 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
 
       {/* Questrade Section */}
       <div>
-        <div className="text-accent text-xs tracking-widest mb-4">
+        <div className="text-accent text-xs tracking-wide mb-4">
           QUESTRADE API — BROKER SYNC
         </div>
 
         {/* How to get a token */}
         <div className="border border-border bg-card p-4 mb-4 text-xs text-muted-foreground space-y-1">
-          <div className="text-foreground mb-2 tracking-widest">HOW TO GET A TOKEN:</div>
+          <div className="text-foreground mb-2 tracking-wide">HOW TO GET A TOKEN:</div>
           <div>1. Login → My Account → App Hub</div>
           <div>2. Generate a new token under "Personal API Access"</div>
           <div>3. Paste it below — tokens expire after 30 days without use</div>
@@ -184,7 +184,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             <div className="text-xs space-y-0.5">
               <div className="flex items-center gap-2">
                 <CheckCircle size={12} className="text-primary" />
-                <span className="text-primary tracking-widest">TOKEN ACTIVE</span>
+                <span className="text-primary tracking-wide">TOKEN ACTIVE</span>
               </div>
               <div className="text-muted-foreground">
                 Ending in {status.tokenPreview}
@@ -213,7 +213,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
 
         {/* Token input */}
         <div className="space-y-2">
-          <label className="text-[10px] tracking-widest text-muted-foreground">
+          <label className="text-[10px] tracking-wide text-muted-foreground">
             {status?.hasToken ? "REPLACE TOKEN" : "REFRESH TOKEN"}
           </label>
           <input
@@ -261,7 +261,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         {/* Sync result */}
         {syncResult && (
           <div className="border border-border bg-card p-4 mt-4 text-xs space-y-2">
-            <div className="text-accent tracking-widest mb-2">SYNC RESULT</div>
+            <div className="text-accent tracking-wide mb-2">SYNC RESULT</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div>
                 <div className="text-lg font-medium tabular-nums text-primary">
@@ -308,10 +308,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
 
       {/* Contribution Plan */}
       <div>
-        <div className="text-accent text-xs tracking-widest mb-4">CONTRIBUTION PLAN</div>
+        <div className="text-accent text-xs tracking-wide mb-4">CONTRIBUTION PLAN</div>
         <div className="border border-border bg-card p-4 space-y-4">
           <div>
-            <div className="text-[10px] tracking-widest text-muted-foreground mb-2">FREQUENCY</div>
+            <div className="text-[10px] tracking-wide text-muted-foreground mb-2">FREQUENCY</div>
             <div className="flex gap-2">
               {(["weekly", "biweekly", "monthly"] as const).map(f => (
                 <button key={f}
@@ -352,7 +352,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
       {/* Ticker Targets */}
       {tickers.length > 0 && (
         <div>
-          <div className="text-accent text-xs tracking-widest mb-4">TICKER TARGETS</div>
+          <div className="text-accent text-xs tracking-wide mb-4">TICKER TARGETS</div>
           <div className="border border-border bg-card p-4 space-y-3">
             <div className="text-[10px] text-muted-foreground mb-1">ALLOCATION TARGET (%) — MUST SUM TO 100</div>
             {tickers.map(ticker => {
@@ -394,7 +394,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
 
       {/* App Info */}
       <div>
-        <div className="text-accent text-xs tracking-widest mb-4">APP INFO</div>
+        <div className="text-accent text-xs tracking-wide mb-4">APP INFO</div>
         <div className="border border-border bg-card p-4 text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between">
             <span>VERSION</span>

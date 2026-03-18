@@ -12,7 +12,7 @@ export default async function TransactionsPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-amber-400 font-medium tracking-widest">TRANSACTION LOG</h1>
+        <h1 className="text-amber-400 font-medium tracking-wide">TRANSACTION LOG</h1>
         <span className="text-muted-foreground text-xs">//</span>
         <span className="text-xs text-muted-foreground">{transactions.length} RECORDS</span>
       </div>

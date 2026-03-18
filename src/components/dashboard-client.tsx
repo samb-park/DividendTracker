@@ -162,21 +162,21 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
       {holdingSummaries.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-px border border-border bg-border mb-6">
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">TOTAL ASSETS</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL ASSETS</div>
             <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalValue)}</div>
           </div>
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">MARKET VALUE</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MARKET VALUE</div>
             <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(holdingsValue)}</div>
           </div>
           {totalCash > 0 && (
             <div className="bg-card p-3">
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">CASH</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CASH</div>
               <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalCash)}</div>
             </div>
           )}
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">OPEN P&amp;L</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">OPEN P&amp;L</div>
             <div className={`text-xs font-medium tabular-nums truncate ${openPnL >= 0 ? "text-positive" : "text-negative"}`}>
               {openPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(openPnL))}
             </div>
@@ -185,7 +185,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           </div>
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">TODAY&apos;S P&amp;L</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L</div>
             <div className={`text-xs font-medium tabular-nums truncate ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
               {todayPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(todayPnL))}
             </div>
@@ -194,7 +194,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           </div>
           <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
               {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
             </div>
             <div className="text-xs font-medium tabular-nums truncate text-primary">

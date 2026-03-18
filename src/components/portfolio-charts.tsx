@@ -248,7 +248,7 @@ export function PortfolioCharts({
       {holdingsWithTransactions && holdingsWithTransactions.length > 0 && (
         <div className="border border-border p-4 bg-card">
           <div className="flex items-center justify-between mb-4">
-            <div className="text-accent text-xs tracking-widest">&#9654; TOTAL EQUITY</div>
+            <div className="text-accent text-xs tracking-wide">&#9654; TOTAL EQUITY</div>
             <div className="relative" ref={rangeDropdownRef}>
               <button
                 className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1.5 min-w-[4rem]"

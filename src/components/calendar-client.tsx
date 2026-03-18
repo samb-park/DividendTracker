@@ -266,7 +266,7 @@ export function CalendarClient() {
   return (
     <div ref={calendarRef} className="space-y-6">
       {/* Legend */}
-      <div className="flex gap-4 text-[10px] tracking-widest">
+      <div className="flex gap-4 text-[10px] tracking-wide">
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 cal-exdiv" />
           EX-DIV DATE
@@ -285,7 +285,7 @@ export function CalendarClient() {
         <button onClick={prevMonth} className="btn-retro p-1">
           <ChevronLeft size={14} />
         </button>
-        <span className="text-accent tracking-widest text-sm flex-1 text-center">
+        <span className="text-accent tracking-wide text-sm flex-1 text-center">
           {MONTHS[month]} {year}
         </span>
         <button onClick={nextMonth} className="btn-retro p-1">
@@ -296,7 +296,7 @@ export function CalendarClient() {
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 gap-1">
         {DAYS.map((d) => (
-          <div key={d} className="text-center text-[9px] text-muted-foreground tracking-widest py-1">
+          <div key={d} className="text-center text-[9px] text-muted-foreground tracking-wide py-1">
             <span className="hidden sm:inline">{d}</span>
             <span className="sm:hidden">{d[0]}</span>
           </div>
@@ -356,7 +356,7 @@ export function CalendarClient() {
       {/* Selected day detail */}
       {selectedDay && selectedEvents.length > 0 && (
         <div className="border border-border bg-card p-4 space-y-2">
-          <div className="text-accent text-xs tracking-widest mb-3">
+          <div className="text-accent text-xs tracking-wide mb-3">
             {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-CA", {
               weekday: "long", year: "numeric", month: "long", day: "numeric",
             }).toUpperCase()}
@@ -369,7 +369,7 @@ export function CalendarClient() {
               </div>
               <div className="text-right">
                 <span
-                  className="text-[10px] tracking-widest px-1 py-0.5 border"
+                  className="text-[10px] tracking-wide px-1 py-0.5 border"
                   style={{
                     color: e.type === "exdiv" ? "hsl(var(--accent))" : "hsl(var(--primary))",
                     borderColor: e.type === "exdiv" ? "hsl(var(--accent) / 0.4)" : "hsl(var(--primary) / 0.4)",
@@ -395,7 +395,7 @@ export function CalendarClient() {
 
       {/* Upcoming dividends list */}
       <div>
-        <div className="text-xs tracking-widest text-accent mb-3">
+        <div className="text-xs tracking-wide text-accent mb-3">
           UPCOMING — NEXT 90 DAYS
         </div>
         {upcoming.length === 0 ? (
@@ -424,7 +424,7 @@ export function CalendarClient() {
                       <td className="font-medium">{u.event.ticker}</td>
                       <td>
                         <span
-                          className="text-[10px] tracking-widest"
+                          className="text-[10px] tracking-wide"
                           style={{
                             color: u.event.type === "exdiv"
                               ? "hsl(var(--accent))"
@@ -465,7 +465,7 @@ export function CalendarClient() {
       {/* Summary cards */}
       {events.length > 0 && (
         <div>
-          <div className="text-xs tracking-widest text-accent mb-3">
+          <div className="text-xs tracking-wide text-accent mb-3">
             DIVIDEND HOLDINGS — {events.length} STOCKS
           </div>
           <div className="grid grid-cols-1 gap-2">

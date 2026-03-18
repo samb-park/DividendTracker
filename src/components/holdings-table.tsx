@@ -169,6 +169,37 @@ export function HoldingsTable({
 
   const totalMarketValue = rows.reduce((s, r) => s + r.marketValue, 0);
 
+  const totalsByCur = rows.reduce((acc, r) => {
+    const c = r.holding.currency;
+    acc[c] = acc[c] ?? { mkt: 0, cost: 0, pnl: 0 };
+    acc[c].mkt += r.marketValue;
+    acc[c].cost += r.costBasis;
+    acc[c].pnl += r.unrealizedPnL;
+    return acc;
+  }, {} as Record<string, { mkt: number; cost: number; pnl: number }>);
+
+  const totalCurrencies = Object.keys(totalsByCur) as ("USD" | "CAD")[];
+  const fmtTotal = (mode: "mkt" | "cost") =>
+    totalCurrencies.map(c => {
+      const s = totalsByCur[c];
+      const val = mode === "mkt" ? s.mkt : s.cost;
+      const sym = c === "CAD" ? "C$" : "$";
+      return `${sym}${fmt(val)}`;
+    }).join(" / ");
+  const fmtTotalPnL = () =>
+    totalCurrencies.map(c => {
+      const s = totalsByCur[c];
+      const sym = c === "CAD" ? "C$" : "$";
+      return `${s.pnl >= 0 ? "+" : ""}${sym}${fmt(Math.abs(s.pnl))}`;
+    }).join(" / ");
+  const fmtTotalPnLPct = () =>
+    totalCurrencies.map(c => {
+      const s = totalsByCur[c];
+      const pct = s.cost > 0 ? (s.pnl / s.cost) * 100 : 0;
+      return fmtPct(pct);
+    }).join(" / ");
+  const totalPnLPositive = totalCurrencies.every(c => totalsByCur[c].pnl >= 0);
+
   // Contribution allocation (Excel Funds column logic)
   // contrib is always in CAD; convert to each stock's native currency
   const contribCAD = investContrib
@@ -333,6 +364,25 @@ export function HoldingsTable({
                   );
                 })}
               </tbody>
+              {rows.length > 1 && totalCurrencies.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-border">
+                    <td className="text-xs text-muted-foreground font-medium">TOTAL</td>
+                    <td className="hidden lg:table-cell" />
+                    <td />
+                    <td />
+                    <td className="hidden sm:table-cell" />
+                    <td className="text-right tabular-nums font-medium text-xs">
+                      {fmtTotal(mktMode)}
+                    </td>
+                    <td />
+                    <td className={`text-right tabular-nums font-medium text-xs ${totalPnLPositive ? "text-positive" : "text-negative"}`}>
+                      {colMode === "usd" ? fmtTotalPnL() : fmtTotalPnLPct()}
+                    </td>
+                    <td className="hidden sm:table-cell" />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

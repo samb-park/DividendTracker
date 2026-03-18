@@ -126,7 +126,7 @@ export function AllocationBars({
       <div className="border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-accent text-xs tracking-widest">&#9654; PORTFOLIO ALLOCATION</div>
+            <div className="text-accent text-xs tracking-wide">&#9654; PORTFOLIO ALLOCATION</div>
             <div className="text-[10px] text-muted-foreground mt-0.5">By Position Size</div>
           </div>
           <div className="flex gap-1">
@@ -155,7 +155,7 @@ export function AllocationBars({
           <Link
             href="/portfolio"
             replace
-            className="text-[10px] text-muted-foreground hover:text-primary transition-colors tracking-widest flex items-center gap-1"
+            className="text-[10px] text-muted-foreground hover:text-primary transition-colors tracking-wide flex items-center gap-1"
           >
             PORTFOLIO ›
           </Link>
@@ -167,7 +167,7 @@ export function AllocationBars({
         <div className="border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-accent text-xs tracking-widest">&#9654; DIVIDEND DISTRIBUTION</div>
+              <div className="text-accent text-xs tracking-wide">&#9654; DIVIDEND DISTRIBUTION</div>
               <div className="text-[10px] text-muted-foreground mt-0.5">By Annual Payout</div>
             </div>
             <div className="flex gap-1">
@@ -199,7 +199,7 @@ export function AllocationBars({
             <Link
               href="/calendar"
               replace
-              className="text-[10px] text-muted-foreground hover:text-primary transition-colors tracking-widest flex items-center gap-1"
+              className="text-[10px] text-muted-foreground hover:text-primary transition-colors tracking-wide flex items-center gap-1"
             >
               CALENDAR ›
             </Link>

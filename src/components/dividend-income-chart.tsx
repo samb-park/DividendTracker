@@ -247,7 +247,7 @@ export function DividendIncomeChart({
   return (
     <div ref={containerRef} className="border border-border bg-card p-4 mb-6">
       {/* Header: title */}
-      <div className="text-accent text-xs tracking-widest mb-2">&#9654; DIVIDEND INCOME</div>
+      <div className="text-accent text-xs tracking-wide mb-2">&#9654; DIVIDEND INCOME</div>
 
       {/* Header: year nav + GROSS/NET toggle */}
       <div className="flex items-center justify-between mb-3">
@@ -347,7 +347,7 @@ export function DividendIncomeChart({
           {annualTotal > 0 && (
             <div className="flex gap-4 mt-3 pt-3 border-t border-border">
               <div className="flex-1">
-                <div className="text-[10px] text-muted-foreground tracking-widest mb-0.5">
+                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">
                   {year} TOTAL
                 </div>
                 <div className="text-sm font-medium tabular-nums text-primary">
@@ -355,7 +355,7 @@ export function DividendIncomeChart({
                 </div>
               </div>
               <div className="flex-1">
-                <div className="text-[10px] text-muted-foreground tracking-widest mb-0.5">AVG / MONTH</div>
+                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">AVG / MONTH</div>
                 <div className="text-sm font-medium tabular-nums text-primary">
                   {currencySymbol}{fmt(monthlyAvg)}
                 </div>
@@ -369,7 +369,7 @@ export function DividendIncomeChart({
       {selectedMonth && selectedData && selectedData.items.length > 0 && (
         <div className="mt-4 border-t border-border pt-3">
           <div className="flex items-center gap-2 mb-2">
-            <div className="text-accent text-[10px] tracking-widest">
+            <div className="text-accent text-[10px] tracking-wide">
               {MONTH_LABELS[parseInt(selectedMonth.slice(5, 7)) - 1]} {selectedMonth.slice(0, 4)}
             </div>
             {selectedData.source === "projected" && (

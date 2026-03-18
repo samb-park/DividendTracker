@@ -305,7 +305,7 @@ const [showHistory, setShowHistory] = useState(false);
       {/* Unified header — sticky */}
       <div className="sticky top-0 z-10 bg-background flex items-center justify-between px-4 border-b border-border safe-top" style={{ paddingBottom: "12px", paddingTop: "12px" }}>
         <div className="min-w-0">
-          <div className="text-accent font-medium tracking-widest">{row.holding.ticker}</div>
+          <div className="text-accent font-medium tracking-wide">{row.holding.ticker}</div>
           {row.holding.name && (
             <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{row.holding.name}</div>
           )}
@@ -348,7 +348,7 @@ const [showHistory, setShowHistory] = useState(false);
 
         {/* Price info */}
         <div className="border border-border bg-card p-4 mb-3">
-          <div className="text-[10px] text-muted-foreground tracking-widest mb-2">PRICE</div>
+          <div className="text-[10px] text-muted-foreground tracking-wide mb-2">PRICE</div>
           {p ? (
             <>
               <div className="flex flex-wrap items-baseline gap-3 mb-3">
@@ -387,7 +387,7 @@ const [showHistory, setShowHistory] = useState(false);
 
         {/* Position summary */}
         <div className="border border-border bg-card p-4 mb-3">
-          <div className="text-[10px] text-muted-foreground tracking-widest mb-3">POSITION</div>
+          <div className="text-[10px] text-muted-foreground tracking-wide mb-3">POSITION</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
               <div className="text-[10px] text-muted-foreground">SHARES</div>
@@ -438,7 +438,7 @@ const [showHistory, setShowHistory] = useState(false);
         {/* Dividends summary card */}
         {(p?.dividendYield != null || estimatedAnnual != null || totalDivsAllTime > 0) && (
           <div className="border border-border bg-card p-4 mb-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-3">DIVIDENDS</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-3">DIVIDENDS</div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               {p?.dividendYield != null && (
                 <div>
@@ -506,7 +506,7 @@ const [showHistory, setShowHistory] = useState(false);
         {/* Investment Plan */}
         {readOnly && investPlan && investPlan.target && (
           <div className="border border-border bg-card p-4 mb-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-3">INVESTMENT PLAN</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-3">INVESTMENT PLAN</div>
             {(() => {
               const currentPct = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
               const targetPct = investPlan.target!.pct;
@@ -567,13 +567,13 @@ const [showHistory, setShowHistory] = useState(false);
             className={`btn-retro text-xs ${activeTab === "transactions" ? "btn-retro-primary" : ""}`}
             onClick={() => setActiveTab("transactions")}
           >
-            [TRANSACTIONS]
+            TRANSACTIONS
           </button>
           <button
             className={`btn-retro text-xs ${activeTab === "dividends" ? "btn-retro-primary" : ""}`}
             onClick={() => setActiveTab("dividends")}
           >
-            [DIV HISTORY]
+            DIV HISTORY
           </button>
         </div>
 
@@ -581,7 +581,7 @@ const [showHistory, setShowHistory] = useState(false);
         {activeTab === "transactions" && (
           <div className="border border-border bg-card p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] text-muted-foreground tracking-widest">
+              <div className="text-[10px] text-muted-foreground tracking-wide">
                 TRANSACTIONS ({filteredTxns.length}/{buysSells.length})
               </div>
               {!readOnly && (
@@ -646,7 +646,7 @@ const [showHistory, setShowHistory] = useState(false);
             {(hasActualDivChart || hasProjectedDivChart) && (
               <div className="border border-border bg-card p-4 mb-3">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-[10px] text-muted-foreground tracking-widest">12-MONTH HISTORY</div>
+                  <div className="text-[10px] text-muted-foreground tracking-wide">12-MONTH HISTORY</div>
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
                     {hasActualDivChart && (
                       <span className="flex items-center gap-1">
@@ -709,7 +709,7 @@ const [showHistory, setShowHistory] = useState(false);
             <div className="border border-border bg-card p-4 mb-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="text-[10px] text-muted-foreground tracking-widest">
+                  <div className="text-[10px] text-muted-foreground tracking-wide">
                     RECEIVED ({dividendTxns.length})
                   </div>
                   {totalDivsAllTime > 0 && (

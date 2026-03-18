@@ -88,7 +88,7 @@ export default function MorePage() {
   const [loading, setLoading] = useState(false);
   const [selectedPortfolio, setSelectedPortfolio] = useState("");
   const [selectedTicker, setSelectedTicker] = useState("");
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [selectedYear, setSelectedYear] = useState("");
 
   useEffect(() => {
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
@@ -141,7 +141,7 @@ export default function MorePage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`btn-retro text-xs px-3 py-1 ${activeTab === tab.key ? "btn-retro-primary" : ""}`}
+            className={`btn-retro text-xs px-3 py-1 whitespace-nowrap ${activeTab === tab.key ? "btn-retro-primary" : ""}`}
           >
             {tab.label}
           </button>

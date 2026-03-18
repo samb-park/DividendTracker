@@ -165,7 +165,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
         <div className="border border-border bg-card p-3 mb-4 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">ACCOUNT</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">ACCOUNT</div>
               <select
                 className="w-full bg-background border border-border text-xs px-2 py-1.5"
                 value={form.portfolioId}
@@ -177,7 +177,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
               </select>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">TYPE</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TYPE</div>
               <select
                 className="w-full bg-background border border-border text-xs px-2 py-1.5"
                 value={form.action}
@@ -190,7 +190,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">DATE</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">DATE</div>
               <input
                 type="date"
                 className="w-full bg-background border border-border text-xs px-2 py-1.5"
@@ -199,7 +199,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
               />
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">CURRENCY</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CURRENCY</div>
               <select
                 className="w-full bg-background border border-border text-xs px-2 py-1.5"
                 value={form.currency}
@@ -211,7 +211,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">AMOUNT</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">AMOUNT</div>
             <input
               type="number"
               step="0.01"
@@ -222,7 +222,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
             />
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">NOTES (OPTIONAL)</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">NOTES (OPTIONAL)</div>
             <input
               type="text"
               className="w-full bg-background border border-border text-xs px-2 py-1.5"
@@ -256,15 +256,15 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
           {/* Year summary */}
           <div className="grid grid-cols-3 gap-px bg-border border border-border mb-4">
             <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">DEPOSITED</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">DEPOSITED</div>
               <div className="text-sm font-medium tabular-nums text-positive">C${fmt(totalDepositCAD)}</div>
             </div>
             <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">WITHDRAWN</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">WITHDRAWN</div>
               <div className="text-sm font-medium tabular-nums text-negative">C${fmt(totalWithdrawalCAD)}</div>
             </div>
             <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">NET</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">NET</div>
               <div className={`text-sm font-medium tabular-nums ${netCAD >= 0 ? "text-positive" : "text-negative"}`}>
                 {netCAD >= 0 ? "+" : ""}C${fmt(Math.abs(netCAD))}
               </div>
