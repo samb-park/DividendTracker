@@ -22,6 +22,8 @@ interface YearRow {
 interface TickerData {
   ticker: string;
   history: YearRow[];
+  shares: number;
+  currency: string;
 }
 
 function fmt(n: number, d = 2) {
@@ -33,33 +35,59 @@ export function DividendGrowthChart() {
   const [cuts, setCuts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [fxRate, setFxRate] = useState(1.35);
 
   useEffect(() => {
+    fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
     fetch("/api/dividend-growth")
       .then((r) => r.json())
       .then((d) => {
         setData(d.tickers ?? []);
         setCuts(d.cuts ?? []);
-        if (d.tickers?.length > 0) setSelected(d.tickers[0].ticker);
+        setSelected("__portfolio__");
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  const current = useMemo(
-    () => data.find((d) => d.ticker === selected),
-    [data, selected]
+  // Portfolio aggregate: for each year, sum DPS × shares across all tickers (USD→CAD via fxRate)
+  const portfolioHistory = useMemo((): YearRow[] => {
+    const yearMap = new Map<number, number>();
+    for (const t of data) {
+      if (!t.shares || t.shares <= 0) continue;
+      for (const row of t.history) {
+        const divCAD = row.annualDPS * t.shares * (t.currency === "USD" ? fxRate : 1);
+        yearMap.set(row.year, (yearMap.get(row.year) ?? 0) + divCAD);
+      }
+    }
+    const sorted = Array.from(yearMap.entries())
+      .map(([year, annualDPS]) => ({ year, annualDPS }))
+      .sort((a, b) => a.year - b.year);
+    return sorted.map((row, i) => {
+      const prev = sorted[i - 1];
+      const growthPct = prev && prev.annualDPS > 0
+        ? ((row.annualDPS - prev.annualDPS) / prev.annualDPS) * 100
+        : null;
+      return { ...row, growthPct };
+    });
+  }, [data, fxRate]);
+
+  const isPortfolio = selected === "__portfolio__";
+
+  const currentHistory = useMemo(
+    () => isPortfolio ? portfolioHistory : (data.find((d) => d.ticker === selected)?.history ?? []),
+    [isPortfolio, portfolioHistory, data, selected]
   );
 
   // Compute CAGR if we have at least 2 years
   const cagr = useMemo(() => {
-    if (!current || current.history.length < 2) return null;
-    const first = current.history[0];
-    const last = current.history[current.history.length - 1];
+    if (currentHistory.length < 2) return null;
+    const first = currentHistory[0];
+    const last = currentHistory[currentHistory.length - 1];
     const years = last.year - first.year;
     if (years <= 0 || first.annualDPS <= 0) return null;
     return (Math.pow(last.annualDPS / first.annualDPS, 1 / years) - 1) * 100;
-  }, [current]);
+  }, [currentHistory]);
 
   if (loading) {
     return <div className="text-muted-foreground text-xs text-center py-12">LOADING...</div>;
@@ -84,6 +112,15 @@ export function DividendGrowthChart() {
 
       {/* Ticker selector */}
       <div className="flex flex-wrap gap-1.5 mb-6">
+        {/* Portfolio aggregate button */}
+        <button
+          className={`btn-retro text-xs px-2 py-0.5 ${isPortfolio ? "btn-retro-primary" : ""}`}
+          onClick={() => setSelected("__portfolio__")}
+          title="Weighted sum: DPS × shares across all holdings (USD→CAD)"
+        >
+          PORTFOLIO
+        </button>
+        <span className="text-border self-center">|</span>
         {data.map((d) => {
           const hasCut = cuts.includes(d.ticker);
           return (
@@ -99,32 +136,34 @@ export function DividendGrowthChart() {
         })}
       </div>
 
-      {current && (
+      {currentHistory.length > 0 && (
         <>
           {/* Summary row */}
           <div className="grid grid-cols-3 gap-px bg-border border border-border mb-5">
             <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">LATEST DPS</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
+                {isPortfolio ? "ANNUAL DIV (CAD)" : "LATEST DPS"}
+              </div>
               <div className="text-sm font-medium tabular-nums text-primary">
-                ${fmt(current.history[current.history.length - 1]?.annualDPS ?? 0)}
+                {isPortfolio ? "C$" : "$"}{fmt(currentHistory[currentHistory.length - 1]?.annualDPS ?? 0)}
               </div>
             </div>
             <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAGR</div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">DIV CAGR</div>
               <div className={`text-sm font-medium tabular-nums ${cagr !== null && cagr >= 0 ? "text-positive" : "text-negative"}`}>
                 {cagr !== null ? `${cagr >= 0 ? "+" : ""}${fmt(cagr)}%` : "—"}
               </div>
             </div>
             <div className="bg-card p-2">
               <div className="text-[10px] text-muted-foreground tracking-wide mb-1">YRS OF DATA</div>
-              <div className="text-sm font-medium tabular-nums">{current.history.length}</div>
+              <div className="text-sm font-medium tabular-nums">{currentHistory.length}</div>
             </div>
           </div>
 
           {/* Chart */}
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={current.history} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+              <ComposedChart data={currentHistory} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="year"
@@ -137,7 +176,7 @@ export function DividendGrowthChart() {
                   tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) => `$${fmt(v, 2)}`}
+                  tickFormatter={(v) => isPortfolio ? `C$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : fmt(v, 0)}` : `$${fmt(v, 2)}`}
                 />
                 <YAxis
                   yAxisId="growth"
@@ -150,13 +189,16 @@ export function DividendGrowthChart() {
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "inherit" }}
                   formatter={(value: number, name: string) => {
-                    if (name === "annualDPS") return [`$${fmt(value)}`, "Annual DPS"];
+                    if (name === "annualDPS") return [
+                      isPortfolio ? `C$${fmt(value)}` : `$${fmt(value)}`,
+                      isPortfolio ? "Total Annual Div" : "Annual DPS",
+                    ];
                     if (name === "growthPct") return [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"];
                     return [value, name];
                   }}
                 />
                 <Bar yAxisId="dps" dataKey="annualDPS" maxBarSize={32} radius={[2, 2, 0, 0]}>
-                  {current.history.map((row, i) => (
+                  {currentHistory.map((row, i) => (
                     <Cell
                       key={i}
                       fill={
@@ -182,21 +224,29 @@ export function DividendGrowthChart() {
             </ResponsiveContainer>
           </div>
 
+          {isPortfolio && (
+            <div className="text-[9px] text-muted-foreground/50 mt-1 text-right">
+              USD holdings converted at current FX rate ({fmt(fxRate, 4)})
+            </div>
+          )}
+
           {/* Year table */}
           <div className="mt-5 overflow-x-auto">
             <table>
               <thead>
                 <tr>
                   <th>YEAR</th>
-                  <th className="text-right">ANNUAL DPS</th>
+                  <th className="text-right">{isPortfolio ? "TOTAL DIV (CAD)" : "ANNUAL DPS"}</th>
                   <th className="text-right">YoY GROWTH</th>
                 </tr>
               </thead>
               <tbody>
-                {[...current.history].reverse().map((row) => (
+                {[...currentHistory].reverse().map((row) => (
                   <tr key={row.year}>
                     <td className="text-muted-foreground text-xs">{row.year}</td>
-                    <td className="text-right tabular-nums text-primary">${fmt(row.annualDPS)}</td>
+                    <td className="text-right tabular-nums text-primary">
+                      {isPortfolio ? "C$" : "$"}{fmt(row.annualDPS)}
+                    </td>
                     <td className={`text-right tabular-nums text-xs ${row.growthPct === null ? "text-muted-foreground" : row.growthPct >= 0 ? "text-positive" : "text-negative"}`}>
                       {row.growthPct === null
                         ? "—"

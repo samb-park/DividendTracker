@@ -73,11 +73,18 @@ function computeStreak(history: YearlyDiv[]): number {
 export async function GET() {
   const holdings = await prisma.holding.findMany({
     where: { quantity: { gt: 0 } },
-    select: { ticker: true },
-    distinct: ["ticker"],
+    select: { ticker: true, quantity: true, currency: true },
   });
 
-  const tickers = holdings.map((h) => h.ticker);
+  // Aggregate shares per ticker (multiple accounts may hold the same ticker)
+  const sharesMap = new Map<string, { shares: number; currency: string }>();
+  for (const h of holdings) {
+    const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
+    const existing = sharesMap.get(h.ticker);
+    sharesMap.set(h.ticker, { shares: (existing?.shares ?? 0) + qty, currency: h.currency });
+  }
+
+  const tickers = [...sharesMap.keys()];
 
   const results = await Promise.all(
     tickers.map(async (ticker) => {
@@ -90,7 +97,8 @@ export async function GET() {
           : null;
         return { ...row, growthPct };
       });
-      return { ticker, history: withGrowth, streak: computeStreak(history) };
+      const info = sharesMap.get(ticker)!;
+      return { ticker, history: withGrowth, streak: computeStreak(history), shares: info.shares, currency: info.currency };
     })
   );
 
