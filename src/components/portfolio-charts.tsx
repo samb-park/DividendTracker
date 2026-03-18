@@ -191,8 +191,11 @@ export function PortfolioCharts({
       let totalValue = 0;
       let totalCost = 0;
 
-      // Reconstruct cash at this date:
-      // Start from current cash, undo post-date stock transactions AND cash transactions
+      // Reconstruct cash at this date.
+      // Only undo SELL transactions (removes post-sell proceeds so pre-sell dates don't dip)
+      // and DEPOSIT/WITHDRAWAL (reflects actual cash balance at that time).
+      // Do NOT undo BUY transactions: deposit history may be incomplete (sync only covers
+      // last year), so undoing buys without matching deposits inflates historical cash.
       let cashAtDate = totalCashCAD;
 
       for (const h of holdingsWithTransactions) {
@@ -212,12 +215,10 @@ export function PortfolioCharts({
               const commission = parseFloat(txn.commission ?? "0");
               if (txn.action === "BUY") {
                 sharesAtDate -= qty;
-                cashAtDate += (qty * price + commission) * currencyMult; // undo buy: restore cash spent
+                // Do NOT restore cash for buys (incomplete deposit history would inflate)
               } else if (txn.action === "SELL") {
                 sharesAtDate += qty;
                 cashAtDate -= (qty * price - commission) * currencyMult; // undo sell: remove proceeds
-              } else if (txn.action === "DIVIDEND") {
-                cashAtDate -= price * currencyMult; // undo dividend: remove received amount
               }
             }
           }
