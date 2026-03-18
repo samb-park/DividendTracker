@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fmt } from "@/lib/utils";
 
 interface DividendItem {
@@ -226,23 +225,15 @@ export function DividendIncomeChart({
 
       {/* Header: year nav + GROSS/NET toggle */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1">
-          <button
-            className="btn-retro p-2 min-w-[36px] flex items-center justify-center"
-            onClick={() => setYear((y) => y - 1)}
-            aria-label="Previous year"
-          >
-            <ChevronLeft size={13} />
-          </button>
-          <span className="text-accent text-xs tabular-nums w-10 text-center">{year}</span>
-          <button
-            className="btn-retro p-2 min-w-[36px] flex items-center justify-center"
-            onClick={() => setYear((y) => y + 1)}
-            aria-label="Next year"
-          >
-            <ChevronRight size={13} />
-          </button>
-        </div>
+        <select
+          className="bg-background border border-border text-xs px-2 py-1 text-accent tabular-nums"
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + 2 - i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <div className="relative" ref={netDropdownRef}>
           <button
             className="btn-retro btn-retro-primary text-[10px] px-2 py-1.5 flex items-center gap-1.5"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { fmt } from "@/lib/utils";
 
 interface CashItem {
@@ -120,19 +120,15 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
     <div>
       {/* Year nav + add button */}
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-1">
-          <button className="btn-retro p-0.5" onClick={() => setYear((y) => y - 1)}>
-            <ChevronLeft size={11} />
-          </button>
-          <span className="text-accent text-xs tabular-nums w-10 text-center">{year}</span>
-          <button
-            className="btn-retro p-0.5 disabled:opacity-30"
-            onClick={() => setYear((y) => y + 1)}
-            disabled={year >= CURRENT_YEAR}
-          >
-            <ChevronRight size={11} />
-          </button>
-        </div>
+        <select
+          className="bg-background border border-border text-xs px-2 py-1 text-accent tabular-nums"
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {[...years].sort((a, b) => b - a).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <button
           className="btn-retro btn-retro-primary text-xs flex items-center gap-1"
           onClick={() => setShowForm((v) => !v)}
