@@ -160,20 +160,23 @@ export function PortfolioCharts({
       queryParam = `range=${range.toLowerCase()}`;
     }
 
-    // Fetch historical prices for all tickers
+    // Fetch historical prices for all tickers and cash transactions in parallel
     const histories: Record<string, { date: string; close: number }[]> = {};
-    await Promise.all(
-      holdingsWithTransactions.map(async (h) => {
+    let cashTxns: { date: string; action: "DEPOSIT" | "WITHDRAWAL"; amount: number; currency: "CAD" | "USD" }[] = [];
+    await Promise.all([
+      ...holdingsWithTransactions.map(async (h) => {
         try {
           const res = await fetch(`/api/price/${h.ticker}/history?${queryParam}`);
-          if (res.ok) {
-            histories[h.ticker] = await res.json();
-          }
+          if (res.ok) histories[h.ticker] = await res.json();
         } catch {
           // skip
         }
-      })
-    );
+      }),
+      fetch("/api/cash-transactions?all=true")
+        .then((r) => r.ok ? r.json() : { items: [] })
+        .then((d) => { cashTxns = d.items ?? []; })
+        .catch(() => {}),
+    ]);
 
     // Collect all chart dates
     const dateSet = new Set<string>();
@@ -188,6 +191,10 @@ export function PortfolioCharts({
       let totalValue = 0;
       let totalCost = 0;
 
+      // Reconstruct cash at this date:
+      // Start from current cash, undo post-date stock transactions AND cash transactions
+      let cashAtDate = totalCashCAD;
+
       for (const h of holdingsWithTransactions) {
         const hist = histories[h.ticker];
         const currencyMult = h.currency === "USD" ? fx : 1;
@@ -195,15 +202,23 @@ export function PortfolioCharts({
         const avgCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
         const txns = h.transactions;
 
-        // Reconstruct shares held at this historical date
         let sharesAtDate = currentQty;
         if (txns && txns.length > 0) {
           for (const txn of txns) {
             const txnDate = txn.date ? txn.date.slice(0, 10) : "";
             if (txnDate > date) {
               const qty = parseFloat(txn.quantity);
-              if (txn.action === "BUY") sharesAtDate -= qty;
-              else if (txn.action === "SELL") sharesAtDate += qty;
+              const price = parseFloat(txn.price);
+              const commission = parseFloat(txn.commission ?? "0");
+              if (txn.action === "BUY") {
+                sharesAtDate -= qty;
+                cashAtDate += (qty * price + commission) * currencyMult; // undo buy: restore cash spent
+              } else if (txn.action === "SELL") {
+                sharesAtDate += qty;
+                cashAtDate -= (qty * price - commission) * currencyMult; // undo sell: remove proceeds
+              } else if (txn.action === "DIVIDEND") {
+                cashAtDate -= price * currencyMult; // undo dividend: remove received amount
+              }
             }
           }
         }
@@ -217,17 +232,25 @@ export function PortfolioCharts({
         totalCost += sharesAtDate * avgCost * currencyMult;
       }
 
+      // Undo post-date deposits/withdrawals so cash reflects pre-deposit balance
+      for (const ct of cashTxns) {
+        if (ct.date > date) {
+          const mult = ct.currency === "USD" ? fx : 1;
+          if (ct.action === "DEPOSIT") {
+            cashAtDate -= ct.amount * mult; // before this deposit, less cash
+          } else {
+            cashAtDate += ct.amount * mult; // before this withdrawal, more cash
+          }
+        }
+      }
+      if (cashAtDate < 0) cashAtDate = 0;
+
       return {
         date,
-        value: Math.round(totalValue * 100) / 100,
+        value: Math.round((totalValue + cashAtDate) * 100) / 100,
         cost: Math.round(totalCost * 100) / 100,
       };
     });
-
-    // Add cash to the most recent point so it matches Total Assets
-    if (result.length > 0) {
-      result[result.length - 1].value = Math.round((result[result.length - 1].value + totalCashCAD) * 100) / 100;
-    }
 
     setEquityData(result);
     setLoadingPnl(false);

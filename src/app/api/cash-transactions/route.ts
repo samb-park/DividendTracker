@@ -5,6 +5,22 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
+  // ?all=true returns minimal data for all years (used by equity chart reconstruction)
+  if (searchParams.get("all") === "true") {
+    const txns = await prisma.cashTransaction.findMany({
+      select: { date: true, action: true, amount: true, currency: true },
+      orderBy: { date: "asc" },
+    });
+    const items = txns.map((t) => ({
+      date: t.date.toISOString().slice(0, 10),
+      action: t.action as "DEPOSIT" | "WITHDRAWAL",
+      amount: parseFloat(t.amount.toString()),
+      currency: t.currency as "CAD" | "USD",
+    }));
+    return NextResponse.json({ items });
+  }
+
   const year = parseInt(searchParams.get("year") ?? new Date().getFullYear().toString(), 10);
 
   const start = new Date(`${year}-01-01T00:00:00.000Z`);
