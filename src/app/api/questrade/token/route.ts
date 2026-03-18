@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { exchangeRefreshToken } from "@/lib/questrade";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 /** GET — return whether a token is saved (masked) */
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const setting = await prisma.setting.findUnique({ where: { key: "qt_refresh_token" } });
   const apiServer = await prisma.setting.findUnique({ where: { key: "qt_api_server" } });
   const lastSync = await prisma.setting.findUnique({ where: { key: "qt_last_sync" } });
@@ -20,6 +24,9 @@ export async function GET() {
 
 /** POST { refreshToken } — validate + save token */
 export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { refreshToken } = await req.json();
   if (!refreshToken?.trim()) {
     return NextResponse.json({ error: "refreshToken is required" }, { status: 400 });
@@ -54,6 +61,9 @@ export async function POST(req: Request) {
 
 /** DELETE — remove token */
 export async function DELETE() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   await prisma.setting.deleteMany({
     where: { key: { in: ["qt_refresh_token", "qt_api_server", "qt_last_sync"] } },
   });

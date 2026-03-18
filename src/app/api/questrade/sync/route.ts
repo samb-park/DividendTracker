@@ -8,6 +8,7 @@ import {
   getBalances,
   QtActivity,
 } from "@/lib/questrade";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,9 @@ export interface SyncResult {
 }
 
 export async function POST() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const tokenSetting = await prisma.setting.findUnique({ where: { key: "qt_refresh_token" } });
   const serverSetting = await prisma.setting.findUnique({ where: { key: "qt_api_server" } });
 

@@ -6,7 +6,7 @@ export HOME=${HOME:-/app/data}
 mkdir -p "$HOME"
 
 echo "Ensuring database schema is up to date..."
-node ./node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss
+node ./node_modules/prisma/build/index.js db push --skip-generate
 
 echo "Starting application..."
 exec "$@"

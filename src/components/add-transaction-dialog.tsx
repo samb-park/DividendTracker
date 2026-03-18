@@ -18,28 +18,34 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
-    if (!quantity || !price) return;
+    const qty = parseFloat(quantity);
+    const prc = parseFloat(price);
+    if (!quantity || !price || qty <= 0 || prc <= 0) return;
     setLoading(true);
-    await fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        holdingId,
-        action,
-        date,
-        quantity: parseFloat(quantity),
-        price: parseFloat(price),
-        commission: commission ? parseFloat(commission) : 0,
-        notes: notes || null,
-      }),
-    });
-    onAdd();
-    setQuantity("");
-    setPrice("");
-    setCommission("");
-    setNotes("");
-    setOpen(false);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          holdingId,
+          action,
+          date,
+          quantity: qty,
+          price: prc,
+          commission: commission ? Math.abs(parseFloat(commission)) : 0,
+          notes: notes || null,
+        }),
+      });
+      if (!res.ok) return;
+      onAdd();
+      setQuantity("");
+      setPrice("");
+      setCommission("");
+      setNotes("");
+      setOpen(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!open) {
@@ -72,15 +78,15 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">QUANTITY</label>
-            <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
+            <input type="number" min="0.0001" step="0.0001" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">PRICE</label>
-            <input type="number" step="0.0001" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+            <input type="number" min="0.0001" step="0.0001" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">COMMISSION</label>
-            <input type="number" step="0.01" value={commission} onChange={(e) => setCommission(e.target.value)} placeholder="0.00" />
+            <input type="number" min="0" step="0.01" value={commission} onChange={(e) => setCommission(e.target.value)} placeholder="0.00" />
           </div>
         </div>
         <div className="mb-4">

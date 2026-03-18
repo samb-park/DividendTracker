@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const [settings, holdings] = await Promise.all([
     prisma.setting.findMany({ where: { key: { startsWith: "investment:" } } }),
     prisma.holding.findMany({
@@ -41,6 +45,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   if (body.type === "contribution") {
     const { frequency, amount, currency } = body;

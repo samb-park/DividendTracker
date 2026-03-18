@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
 
   // ?all=true returns minimal data for all years (used by equity chart reconstruction)
@@ -54,6 +57,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { portfolioId, action, date, amount, currency, notes } = await req.json();
   if (!portfolioId || !action || !date || !amount || !currency) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/auth";
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const year = searchParams.get("year") ?? new Date().getFullYear().toString();
 
@@ -10,7 +14,7 @@ export async function GET(req: NextRequest) {
       action: "DIVIDEND",
       date: {
         gte: new Date(`${year}-01-01`),
-        lte: new Date(`${year}-12-31T23:59:59`),
+        lt: new Date(`${parseInt(year) + 1}-01-01`),
       },
     },
     orderBy: { date: "asc" },
@@ -24,7 +28,7 @@ export async function GET(req: NextRequest) {
       t.holding.portfolio.name,
       t.holding.ticker,
       t.holding.currency,
-      t.price,
+      (parseFloat(t.price.toString()) * parseFloat(t.quantity.toString())).toFixed(2),
       t.notes ?? "",
     ]),
   ];
