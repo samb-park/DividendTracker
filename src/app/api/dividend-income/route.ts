@@ -54,7 +54,12 @@ function isUSListed(ticker: string): boolean {
 function netFactor(accountType: string, currency: string, ticker: string): number {
   // Only apply US 15% NRA withholding if the stock is US-listed (heuristic: no exchange suffix)
   const applyUSWithholding = currency === "USD" && isUSListed(ticker);
-  if (accountType === "RRSP") return 1.0; // Canada-US treaty Article XXI(7) exempts RRSP
+  if (accountType === "RRSP") {
+    // Canada-US treaty Art XXI(7): US-listed stocks exempt from NRA withholding
+    if (applyUSWithholding) return 1.0;
+    if (currency === "CAD") return 1.0; // domestic dividends: no foreign withholding
+    return 0.85; // non-US foreign holdings (ADRs, EU stocks): treaty may not apply
+  }
   if (accountType === "TFSA") return applyUSWithholding ? 0.85 : 1.0; // TFSA not treaty-exempt
   if (accountType === "FHSA") return applyUSWithholding ? 0.85 : 1.0; // FHSA not treaty-exempt
   if (accountType === "RESP") return applyUSWithholding ? 0.85 : 1.0; // RESP not treaty-exempt
@@ -133,6 +138,7 @@ export async function GET(req: Request) {
         divData = tickerDataCache.get(ticker)!;
       } else {
         const appCached = cache.get(ticker);
+        if (appCached && Date.now() - appCached.fetchedAt >= TTL) cache.delete(ticker);
         if (appCached && Date.now() - appCached.fetchedAt < TTL) {
           divData = appCached.data;
           tickerDataCache.set(ticker, divData);

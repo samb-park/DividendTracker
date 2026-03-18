@@ -108,6 +108,8 @@ export function HoldingsTable({
   const [dayMode, setDayMode] = useState<"day" | "yld" | "yoc">("day");
   const [streaks, setStreaks] = useState<Record<string, number>>({});
   const [dividendCuts, setDividendCuts] = useState<Set<string>>(new Set());
+  const [dividendCutPcts, setDividendCutPcts] = useState<Record<string, number>>({});
+  const [dividendHistory, setDividendHistory] = useState<Set<string>>(new Set());
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
@@ -124,9 +126,21 @@ export function HoldingsTable({
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
     fetch("/api/dividend-growth").then(r => r.json()).then(d => {
       const map: Record<string, number> = {};
-      for (const t of (d.tickers ?? [])) map[t.ticker] = t.streak ?? 0;
+      const cutPcts: Record<string, number> = {};
+      const history = new Set<string>();
+      const cutsSet = new Set<string>(d.cuts ?? []);
+      for (const t of (d.tickers ?? [])) {
+        map[t.ticker] = t.streak ?? 0;
+        history.add(t.ticker);
+        if (cutsSet.has(t.ticker)) {
+          const last = t.history?.[t.history.length - 1];
+          if (last?.growthPct != null) cutPcts[t.ticker] = last.growthPct;
+        }
+      }
       setStreaks(map);
-      setDividendCuts(new Set(d.cuts ?? []));
+      setDividendCuts(cutsSet);
+      setDividendCutPcts(cutPcts);
+      setDividendHistory(history);
     }).catch(() => {});
   }, []);
 
@@ -209,7 +223,7 @@ export function HoldingsTable({
         case "day": {
           const getDayVal = (r: HoldingRow) => {
             if (dayMode === "day") return r.price?.changePercent ?? 0;
-            if (dayMode === "yld") return r.price?.dividendYield ?? r.price?.trailingAnnualDividendYield ?? 0;
+            if (dayMode === "yld") return r.price?.trailingAnnualDividendYield ?? r.price?.dividendYield ?? 0;
             const rate = r.price?.trailingAnnualDividendRate ?? r.price?.dividendRate ?? 0;
             return rate > 0 && r.costBasis > 0 ? (rate * r.shares / r.costBasis) * 100 : 0;
           };
@@ -331,7 +345,7 @@ export function HoldingsTable({
                     <div className="min-w-0">
                       <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
                       {row.holding.name && (
-                        <div className="text-muted-foreground text-[10px] mt-0.5 truncate">{row.holding.name}</div>
+                        <div className="text-muted-foreground text-[10px] mt-0.5 truncate" title={row.holding.name}>{row.holding.name}</div>
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -362,11 +376,15 @@ export function HoldingsTable({
                       {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
                     </span>
                     {dividendCuts.has(row.holding.ticker) ? (
-                      <span className="text-[11px] flex-shrink-0 text-negative" title="Dividend cut in most recent year">↓ CUT</span>
+                      <span className="text-[11px] flex-shrink-0 text-negative" title="Dividend cut in most recent year">
+                        ↓{dividendCutPcts[row.holding.ticker] != null ? `${dividendCutPcts[row.holding.ticker].toFixed(0)}%` : " CUT"}
+                      </span>
                     ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
                       <span className={`text-[11px] flex-shrink-0 ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
                         ↑{streaks[row.holding.ticker]}Y
                       </span>
+                    ) : dividendHistory.has(row.holding.ticker) ? (
+                      <span className="text-[11px] flex-shrink-0 text-muted-foreground/50" title="Dividend unchanged">—</span>
                     ) : null}
                   </div>
                 </div>
@@ -439,11 +457,15 @@ export function HoldingsTable({
                       <td className="font-medium text-accent">
                         <span>{row.holding.ticker}</span>
                         {dividendCuts.has(row.holding.ticker) ? (
-                          <span className="ml-1 text-[9px] text-negative" title="Dividend cut in most recent year">↓</span>
+                          <span className="ml-1 text-[9px] text-negative" title="Dividend cut in most recent year">
+                            ↓{dividendCutPcts[row.holding.ticker] != null ? `${dividendCutPcts[row.holding.ticker].toFixed(0)}%` : ""}
+                          </span>
                         ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
                           <span className={`ml-1 text-[9px] ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
                             ↑{streaks[row.holding.ticker]}
                           </span>
+                        ) : dividendHistory.has(row.holding.ticker) ? (
+                          <span className="ml-1 text-[9px] text-muted-foreground/50" title="Dividend unchanged in most recent year">—</span>
                         ) : null}
                       </td>
                       <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
@@ -468,7 +490,7 @@ export function HoldingsTable({
                           ? (row.price ? fmtPct(row.price.changePercent) : "—")
                           : dayMode === "yld"
                           ? (() => {
-                              const yld = row.price?.dividendYield ?? row.price?.trailingAnnualDividendYield ?? null;
+                              const yld = row.price?.trailingAnnualDividendYield ?? row.price?.dividendYield ?? null;
                               return yld != null ? `${yld.toFixed(2)}%` : "—";
                             })()
                           : (() => {
@@ -489,6 +511,7 @@ export function HoldingsTable({
                         {wgtMode === "pct"
                           ? (totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—")
                           : (() => {
+                              if (!(row.holding.ticker in investTargets)) return "—";
                               const alloc = allocMap[row.holding.ticker] ?? 0;
                               return `${cur}${fmt(alloc)}`;
                             })()}

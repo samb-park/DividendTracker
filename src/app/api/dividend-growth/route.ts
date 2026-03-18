@@ -17,7 +17,10 @@ interface YearlyDiv {
 
 async function getDividendHistory(ticker: string): Promise<YearlyDiv[]> {
   const cached = cache.get(ticker);
-  if (cached && Date.now() - cached.fetchedAt < TTL) return cached.data;
+  if (cached) {
+    if (Date.now() - cached.fetchedAt < TTL) return cached.data;
+    cache.delete(ticker); // evict expired entry
+  }
 
   try {
     const since = new Date();

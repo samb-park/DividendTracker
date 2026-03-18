@@ -308,7 +308,7 @@ export function HoldingDetailPanel({
   };
 
   // 52W range bar position
-  const range52WPct = p && p.week52High > p.week52Low
+  const range52WPct = p && p.week52High > p.week52Low && !isNaN(p.week52High) && !isNaN(p.week52Low)
     ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
     : null;
   const range52WDotColor = range52WPct != null
@@ -536,9 +536,9 @@ export function HoldingDetailPanel({
                 )}
                 {divCAGR !== null && (
                   <div>
-                    <div className="text-[10px] text-muted-foreground">DIV CAGR</div>
+                    <div className="text-[10px] text-muted-foreground">DIV CAGR ({divCAGR.years}Y)</div>
                     <div className={`tabular-nums ${divCAGR.cagr >= 0 ? "text-positive" : "text-negative"}`}>
-                      {divCAGR.cagr >= 0 ? "+" : ""}{divCAGR.cagr.toFixed(1)}% ({divCAGR.years}Y)
+                      {divCAGR.cagr >= 0 ? "+" : ""}{divCAGR.cagr.toFixed(1)}%
                     </div>
                   </div>
                 )}
