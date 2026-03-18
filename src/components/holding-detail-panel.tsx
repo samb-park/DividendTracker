@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { AddTransactionDialog } from "./add-transaction-dialog";
 import { X } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 interface Transaction {
   id: string;
@@ -69,6 +78,9 @@ function convertCurrency(amount: number, from: "USD" | "CAD", to: "USD" | "CAD",
   return from === "USD" ? amount * fxRate : amount / fxRate;
 }
 
+const COLOR_ACTUAL = "hsl(142, 69%, 58%)";
+const COLOR_PROJECTED = "hsl(142, 50%, 38%)";
+
 export function HoldingDetailPanel({
   row,
   readOnly,
@@ -117,7 +129,6 @@ export function HoldingDetailPanel({
   const [dateFrom, setDateFrom] = useState(oneYearAgo);
   const [dateTo, setDateTo] = useState(today);
 
-  // Derived display helpers
   const sym = displayCur === "CAD" ? "C$" : "$";
   const toDisp = (amount: number) => convertCurrency(amount, row.holding.currency, displayCur, fxRate);
 
@@ -168,7 +179,6 @@ export function HoldingDetailPanel({
     ? (actualDivs12m / row.marketValue) * 100
     : null;
 
-  // Show total return when either price is available or dividends received
   const hasReturn = row.marketValue > 0 || totalDivsAllTime > 0;
   const totalReturn = hasReturn && row.costBasis > 0
     ? (row.marketValue > 0 ? row.marketValue - row.costBasis : 0) + totalDivsAllTime
@@ -176,6 +186,67 @@ export function HoldingDetailPanel({
   const totalReturnPct = totalReturn != null && row.costBasis > 0
     ? (totalReturn / row.costBasis) * 100
     : null;
+
+  // Dividend history chart data: group actual by month, project future months
+  const divChartData = useMemo(() => {
+    const p = row.price;
+    const annualRate = p?.trailingAnnualDividendRate ?? p?.dividendRate ?? 0;
+
+    // Group actual dividends by YYYY-MM
+    const actualByMonth: Record<string, number> = {};
+    for (const t of dividendTxns) {
+      const mo = t.date?.slice(0, 7);
+      if (mo) actualByMonth[mo] = (actualByMonth[mo] ?? 0) + parseFloat(t.price);
+    }
+
+    // Build last 12 months
+    const months: { month: string; label: string; amount: number; source: "actual" | "projected" }[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleString("en", { month: "short" });
+      const isCurrentOrFuture = mo >= today.slice(0, 7);
+      if (actualByMonth[mo] != null) {
+        months.push({ month: mo, label, amount: actualByMonth[mo], source: "actual" });
+      } else if (isCurrentOrFuture && annualRate > 0) {
+        months.push({ month: mo, label, amount: Math.round((annualRate / 12) * row.shares * 100) / 100, source: "projected" });
+      } else if (actualByMonth[mo] == null) {
+        months.push({ month: mo, label, amount: 0, source: "actual" });
+      }
+    }
+
+    return months;
+  }, [dividendTxns, row.price, row.shares, today]);
+
+  const hasActualDivChart = divChartData.some((d) => d.source === "actual" && d.amount > 0);
+  const hasProjectedDivChart = divChartData.some((d) => d.source === "projected" && d.amount > 0);
+
+  // Estimated annual dividend income
+  const p = row.price;
+  const annualDivRate = p?.trailingAnnualDividendRate ?? p?.dividendRate ?? 0;
+  const estimatedAnnual = annualDivRate > 0 ? annualDivRate * row.shares : null;
+
+  // Determine dividend frequency from actual transactions
+  const divFrequency = useMemo(() => {
+    if (dividendTxns.length < 2) return null;
+    const sorted = [...dividendTxns].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+    // Check last 4 divs for frequency pattern
+    const recent = sorted.slice(-4);
+    if (recent.length < 2) return null;
+    const gaps: number[] = [];
+    for (let i = 1; i < recent.length; i++) {
+      const a = new Date(recent[i - 1].date ?? "");
+      const b = new Date(recent[i].date ?? "");
+      gaps.push((b.getTime() - a.getTime()) / 86400000);
+    }
+    const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    if (avgGap < 20) return "WEEKLY";
+    if (avgGap < 40) return "MONTHLY";
+    if (avgGap < 100) return "QUARTERLY";
+    if (avgGap < 200) return "SEMI-ANNUAL";
+    return "ANNUAL";
+  }, [dividendTxns]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -199,8 +270,6 @@ export function HoldingDetailPanel({
     });
   }, [readOnly, row.holding.ticker]);
 
-  const p = row.price;
-
   const deleteHolding = async () => {
     if (!confirm("Delete this holding and all its transactions?")) return;
     await fetch(`/api/holdings/${row.holding.id}`, { method: "DELETE" });
@@ -208,20 +277,36 @@ export function HoldingDetailPanel({
     onClose();
   };
 
+  // 52W range bar position
+  const range52WPct = p && p.week52High > p.week52Low
+    ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
+    : null;
+
   return (
     <div
       ref={panelRef}
       className="fixed inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:w-[28rem] lg:w-[32rem] xl:w-1/2 bg-background md:border-l border-border z-50 overflow-y-auto"
     >
-      {/* Mobile header */}
-      <div className="flex items-center justify-between p-3 border-b border-border md:hidden">
-        <span className="text-xs text-muted-foreground tracking-widest">DETAIL</span>
-        <button className="btn-retro p-1" onClick={onClose}><X size={16} /></button>
+      {/* Mobile header — safe-top ensures it clears the iOS status bar */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-3 border-b border-border md:hidden safe-top">
+        <div>
+          <div className="text-accent font-medium tracking-widest">{row.holding.ticker}</div>
+          {row.holding.name && (
+            <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{row.holding.name}</div>
+          )}
+        </div>
+        <button className="btn-retro p-1.5" onClick={onClose}><X size={16} /></button>
       </div>
-      <div className="p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="text-accent text-lg font-medium">{row.holding.ticker}</div>
+
+      <div className="p-4 md:p-6">
+        {/* Desktop Header */}
+        <div className="hidden md:flex items-center justify-between mb-4">
+          <div>
+            <div className="text-accent text-lg font-medium">{row.holding.ticker}</div>
+            {row.holding.name && (
+              <div className="text-xs text-muted-foreground">{row.holding.name}</div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <div className="relative" ref={curDropdownRef}>
               <button
@@ -245,27 +330,72 @@ export function HoldingDetailPanel({
                 </div>
               )}
             </div>
-            <button className="btn-retro p-1 hidden md:block" onClick={onClose}>
+            <button className="btn-retro p-1" onClick={onClose}>
               <X size={16} />
             </button>
           </div>
         </div>
 
+        {/* Mobile currency toggle */}
+        <div className="flex items-center justify-between mb-4 md:hidden">
+          <div className="relative" ref={undefined}>
+            <button
+              className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
+              onClick={() => setCurDropdownOpen((v) => !v)}
+            >
+              <span className="flex-1 text-left">{displayCur}</span>
+              <span className="text-muted-foreground">▾</span>
+            </button>
+            {curDropdownOpen && (
+              <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+                {(["CAD", "USD"] as const).map((c) => (
+                  <button
+                    key={c}
+                    className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${displayCur === c ? "text-accent" : ""}`}
+                    onClick={() => { setDisplayCur(c); setCurDropdownOpen(false); }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="text-[10px] text-muted-foreground">{row.holding.currency} STOCK</div>
+        </div>
+
         {/* Price info */}
-        <div className="border border-border bg-card p-4 mb-4">
-          <div className="text-xs text-muted-foreground tracking-widest mb-2">PRICE</div>
+        <div className="border border-border bg-card p-4 mb-3">
+          <div className="text-[10px] text-muted-foreground tracking-widest mb-2">PRICE</div>
           {p ? (
             <>
-              <div className="flex items-baseline gap-3">
-                <span className="text-xl font-medium tabular-nums">{sym}{fmt(toDisp(p.price))}</span>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className="text-2xl font-medium tabular-nums">{sym}{fmt(toDisp(p.price))}</span>
                 <span className={`text-sm tabular-nums ${p.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
-                  {fmtPct(p.changePercent)}
+                  {p.changePercent >= 0 ? "+" : ""}{sym}{fmt(toDisp(Math.abs(p.change)))} ({fmtPct(p.changePercent)})
                 </span>
               </div>
-              <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                <span>52W H: {sym}{fmt(toDisp(p.week52High))} ({fmtPct(p.fromHighPct)})</span>
-                <span>52W L: {sym}{fmt(toDisp(p.week52Low))} ({fmtPct(p.fromLowPct)})</span>
-              </div>
+              {/* 52W range bar */}
+              {p.week52High > 0 && p.week52Low > 0 && range52WPct != null && (
+                <div className="mb-1">
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>52W L: {sym}{fmt(toDisp(p.week52Low))}</span>
+                    <span>52W H: {sym}{fmt(toDisp(p.week52High))}</span>
+                  </div>
+                  <div className="relative h-1.5 bg-border rounded-full">
+                    <div
+                      className="absolute top-0 h-full bg-border rounded-full"
+                      style={{ width: "100%" }}
+                    />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-accent border-2 border-background"
+                      style={{ left: `calc(${Math.min(100, Math.max(0, range52WPct))}% - 5px)` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1 text-center">
+                    {range52WPct.toFixed(0)}% from low · {fmtPct(p.fromHighPct)} from high
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-muted-foreground text-xs">LOADING PRICE DATA...</div>
@@ -273,85 +403,127 @@ export function HoldingDetailPanel({
         </div>
 
         {/* Position summary */}
-        <div className="border border-border bg-card p-4 mb-4">
-          <div className="text-xs text-muted-foreground tracking-widest mb-2">POSITION</div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="border border-border bg-card p-4 mb-3">
+          <div className="text-[10px] text-muted-foreground tracking-widest mb-3">POSITION</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
-              <div className="text-xs text-muted-foreground">SHARES</div>
+              <div className="text-[10px] text-muted-foreground">SHARES</div>
               <div className="tabular-nums">{fmt(row.shares, 4)}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">WEIGHT</div>
+              <div className="text-[10px] text-muted-foreground">WEIGHT</div>
               <div className="tabular-nums">
                 {totalMarketValue > 0 ? `${((row.marketValue / totalMarketValue) * 100).toFixed(1)}%` : "—"}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">AVG COST</div>
+              <div className="text-[10px] text-muted-foreground">AVG COST</div>
               <div className="tabular-nums">{sym}{fmt(toDisp(row.avgCost))}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">DAY</div>
+              <div className="text-[10px] text-muted-foreground">DAY CHANGE</div>
               <div className={`tabular-nums ${p ? (p.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
-                {p ? `${p.changePercent >= 0 ? "+" : ""}${sym}${fmt(toDisp(p.change * row.shares))} (${p.changePercent >= 0 ? "+" : ""}${p.changePercent.toFixed(2)}%)` : "—"}
+                {p ? `${p.changePercent >= 0 ? "+" : ""}${sym}${fmt(toDisp(p.change * row.shares))}` : "—"}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">COST BASIS</div>
+              <div className="text-[10px] text-muted-foreground">COST BASIS</div>
               <div className="tabular-nums">{sym}{fmt(toDisp(row.costBasis))}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">MKT VALUE</div>
+              <div className="text-[10px] text-muted-foreground">MKT VALUE</div>
               <div className="tabular-nums">{row.marketValue > 0 ? `${sym}${fmt(toDisp(row.marketValue))}` : "—"}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">DIV YIELD</div>
-              <div className="tabular-nums">
-                {p?.dividendYield != null ? `${p.dividendYield.toFixed(2)}%` : "—"}
+              <div className="text-[10px] text-muted-foreground">PRICE RETURN</div>
+              <div className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
+                {row.marketValue > 0 ? `${row.unrealizedPnL >= 0 ? "+" : ""}${sym}${fmt(Math.abs(toDisp(row.unrealizedPnL)))} (${fmtPct(row.unrealizedPnLPct)})` : "—"}
               </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">TOTAL DIVS</div>
-              <div className={`tabular-nums ${totalDivsAllTime > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                {totalDivsAllTime > 0 ? `${sym}${fmt(toDisp(totalDivsAllTime))}` : "—"}
-              </div>
-            </div>
-            {actualDivs12m > 0 && (
-              <>
-                <div>
-                  <div className="text-xs text-muted-foreground">12M DIVS</div>
-                  <div className="tabular-nums">{sym}{fmt(toDisp(actualDivs12m))}</div>
-                </div>
-                {actualYield != null && (
-                  <div>
-                    <div className="text-xs text-muted-foreground">ACTUAL YIELD</div>
-                    <div className="tabular-nums">{actualYield.toFixed(2)}%</div>
-                  </div>
-                )}
-                {actualYieldOnCost != null && (
-                  <div>
-                    <div className="text-xs text-muted-foreground">YIELD ON COST</div>
-                    <div className="tabular-nums">{actualYieldOnCost.toFixed(2)}%</div>
-                  </div>
-                )}
-              </>
-            )}
             {totalReturn != null && (
-              <div className="col-span-2">
-                <div className="text-xs text-muted-foreground">TOTAL RETURN</div>
+              <div>
+                <div className="text-[10px] text-muted-foreground">TOTAL RETURN</div>
                 <div className={`tabular-nums ${totalReturn >= 0 ? "text-positive" : "text-negative"}`}>
                   {totalReturn >= 0 ? "+" : ""}{sym}{fmt(Math.abs(toDisp(totalReturn)))}
-                  {totalReturnPct != null && ` (${totalReturn >= 0 ? "+" : ""}${totalReturnPct.toFixed(2)}%)`}
+                  {totalReturnPct != null && ` (${fmtPct(totalReturnPct)})`}
                 </div>
               </div>
             )}
           </div>
         </div>
 
+        {/* Dividends summary card */}
+        {(p?.dividendYield != null || estimatedAnnual != null || totalDivsAllTime > 0) && (
+          <div className="border border-border bg-card p-4 mb-3">
+            <div className="text-[10px] text-muted-foreground tracking-widest mb-3">DIVIDENDS</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {p?.dividendYield != null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">IND. YIELD</div>
+                  <div className="tabular-nums">{p.dividendYield.toFixed(2)}%</div>
+                </div>
+              )}
+              {actualYield != null ? (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">ACTUAL YIELD</div>
+                  <div className="tabular-nums">{actualYield.toFixed(2)}%</div>
+                </div>
+              ) : p?.trailingAnnualDividendYield != null ? (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">TRAIL. YIELD</div>
+                  <div className="tabular-nums">{p.trailingAnnualDividendYield.toFixed(2)}%</div>
+                </div>
+              ) : null}
+              {actualYieldOnCost != null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">YIELD ON COST</div>
+                  <div className="tabular-nums">{actualYieldOnCost.toFixed(2)}%</div>
+                </div>
+              )}
+              {divFrequency && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">FREQUENCY</div>
+                  <div className="tabular-nums">{divFrequency}</div>
+                </div>
+              )}
+              {estimatedAnnual != null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">EST. ANNUAL</div>
+                  <div className="tabular-nums text-primary">{sym}{fmt(toDisp(estimatedAnnual))}</div>
+                </div>
+              )}
+              {actualDivs12m > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">12M RECEIVED</div>
+                  <div className="tabular-nums">{sym}{fmt(toDisp(actualDivs12m))}</div>
+                </div>
+              )}
+              {totalDivsAllTime > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">ALL-TIME DIVS</div>
+                  <div className="tabular-nums text-primary">{sym}{fmt(toDisp(totalDivsAllTime))}</div>
+                </div>
+              )}
+              {p?.exDividendDate && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">EX-DIV DATE</div>
+                  <div className="tabular-nums">{p.exDividendDate}</div>
+                </div>
+              )}
+              {p?.dividendDate && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">PAY DATE</div>
+                  <div className="tabular-nums">{p.dividendDate}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Investment Plan */}
         {readOnly && investPlan && investPlan.target && (
-          <div className="border border-border bg-card p-4 mb-4">
-            <div className="text-xs text-muted-foreground tracking-widest mb-3">INVESTMENT PLAN</div>
+          <div className="border border-border bg-card p-4 mb-3">
+            <div className="text-[10px] text-muted-foreground tracking-widest mb-3">INVESTMENT PLAN</div>
             {(() => {
               const currentPct = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
               const targetPct = investPlan.target!.pct;
@@ -372,11 +544,11 @@ export function HoldingDetailPanel({
               return (
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <div className="text-xs text-muted-foreground">TARGET</div>
+                    <div className="text-[10px] text-muted-foreground">TARGET</div>
                     <div className="tabular-nums">{targetPct.toFixed(1)}%</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">GAP</div>
+                    <div className="text-[10px] text-muted-foreground">GAP</div>
                     {reached ? (
                       <div className="tabular-nums text-positive">✓ REACHED</div>
                     ) : (
@@ -384,16 +556,16 @@ export function HoldingDetailPanel({
                     )}
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">FUNDS</div>
+                    <div className="text-[10px] text-muted-foreground">FUNDS</div>
                     <div className="tabular-nums text-primary">{sym}{fmt(allocDisplay)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">POST %</div>
+                    <div className="text-[10px] text-muted-foreground">POST %</div>
                     <div className="tabular-nums">{postPct.toFixed(2)}%</div>
                   </div>
                   {!reached && periods > 0 && (
                     <div className="col-span-2">
-                      <div className="text-xs text-muted-foreground">TO FILL GAP</div>
+                      <div className="text-[10px] text-muted-foreground">TO FILL GAP</div>
                       <div className="tabular-nums text-primary">
                         {periods} {fl} ({sym}{fmt(contribDisplay)}/{fl})
                       </div>
@@ -406,7 +578,7 @@ export function HoldingDetailPanel({
         )}
 
         {/* Tab bar */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-3">
           <button
             className={`btn-retro text-xs ${activeTab === "transactions" ? "btn-retro-primary" : ""}`}
             onClick={() => setActiveTab("transactions")}
@@ -417,7 +589,7 @@ export function HoldingDetailPanel({
             className={`btn-retro text-xs ${activeTab === "dividends" ? "btn-retro-primary" : ""}`}
             onClick={() => setActiveTab("dividends")}
           >
-            [DIVIDENDS]
+            [DIV HISTORY]
           </button>
         </div>
 
@@ -425,7 +597,7 @@ export function HoldingDetailPanel({
         {activeTab === "transactions" && (
           <div className="border border-border bg-card p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-muted-foreground tracking-widest">
+              <div className="text-[10px] text-muted-foreground tracking-widest">
                 TRANSACTIONS ({filteredTxns.length}/{buysSells.length})
               </div>
               {!readOnly && (
@@ -468,8 +640,13 @@ export function HoldingDetailPanel({
                       <span className="text-muted-foreground">@</span>
                       <span className="tabular-nums">{sym}{fmt(toDisp(parseFloat(txn.price)))}</span>
                     </div>
-                    <div className="text-muted-foreground tabular-nums">
-                      {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
+                    <div className="text-right">
+                      <div className="tabular-nums text-muted-foreground">
+                        {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
+                      </div>
+                      {txn.date && (
+                        <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -478,12 +655,85 @@ export function HoldingDetailPanel({
           </div>
         )}
 
-        {/* Dividends tab */}
+        {/* Dividend History tab */}
         {activeTab === "dividends" && (
           <>
+            {/* Dividend history bar chart */}
+            {(hasActualDivChart || hasProjectedDivChart) && (
+              <div className="border border-border bg-card p-4 mb-3">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] text-muted-foreground tracking-widest">12-MONTH HISTORY</div>
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                    {hasActualDivChart && (
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-[1px]" style={{ backgroundColor: COLOR_ACTUAL }} />
+                        ACTUAL
+                      </span>
+                    )}
+                    {hasProjectedDivChart && (
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-[1px]" style={{ backgroundColor: COLOR_PROJECTED }} />
+                        EST.
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={divChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={14}>
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => v > 0 ? `${sym}${v.toFixed(0)}` : ""}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 0,
+                        fontSize: 11,
+                        fontFamily: "var(--font-mono)",
+                      }}
+                      formatter={(value: number, _name: string, props: any) => [
+                        `${sym}${fmt(toDisp(value))} ${props.payload.source === "projected" ? "(EST)" : ""}`,
+                        "DIVIDEND",
+                      ]}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                      cursor={{ fill: "hsl(var(--border) / 0.3)" }}
+                    />
+                    <Bar dataKey="amount" radius={[1, 1, 0, 0]}>
+                      {divChartData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={entry.source === "projected" ? COLOR_PROJECTED : COLOR_ACTUAL}
+                          opacity={entry.source === "projected" ? 0.7 : 1}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Dividend transactions list */}
             <div className="border border-border bg-card p-4 mb-4">
-              <div className="text-xs text-muted-foreground tracking-widest mb-3">
-                RECEIVED ({filteredDivs.length}/{dividendTxns.length})
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-muted-foreground tracking-widest">
+                  RECEIVED ({filteredDivs.length}/{dividendTxns.length})
+                </div>
+                {!readOnly && (
+                  <AddTransactionDialog
+                    holdingId={row.holding.id}
+                    ticker={row.holding.ticker}
+                    onAdd={onRefresh}
+                  />
+                )}
               </div>
               {dividendTxns.length > 0 && (
                 <div className="flex items-center gap-2 mb-3 text-[10px]">
@@ -511,11 +761,11 @@ export function HoldingDetailPanel({
               )}
               {filteredDivs.length === 0 ? (
                 <div className="text-muted-foreground text-xs text-center py-4">
-                  {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY — SYNC FROM QUESTRADE" : "NO DIVIDENDS IN DATE RANGE"}
+                  {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY" : "NO DIVIDENDS IN DATE RANGE"}
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredDivs.map((txn) => (
+                  {[...filteredDivs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
                     <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className="text-primary">DIV</span>
