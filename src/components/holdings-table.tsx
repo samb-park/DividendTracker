@@ -107,6 +107,7 @@ export function HoldingsTable({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [dayMode, setDayMode] = useState<"day" | "yld" | "yoc">("day");
   const [streaks, setStreaks] = useState<Record<string, number>>({});
+  const [dividendCuts, setDividendCuts] = useState<Set<string>>(new Set());
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
@@ -125,6 +126,7 @@ export function HoldingsTable({
       const map: Record<string, number> = {};
       for (const t of (d.tickers ?? [])) map[t.ticker] = t.streak ?? 0;
       setStreaks(map);
+      setDividendCuts(new Set(d.cuts ?? []));
     }).catch(() => {});
   }, []);
 
@@ -204,7 +206,15 @@ export function HoldingsTable({
       switch (sortCol) {
         case "shares": va = a.shares; vb = b.shares; break;
         case "price": va = priceMode === "price" ? (a.price?.price ?? 0) : a.avgCost; vb = priceMode === "price" ? (b.price?.price ?? 0) : b.avgCost; break;
-        case "day": va = dayMode === "day" ? (a.price?.changePercent ?? 0) : (a.price?.dividendYield ?? a.price?.trailingAnnualDividendYield ?? 0); vb = dayMode === "day" ? (b.price?.changePercent ?? 0) : (b.price?.dividendYield ?? b.price?.trailingAnnualDividendYield ?? 0); break;
+        case "day": {
+          const getDayVal = (r: HoldingRow) => {
+            if (dayMode === "day") return r.price?.changePercent ?? 0;
+            if (dayMode === "yld") return r.price?.dividendYield ?? r.price?.trailingAnnualDividendYield ?? 0;
+            const rate = r.price?.trailingAnnualDividendRate ?? r.price?.dividendRate ?? 0;
+            return rate > 0 && r.costBasis > 0 ? (rate * r.shares / r.costBasis) * 100 : 0;
+          };
+          va = getDayVal(a); vb = getDayVal(b); break;
+        }
         case "mkt": va = mktMode === "mkt" ? a.marketValue : a.costBasis; vb = mktMode === "mkt" ? b.marketValue : b.costBasis; break;
         case "wgt": va = a.marketValue; vb = b.marketValue; break;
         case "pnl": va = colMode === "usd" ? a.unrealizedPnL : a.unrealizedPnLPct; vb = colMode === "usd" ? b.unrealizedPnL : b.unrealizedPnLPct; break;
@@ -351,11 +361,13 @@ export function HoldingsTable({
                     <span className="text-muted-foreground tabular-nums flex-shrink-0">
                       {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
                     </span>
-                    {(streaks[row.holding.ticker] ?? 0) > 0 && (
-                      <span className={`tabular-nums text-[11px] flex-shrink-0 ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`}>
+                    {dividendCuts.has(row.holding.ticker) ? (
+                      <span className="text-[11px] flex-shrink-0 text-negative" title="Dividend cut in most recent year">↓ CUT</span>
+                    ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
+                      <span className={`text-[11px] flex-shrink-0 ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
                         ↑{streaks[row.holding.ticker]}Y
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
@@ -426,11 +438,13 @@ export function HoldingsTable({
                     >
                       <td className="font-medium text-accent">
                         <span>{row.holding.ticker}</span>
-                        {(streaks[row.holding.ticker] ?? 0) > 0 && (
-                          <span className={`ml-1 text-[9px] ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`}>
+                        {dividendCuts.has(row.holding.ticker) ? (
+                          <span className="ml-1 text-[9px] text-negative" title="Dividend cut in most recent year">↓</span>
+                        ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
+                          <span className={`ml-1 text-[9px] ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
                             ↑{streaks[row.holding.ticker]}
                           </span>
-                        )}
+                        ) : null}
                       </td>
                       <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
                         {row.holding.name || "—"}

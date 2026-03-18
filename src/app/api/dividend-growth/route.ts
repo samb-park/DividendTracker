@@ -21,7 +21,7 @@ async function getDividendHistory(ticker: string): Promise<YearlyDiv[]> {
 
   try {
     const since = new Date();
-    since.setFullYear(since.getFullYear() - 7);
+    since.setFullYear(since.getFullYear() - 10);
 
     const chart = await yf.chart(ticker, {
       period1: since.toISOString().split("T")[0],

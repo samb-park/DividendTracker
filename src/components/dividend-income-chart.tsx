@@ -228,6 +228,13 @@ export function DividendIncomeChart({
     return Array.from(types).sort();
   }, [mergedMonths]);
 
+  // Auto-clear account filter if selected account no longer exists in current data
+  useEffect(() => {
+    if (selectedAccount !== null && accountTypes.length > 0 && !accountTypes.includes(selectedAccount)) {
+      setSelectedAccount(null);
+    }
+  }, [accountTypes, selectedAccount]);
+
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
 
   const chartData = useMemo(() => {

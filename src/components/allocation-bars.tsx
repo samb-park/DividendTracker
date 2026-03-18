@@ -251,7 +251,10 @@ export function AllocationBars({
                     <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
                       {currentPct.toFixed(1)}%
                       {gap && gap.targetPct > 0 && (
-                        <span className={`ml-1 text-[9px] ${gap.gap > 1 ? "text-yellow-500" : gap.gap < -1 ? "text-muted-foreground/60" : "text-positive"}`}>
+                        <span
+                          className={`ml-1 text-[9px] ${gap.gap > 1 ? "text-yellow-500" : gap.gap < -1 ? "text-muted-foreground/60" : "text-positive"}`}
+                          title={`Target: ${gap.targetPct.toFixed(1)}% · Current: ${gap.currentPct.toFixed(1)}% · ${gap.gap > 0 ? "Overweight" : gap.gap < 0 ? "Underweight" : "On target"}`}
+                        >
                           {gap.gap >= 0 ? "+" : ""}{gap.gap.toFixed(1)}
                         </span>
                       )}
