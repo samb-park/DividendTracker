@@ -26,6 +26,15 @@ interface PriceData {
 const cache = new Map<string, PriceData>();
 const TTL = 5 * 60 * 1000; // 5 minutes
 
+type PriceError = "not_found" | "network";
+const errorCache = new Map<string, { reason: PriceError; time: number }>();
+
+export function getPriceError(ticker: string): PriceError | null {
+  const e = errorCache.get(ticker);
+  if (!e || Date.now() - e.time > TTL) return null;
+  return e.reason;
+}
+
 export async function getPrice(ticker: string): Promise<PriceData | null> {
   const cached = cache.get(ticker);
   if (cached && Date.now() - cached.fetchedAt < TTL) return cached;
@@ -80,7 +89,16 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
 
     cache.set(ticker, data);
     return data;
-  } catch {
+  } catch (e: unknown) {
+    const msg = String(e instanceof Error ? e.message : e).toLowerCase();
+    const reason: PriceError = (
+      msg.includes("not found") ||
+      msg.includes("no fundamentals") ||
+      msg.includes("validation") ||
+      msg.includes("404") ||
+      msg.includes("invalid symbol")
+    ) ? "not_found" : "network";
+    errorCache.set(ticker, { reason, time: Date.now() });
     return null;
   }
 }

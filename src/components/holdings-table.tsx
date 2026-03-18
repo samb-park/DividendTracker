@@ -96,6 +96,7 @@ export function HoldingsTable({
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
+  const [priceReasons, setPriceReasons] = useState<Record<string, "not_found" | "network">>({});
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [colMode, setColMode] = useState<"usd" | "pct">("usd");
@@ -164,17 +165,26 @@ export function HoldingsTable({
 
   const fetchPrices = useCallback(async (hs: Holding[]) => {
     const results: Record<string, PriceData | null> = {};
+    const reasons: Record<string, "not_found" | "network"> = {};
     await Promise.all(
       hs.map(async (h) => {
         try {
           const res = await fetch(`/api/price/${h.ticker}`);
-          results[h.ticker] = res.ok ? await res.json() : null;
+          if (res.ok) {
+            results[h.ticker] = await res.json();
+          } else {
+            results[h.ticker] = null;
+            const errData = await res.json().catch(() => ({}));
+            reasons[h.ticker] = errData.reason ?? "network";
+          }
         } catch {
           results[h.ticker] = null;
+          reasons[h.ticker] = "network";
         }
       })
     );
     setPrices(results);
+    setPriceReasons(reasons);
     setLoadingPrices(false);
   }, []);
 
@@ -335,6 +345,7 @@ export function HoldingsTable({
               const cur = row.holding.currency === "CAD" ? "C$" : "$";
               const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
               const priceUnavailable = !loadingPrices && !row.price;
+              const priceReason = priceReasons[row.holding.ticker];
               return (
                 <div
                   key={row.holding.id}
@@ -352,7 +363,9 @@ export function HoldingsTable({
                       {loadingPrices ? (
                         <span className="text-muted-foreground text-xs">...</span>
                       ) : priceUnavailable ? (
-                        <span className="text-negative text-xs font-medium">PRICE N/A</span>
+                        <span className="text-negative text-xs font-medium" title={priceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>
+                          {priceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}
+                        </span>
                       ) : (
                         <span className="text-sm tabular-nums font-medium">{cur}{fmt(row.price!.price)}</span>
                       )}
@@ -448,6 +461,7 @@ export function HoldingsTable({
                 {sortedRows.map((row) => {
                   const cur = row.holding.currency === "CAD" ? "C$" : "$";
                   const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
+                  const deskPriceReason = priceReasons[row.holding.ticker];
                   return (
                     <tr
                       key={row.holding.id}
@@ -478,7 +492,7 @@ export function HoldingsTable({
                         {loadingPrices ? (
                           <span className="text-muted-foreground">...</span>
                         ) : priceMode === "price"
-                          ? (row.price ? `${cur}${fmt(row.price.price)}` : <span className="text-negative text-[10px]">PRICE N/A</span>)
+                          ? (row.price ? `${cur}${fmt(row.price.price)}` : <span className="text-negative text-[10px]" title={deskPriceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>{deskPriceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>)
                           : (row.avgCost > 0 ? `${cur}${fmt(row.avgCost)}` : "—")}
                       </td>
                       <td className={`text-right tabular-nums hidden sm:table-cell ${

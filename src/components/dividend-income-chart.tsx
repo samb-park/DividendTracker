@@ -18,6 +18,7 @@ interface DividendItem {
   net: number;
   currency: string;
   accountType: string;
+  isCanadianEligible?: boolean;
 }
 
 interface MonthData {
@@ -227,6 +228,11 @@ export function DividendIncomeChart({
     }
     return Array.from(types).sort();
   }, [mergedMonths]);
+
+  const hasCanadianEligible = useMemo(() =>
+    mergedMonths.some((m) => m.items.some((item) => item.isCanadianEligible)),
+    [mergedMonths]
+  );
 
   // Auto-clear account filter if selected account no longer exists in current data
   useEffect(() => {
@@ -489,7 +495,13 @@ export function DividendIncomeChart({
           NO DIVIDEND DATA FOR {year}
         </div>
       )}
-      <div className="text-[9px] text-muted-foreground/40 mt-3 text-right">
+      {hasCanadianEligible && (
+        <div className="text-[9px] text-muted-foreground/60 mt-2 border-l-2 border-accent/30 pl-2">
+          🍁 CAD dividends in non-registered accounts are shown gross. Canadian eligible dividends
+          qualify for the federal Dividend Tax Credit (~20.7% of gross), significantly reducing effective tax.
+        </div>
+      )}
+      <div className="text-[9px] text-muted-foreground/40 mt-2 text-right">
         For reference only — consult a tax professional
       </div>
     </div>

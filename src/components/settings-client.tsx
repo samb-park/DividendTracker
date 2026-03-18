@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
 import { AddPortfolioDialog } from "./add-portfolio-dialog";
@@ -61,6 +61,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [contribRoom, setContribRoom] = useState<ContribRoom>({ tfsaCarryover: "", rrspLimit: "", fhsaCarryover: "" });
   const [contribDeposits, setContribDeposits] = useState<{ tfsa: number; rrsp: number; fhsa: number }>({ tfsa: 0, rrsp: 0, fhsa: 0 });
   const [savingRoom, setSavingRoom] = useState(false);
+
+  const targetTotal = useMemo(
+    () => tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
+    [tickers, targets]
+  );
 
   const loadStatus = async () => {
     const res = await fetch("/api/questrade/token");
@@ -483,8 +488,14 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 </div>
               );
             })}
+            {targetTotal > 100.01 && !savingTargets && (
+              <div className="flex items-center gap-1 text-[10px] text-negative border border-negative/30 bg-negative/5 px-2 py-1 mt-1">
+                <span>⚠</span>
+                <span>TOTAL {targetTotal.toFixed(1)}% EXCEEDS 100% — ADJUST BEFORE SAVING</span>
+              </div>
+            )}
             <button
-              disabled={savingTargets}
+              disabled={savingTargets || targetTotal > 100.01}
               className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40 mt-2"
               onClick={async () => {
                 setSavingTargets(true);

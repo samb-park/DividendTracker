@@ -23,6 +23,7 @@ interface DividendItem {
   net: number;
   currency: string;
   accountType: string;
+  isCanadianEligible?: boolean; // CAD dividend in non-registered account (may qualify for DTC)
 }
 
 function detectFrequency(dividends: Array<{ date: string | Date; amount: number }>): number {
@@ -106,6 +107,7 @@ export async function GET(req: Request) {
         net: amount, // actual received — already post-withholding from broker
         currency,
         accountType,
+        isCanadianEligible: currency === "CAD" && (accountType === "MARGIN" || accountType === "CASH"),
       });
     }
   } else {
@@ -215,6 +217,7 @@ export async function GET(req: Request) {
               net: netAmount,
               currency: divData.currency,
               accountType,
+              isCanadianEligible: divData.currency === "CAD" && (accountType === "MARGIN" || accountType === "CASH"),
             });
           }
         }

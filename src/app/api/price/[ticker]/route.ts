@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPrice } from "@/lib/price";
+import { getPrice, getPriceError } from "@/lib/price";
 
 export async function GET(
   _req: NextRequest,
@@ -7,6 +7,9 @@ export async function GET(
 ) {
   const { ticker } = await params;
   const data = await getPrice(ticker.toUpperCase());
-  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!data) {
+    const reason = getPriceError(ticker.toUpperCase()) ?? "network";
+    return NextResponse.json({ error: "Not found", reason }, { status: 404 });
+  }
   return NextResponse.json(data);
 }
