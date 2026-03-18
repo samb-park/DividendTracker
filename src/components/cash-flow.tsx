@@ -65,6 +65,16 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
     notes: "",
   });
   const [saving, setSaving] = useState(false);
+  const [portfolioDropOpen, setPortfolioDropOpen] = useState(false);
+  const portfolioDropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (portfolioDropRef.current && !portfolioDropRef.current.contains(e.target as Node)) setPortfolioDropOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
   const fetchData = (y: number) => {
     setLoading(true);
@@ -166,26 +176,42 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <div className="text-[10px] text-muted-foreground tracking-wide mb-1">ACCOUNT</div>
-              <select
-                className="w-full bg-background border border-border text-xs px-2 py-1.5"
-                value={form.portfolioId}
-                onChange={(e) => setForm((f) => ({ ...f, portfolioId: e.target.value }))}
-              >
-                {portfolios.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <div className="relative" ref={portfolioDropRef}>
+                <button
+                  className="btn-retro btn-retro-primary w-full text-xs flex items-center gap-1.5 justify-between"
+                  onClick={() => setPortfolioDropOpen(v => !v)}
+                >
+                  <span className="truncate">{portfolios.find(p => p.id === form.portfolioId)?.name ?? "—"}</span>
+                  <span className="text-muted-foreground flex-shrink-0">▾</span>
+                </button>
+                {portfolioDropOpen && (
+                  <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border w-full max-h-40 overflow-y-auto">
+                    {portfolios.map(p => (
+                      <button
+                        key={p.id}
+                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${form.portfolioId === p.id ? "text-accent" : ""}`}
+                        onClick={() => { setForm(f => ({ ...f, portfolioId: p.id })); setPortfolioDropOpen(false); }}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TYPE</div>
-              <select
-                className="w-full bg-background border border-border text-xs px-2 py-1.5"
-                value={form.action}
-                onChange={(e) => setForm((f) => ({ ...f, action: e.target.value as "DEPOSIT" | "WITHDRAWAL" }))}
-              >
-                <option value="DEPOSIT">DEPOSIT</option>
-                <option value="WITHDRAWAL">WITHDRAWAL</option>
-              </select>
+              <div className="flex gap-1">
+                {(["DEPOSIT", "WITHDRAWAL"] as const).map(a => (
+                  <button
+                    key={a}
+                    className={`btn-retro text-xs flex-1 ${form.action === a ? "btn-retro-primary" : ""}`}
+                    onClick={() => setForm(f => ({ ...f, action: a }))}
+                  >
+                    {a === "DEPOSIT" ? "DEPOSIT" : "WITHDRAWAL"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -200,14 +226,17 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
             </div>
             <div>
               <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CURRENCY</div>
-              <select
-                className="w-full bg-background border border-border text-xs px-2 py-1.5"
-                value={form.currency}
-                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value as "CAD" | "USD" }))}
-              >
-                <option value="CAD">CAD</option>
-                <option value="USD">USD</option>
-              </select>
+              <div className="flex gap-1">
+                {(["CAD", "USD"] as const).map(c => (
+                  <button
+                    key={c}
+                    className={`btn-retro text-xs flex-1 ${form.currency === c ? "btn-retro-primary" : ""}`}
+                    onClick={() => setForm(f => ({ ...f, currency: c }))}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div>

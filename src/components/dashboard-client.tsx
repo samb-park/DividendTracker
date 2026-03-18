@@ -46,6 +46,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
   useEffect(() => {
     setHoldingSummaries([]);
+    setLoadingData(true);
   }, [selectedPortfolioId]);
 
   const displayPortfolios = useMemo(() =>

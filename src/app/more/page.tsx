@@ -258,8 +258,7 @@ export default function MorePage() {
                 {divTxns.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td colSpan={2} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
-                      <td className="hidden sm:table-cell" />
+                      <td colSpan={3} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
                       <td className="text-right tabular-nums text-primary font-medium pt-2">
                         {divTxns.every(t => t.holding.currency === divTxns[0].holding.currency)
                           ? `${sym(divTxns[0].holding.currency)}${fmt(divTxns.reduce((s, t) => s + parseFloat(t.price), 0))}`

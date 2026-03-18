@@ -16,6 +16,14 @@ const COLORS = [
   "hsl(320, 60%, 65%)",
 ];
 
+function tickerColor(ticker: string): string {
+  let hash = 0;
+  for (let i = 0; i < ticker.length; i++) {
+    hash = ticker.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
+
 interface BarEntry {
   ticker: string;
   value: number;
@@ -96,7 +104,7 @@ export function AllocationBars({
       .map((h, i) => ({
         ticker: h.ticker,
         value: toDisplay(h.marketValue, h.currency, displayCurrency, fxRate),
-        color: COLORS[i % COLORS.length],
+        color: tickerColor(h.ticker),
       }))
       .filter((e) => e.value > 0)
       .sort((a, b) => b.value - a.value);
@@ -110,7 +118,7 @@ export function AllocationBars({
       .map((h, i) => ({
         ticker: h.ticker,
         value: toDisplay(h.annualDividend ?? 0, h.currency, displayCurrency, fxRate),
-        color: COLORS[i % COLORS.length],
+        color: tickerColor(h.ticker),
       }))
       .filter((e) => e.value > 0)
       .sort((a, b) => b.value - a.value);

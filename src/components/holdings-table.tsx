@@ -261,6 +261,7 @@ export function HoldingsTable({
   }
 
   useEffect(() => {
+    if (loadingPrices) return;
     onHoldingsChange(
       rows.map((r) => ({
         ticker: r.holding.ticker,
@@ -277,7 +278,7 @@ export function HoldingsTable({
       }))
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prices, holdings]);
+  }, [prices, holdings, loadingPrices]);
 
   const selectedRow = sortedRows.find((r) => r.holding.id === selectedRowId) ?? null;
 
@@ -323,7 +324,7 @@ export function HoldingsTable({
                     {mktMode === "mkt" ? "MKT" : "COST"}{si("mkt") || " ▾"}
                   </th>
                   <th
-                    className="text-right w-16 cursor-pointer select-none hover:text-accent transition-colors"
+                    className="text-right w-16 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => { setWgtMode(m => m === "pct" ? "alloc" : "pct"); cycleSort("wgt"); }}
                     title="Click to sort / toggle WEIGHT / ALLOCATION"
                   >
@@ -387,7 +388,7 @@ export function HoldingsTable({
                           ? (row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—")
                           : (row.costBasis > 0 ? `${cur}${fmt(row.costBasis)}` : "—")}
                       </td>
-                      <td className="text-right tabular-nums text-muted-foreground">
+                      <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">
                         {wgtMode === "pct"
                           ? (totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—")
                           : (() => {
@@ -426,7 +427,7 @@ export function HoldingsTable({
                     <td className="text-right tabular-nums font-medium text-xs">
                       {fmtTotal(mktMode)}
                     </td>
-                    <td />
+                    <td className="hidden sm:table-cell" />
                     <td className={`text-right tabular-nums font-medium text-xs ${totalPnLPositive ? "text-positive" : "text-negative"}`}>
                       {colMode === "usd" ? fmtTotalPnL() : fmtTotalPnLPct()}
                     </td>

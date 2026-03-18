@@ -310,6 +310,11 @@ export function HoldingDetailPanel({
   const range52WPct = p && p.week52High > p.week52Low
     ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
     : null;
+  const range52WDotColor = range52WPct != null
+    ? range52WPct <= 30 ? "hsl(142, 69%, 58%)"
+    : range52WPct >= 75 ? "hsl(38, 92%, 55%)"
+    : "hsl(var(--accent))"
+    : "hsl(var(--accent))";
 
   const panel = (
     <div className="fixed inset-0 z-50 flex">
@@ -388,8 +393,8 @@ export function HoldingDetailPanel({
                       style={{ width: "100%" }}
                     />
                     <div
-                      className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-accent border-2 border-background"
-                      style={{ left: `calc(${Math.min(100, Math.max(0, range52WPct))}% - 5px)` }}
+                      className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-background"
+                      style={{ left: `calc(${Math.min(100, Math.max(0, range52WPct))}% - 5px)`, backgroundColor: range52WDotColor }}
                     />
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 text-center">
@@ -505,6 +510,22 @@ export function HoldingDetailPanel({
                   <div className="tabular-nums text-primary">{sym}{fmt(toDisp(totalDivsAllTime))}</div>
                 </div>
               )}
+              {totalDivsAllTime > 0 && row.costBasis > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">BASIS REDUCED</div>
+                  <div className="tabular-nums text-positive">
+                    {((totalDivsAllTime / row.costBasis) * 100).toFixed(1)}%
+                  </div>
+                </div>
+              )}
+              {totalDivsAllTime > 0 && row.costBasis > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">EFF. COST</div>
+                  <div className="tabular-nums">
+                    {sym}{fmt(toDisp(Math.max(0, row.costBasis - totalDivsAllTime)))}
+                  </div>
+                </div>
+              )}
               {p?.exDividendDate && (
                 <div>
                   <div className="text-[10px] text-muted-foreground">EX-DIV DATE</div>
@@ -556,6 +577,7 @@ export function HoldingDetailPanel({
                 : 0;
               const periods = (!reached && contribDisplay > 0) ? Math.ceil(gapDisplay / contribDisplay) : 0;
               const fl = investPlan.contribution ? FREQ_LABEL[investPlan.contribution.frequency] : "BW";
+              const sharesToBuy = p && allocAmount > 0 ? allocAmount / p.price : null;
               return (
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -574,6 +596,14 @@ export function HoldingDetailPanel({
                     <div className="text-[10px] text-muted-foreground">FUNDS</div>
                     <div className="tabular-nums text-primary">{sym}{fmt(allocDisplay)}</div>
                   </div>
+                  {sharesToBuy != null && sharesToBuy > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">SHARES TO BUY</div>
+                      <div className="tabular-nums text-primary">
+                        {sharesToBuy < 1 ? sharesToBuy.toFixed(4) : sharesToBuy < 10 ? sharesToBuy.toFixed(2) : fmt(sharesToBuy, 0)}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-[10px] text-muted-foreground">POST %</div>
                     <div className="tabular-nums">{postPct.toFixed(2)}%</div>
@@ -590,6 +620,15 @@ export function HoldingDetailPanel({
               );
             })()}
           </div>
+        )}
+
+        {!showHistory && (
+          <button
+            className="w-full text-[10px] text-muted-foreground hover:text-primary transition-colors py-2 text-center tracking-wide border border-dashed border-border mb-3"
+            onClick={() => setShowHistory(true)}
+          >
+            ▾ SHOW TRANSACTION HISTORY
+          </button>
         )}
 
         {showHistory && (<>
