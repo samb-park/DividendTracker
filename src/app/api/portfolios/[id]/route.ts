@@ -10,8 +10,12 @@ export async function DELETE(
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  await prisma.portfolio.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.portfolio.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 }
 
 export async function PATCH(
@@ -25,12 +29,16 @@ export async function PATCH(
   const body = await req.json();
   const { cashCAD, cashUSD } = body;
 
-  const updated = await prisma.portfolio.update({
-    where: { id },
-    data: {
-      ...(cashCAD !== undefined && { cashCAD }),
-      ...(cashUSD !== undefined && { cashUSD }),
-    },
-  });
-  return NextResponse.json(updated);
+  try {
+    const updated = await prisma.portfolio.update({
+      where: { id },
+      data: {
+        ...(cashCAD !== undefined && { cashCAD }),
+        ...(cashUSD !== undefined && { cashUSD }),
+      },
+    });
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 }

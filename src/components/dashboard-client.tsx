@@ -281,7 +281,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           </div>
           <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L <span className="text-[9px] opacity-50">vs PREV CLOSE</span></div>
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L</div>
             <div className={`text-xs font-medium tabular-nums truncate ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
               {todayPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(todayPnL))}
             </div>

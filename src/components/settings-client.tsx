@@ -187,23 +187,30 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
     const edit = cashEdits[id];
     if (!edit) return;
     setSavingCash(id);
-    await fetch(`/api/portfolios/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cashCAD: edit.cad ? parseFloat(edit.cad) : 0,
-        cashUSD: edit.usd ? parseFloat(edit.usd) : 0,
-      }),
-    });
-    setSavingCash(null);
-    setCashEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
-    await refreshPortfolios();
+    try {
+      await fetch(`/api/portfolios/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cashCAD: edit.cad ? parseFloat(edit.cad) : 0,
+          cashUSD: edit.usd ? parseFloat(edit.usd) : 0,
+        }),
+      });
+      setCashEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
+      await refreshPortfolios();
+    } finally {
+      setSavingCash(null);
+    }
   };
 
   const deletePortfolio = async (id: string) => {
-    await fetch(`/api/portfolios/${id}`, { method: "DELETE" });
-    setConfirmDeletePortfolioId(null);
-    await refreshPortfolios();
+    try {
+      await fetch(`/api/portfolios/${id}`, { method: "DELETE" });
+      setConfirmDeletePortfolioId(null);
+      await refreshPortfolios();
+    } catch {
+      setConfirmDeletePortfolioId(null);
+    }
   };
 
   return (

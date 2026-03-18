@@ -8,7 +8,7 @@ export const tabs = [
   { href: "/",          label: "OVERVIEW",  icon: BarChart3 },
   { href: "/portfolio", label: "HOLDINGS",  icon: Briefcase },
   { href: "/calendar",  label: "CALENDAR",  icon: CalendarDays },
-  { href: "/more",      label: "MORE",      icon: Receipt },
+  { href: "/more",      label: "HISTORY",   icon: Receipt },
   { href: "/settings",  label: "SETTINGS",  icon: SlidersHorizontal },
 ];
 

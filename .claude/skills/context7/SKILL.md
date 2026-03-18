@@ -1,6 +1,6 @@
 ---
 name: context7
-description: Search GitHub issues, pull requests, and discussions across any repository. Activates when researching external dependencies (whisper.cpp, NAudio), looking for similar bugs, or finding implementation examples.
+description: Search GitHub issues, pull requests, and discussions across any repository. Activates when researching external dependencies (Prisma, NextAuth, Recharts, yahoo-finance2, Next.js), looking for similar bugs, or finding implementation examples.
 ---
 
 # Context7 - GitHub Search
@@ -11,64 +11,78 @@ Search GitHub repositories for issues, PRs, discussions, and code examples to re
 
 - Keywords: "search GitHub", "find issues", "look up PR", "GitHub discussion"
 - Research patterns: "Are there any [repo] issues about [topic]?"
-- Dependency research: Mentions of whisper.cpp, NAudio, WPF, Inno Setup
+- Dependency research: Mentions of Prisma, NextAuth, Recharts, yahoo-finance2, Next.js
 - Bug investigation: "Has anyone else experienced [problem]?"
 - Implementation examples: "How do others implement [feature]?"
 
 ## Frequently Searched Repositories
 
-VoiceLite dependencies and related projects:
+DividendTracker dependencies and related projects:
 
 | Repository | Purpose | When to Search |
 |------------|---------|----------------|
-| **ggerganov/whisper.cpp** | Core transcription engine | Performance optimization, model loading, quantization issues |
-| **naudio/NAudio** | Audio recording library | WaveInEvent issues, audio format problems, disposal patterns |
-| **dotnet/wpf** | WPF framework | UI threading, XAML binding, Dispatcher issues |
-| **jrsoftware/issrc** | Inno Setup installer | Installer configuration, file inclusion, signing |
-| **dotnet/runtime** | .NET runtime | Performance issues, GC problems, async/await patterns |
+| **prisma/prisma** | ORM & DB schema | Migration issues, relation queries, performance, type generation |
+| **nextauthjs/next-auth** | Authentication | Session handling, OAuth providers, JWT callbacks, middleware |
+| **recharts/recharts** | Data visualization | Chart customization, responsive containers, animation issues |
+| **gadicc/node-yahoo-finance2** | Stock/dividend data | API rate limits, data parsing, ticker lookup errors |
+| **vercel/next.js** | App framework | App Router, Server Components, API routes, caching, hydration |
 
 ## Search Syntax Examples
 
-### Search whisper.cpp Performance Issues
+### Search Prisma Migration Issues
 
 ```
-Repository: ggerganov/whisper.cpp
-Query: "performance optimization" label:performance
+Repository: prisma/prisma
+Query: "migration failed" OR "schema drift" label:bug is:closed
 Sort: Most commented
-Filter: Created after 2024-01-01
 
 # Look for:
-- Quantization discussions (Q8_0, Q4_0)
-- Flash attention implementations
-- Beam size optimization
-- Model loading speed improvements
+- Baseline migration strategies
+- Shadow database issues
+- Type generation problems
+- Relation query performance
 ```
 
-### Search NAudio Recording Problems
+### Search NextAuth Session Problems
 
 ```
-Repository: naudio/NAudio
-Query: "WaveInEvent" label:bug is:closed
+Repository: nextauthjs/next-auth
+Query: "session undefined" OR "JWT callback" label:bug
 Sort: Recently updated
 
 # Look for:
-- Disposal patterns (memory leaks)
-- Buffer size configurations
-- Sample rate issues (16kHz mono)
-- Event subscription patterns
+- Middleware configuration patterns
+- Session token expiry handling
+- Custom credentials provider
+- Server component session access
 ```
 
-### Find WPF Dispatcher Examples
+### Search Recharts Responsive Issues
 
 ```
-Repository: dotnet/wpf
-Query: "Dispatcher.Invoke" in:code language:csharp
-Filter: Stars >100
+Repository: recharts/recharts
+Query: "ResponsiveContainer" OR "chart not rendering" is:closed
+Sort: Most commented
 
 # Look for:
-- Thread-safe UI updates
-- Background worker patterns
-- Async dispatcher usage
+- SSR/hydration mismatches
+- Dynamic data updates
+- Custom tooltip patterns
+- Mobile responsiveness
+```
+
+### Search yahoo-finance2 Data Issues
+
+```
+Repository: gadicc/node-yahoo-finance2
+Query: "rate limit" OR "dividend history" OR "ticker not found"
+State: Closed (to find fixes)
+
+# Look for:
+- API throttling strategies
+- Data normalization patterns
+- Error handling for delisted stocks
+- Historical dividend data quirks
 ```
 
 ## Search Strategies
@@ -77,10 +91,10 @@ Filter: Stars >100
 
 ```
 Step 1: Search issue titles
-  → "transcription slow"
+  → "prisma migration"
 
 Step 2: Add labels
-  → "transcription slow" label:performance
+  → "prisma migration" label:bug
 
 Step 3: Check discussions
   → Switch to Discussions tab for detailed solutions
@@ -102,74 +116,55 @@ Step 4: Look at closed issues
 2. Check PRs for code examples
 3. Look for "how to" issues with detailed responses
 
-### 3. Code Examples
+## Common DividendTracker Research Queries
+
+### Prisma Performance
 
 ```
-# Search for actual code implementation
-in:code language:csharp "WaveInEvent"
-
-# Search for configuration examples
-in:file filename:.csproj "NAudio"
-
-# Search for specific patterns
-in:code "async Task TranscribeAsync"
-```
-
-## Common VoiceLite Research Queries
-
-### Whisper.cpp Performance
-
-```
-Query: "Q8_0 quantization" OR "performance improvement"
-Repo: ggerganov/whisper.cpp
+Query: "slow query" OR "N+1" OR "include vs select"
+Repo: prisma/prisma
 Labels: performance, optimization
-Date: After 2024-01-01
 
-Expected: Quantization benchmarks, speed comparisons, optimization tips
+Expected: Relation loading strategies, index hints, query batching
 ```
 
-### NAudio Memory Leaks
+### NextAuth App Router
 
 ```
-Query: "memory leak" OR "dispose" "WaveInEvent"
-Repo: naudio/NAudio
-State: Closed (to find fixes)
-Sort: Most commented
+Query: "app router" OR "server component" "session"
+Repo: nextauthjs/next-auth
+Date: After 2023-06-01
 
-Expected: Disposal patterns, IDisposable best practices
+Expected: getServerSession patterns, middleware config, route protection
 ```
 
-### Inno Setup File Inclusion
+### Recharts SSR Fix
 
 ```
-Query: "files not included" OR "missing from installer"
-Repo: jrsoftware/issrc
-Labels: bug, question
+Query: "window is not defined" OR "SSR" OR "hydration"
+Repo: recharts/recharts
+State: Closed
 
-Expected: Common .iss mistakes, file path issues, git ignore problems
+Expected: Dynamic import patterns, client-only wrappers
 ```
 
-### .NET Process Management
+### yahoo-finance2 Dividend Data
 
 ```
-Query: "Process.Kill" OR "zombie process"
-Repo: dotnet/runtime
-Language: C#
+Query: "dividendHistory" OR "historical dividends"
+Repo: gadicc/node-yahoo-finance2
 
-Expected: Proper disposal patterns, timeout handling
+Expected: Data structure, date parsing, currency handling
 ```
 
 ## Advanced Search Operators
 
 ```
 # Combine multiple terms
-"whisper performance" AND "quantization"
+"prisma schema" AND "migration"
 
 # Exclude terms
-"audio recording" NOT "streaming"
-
-# Search specific user
-author:ggerganov "optimization"
+"next-auth" NOT "pages router"
 
 # Search by date range
 created:>=2024-01-01
@@ -177,66 +172,8 @@ created:>=2024-01-01
 # Search by reactions
 reactions:>10
 
-# Search by comments
-comments:>5
-
 # Search in specific locations
-in:title "memory leak"
-in:body "WaveInEvent"
+in:title "session expired"
+in:body "getServerSession"
 in:comments "fixed in"
 ```
-
-## Workflow Example
-
-**Scenario**: VoiceLite transcription is slow with tiny model
-
-```
-Step 1: Search whisper.cpp issues
-  → Query: "tiny model slow" label:performance
-  → Find: Issue #1234 - "Tiny model slower than expected"
-
-Step 2: Read discussion
-  → Solution: Enable flash attention, adjust beam size
-  → PR #5678 has implementation
-
-Step 3: Check PR for code changes
-  → Command line flag: --flash-attn
-  → Configuration: beam_size=1
-
-Step 4: Check if applied to VoiceLite
-  → Review PersistentWhisperService.cs whisper command
-  → Verify flags are present
-
-Step 5: Test & validate
-  → Apply if missing, test performance improvement
-```
-
-## Troubleshooting Search Results
-
-### "Too many results"
-- Add more specific labels
-- Filter by date (recent issues more relevant)
-- Use `is:closed` for solved problems
-- Sort by "Most commented" for well-discussed issues
-
-### "No results found"
-- Remove labels, search broadly first
-- Try synonyms ("slow" vs "performance", "crash" vs "exception")
-- Search discussions instead of issues
-- Check if repository is active (last commit date)
-
-### "Results not relevant"
-- Add language filter (language:csharp)
-- Search in code instead of issues (in:code)
-- Use exact phrases with quotes: "exact error message"
-- Exclude common false positives: NOT "unrelated term"
-
-## Integration with VoiceLite Development
-
-When researching VoiceLite issues, search these patterns:
-
-**Audio Issues**: NAudio + "16kHz" OR "mono" OR "WAV format"
-**Transcription Issues**: whisper.cpp + "model loading" OR "timeout" OR "process"
-**Performance Issues**: whisper.cpp + "Q8_0" OR "optimization" OR "speed"
-**Installer Issues**: Inno Setup + "missing files" OR "not included"
-**Memory Issues**: .NET + "memory leak" OR "dispose" OR "GC"

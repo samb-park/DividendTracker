@@ -57,23 +57,21 @@ export async function GET() {
     tickerShares.set(h.ticker, (tickerShares.get(h.ticker) ?? 0) + qty);
   }
 
-  const events: DividendCalendarEvent[] = [];
-
   // 18 months back to capture at least 4 dividends for quarterly payers
   const period1 = new Date();
   period1.setMonth(period1.getMonth() - 18);
   const period1Str = period1.toISOString().split("T")[0];
 
-  for (const [ticker, portfolios] of tickerMap.entries()) {
-    const sharesHeld = tickerShares.get(ticker) ?? 0;
+  const tickers = Array.from(tickerMap.keys());
 
-    const cached = cache.get(ticker);
-    if (cached && Date.now() - cached.fetchedAt < TTL) {
-      events.push({ ...cached.data, portfolios, sharesHeld });
-      continue;
-    }
+  // Fetch all tickers in parallel (cache hits are instant, misses go to Yahoo Finance concurrently)
+  const results = await Promise.allSettled(
+    tickers.map(async (ticker) => {
+      const cached = cache.get(ticker);
+      if (cached && Date.now() - cached.fetchedAt < TTL) {
+        return { ticker, data: cached.data };
+      }
 
-    try {
       const chart = await yahooFinance.chart(ticker, {
         period1: period1Str,
         interval: "1mo",
@@ -84,10 +82,7 @@ export async function GET() {
         .map((d) => { const item = d as { date: number | string; amount: number }; return { date: new Date(item.date).toISOString(), amount: item.amount }; })
         .sort((a, b) => a.date.localeCompare(b.date));
 
-      if (dividends.length === 0) {
-        // Non-dividend stock — skip (don't add to events)
-        continue;
-      }
+      if (dividends.length === 0) return null;
 
       const frequency = detectFrequencyFromHistory(dividends);
       const lastDiv = dividends[dividends.length - 1];
@@ -95,7 +90,6 @@ export async function GET() {
       const exDividendDate = lastDiv.date;
       const annualDividend = amountPerShare * frequency;
 
-      // Estimate payment date ~15 days after ex-div
       const payDate = new Date(exDividendDate);
       payDate.setDate(payDate.getDate() + 15);
       const paymentDate = payDate.toISOString();
@@ -125,10 +119,19 @@ export async function GET() {
       };
 
       cache.set(ticker, { data, fetchedAt: Date.now() });
-      events.push({ ...data, portfolios, sharesHeld });
-    } catch {
-      // Non-dividend stock or fetch error — skip
-    }
+      return { ticker, data };
+    })
+  );
+
+  const events: DividendCalendarEvent[] = [];
+  for (const result of results) {
+    if (result.status !== "fulfilled" || !result.value) continue;
+    const { ticker, data } = result.value;
+    events.push({
+      ...data,
+      portfolios: tickerMap.get(ticker) ?? [],
+      sharesHeld: tickerShares.get(ticker) ?? 0,
+    });
   }
 
   return NextResponse.json(events);

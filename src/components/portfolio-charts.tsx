@@ -296,9 +296,12 @@ export function PortfolioCharts({
                   <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="date"
-                    tick={false}
                     axisLine={{ stroke: "hsl(var(--border))" }}
-                    height={4}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
+                    tickFormatter={(v: string) => v?.slice(0, 7) ?? ""}
+                    height={16}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}

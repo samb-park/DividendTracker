@@ -34,21 +34,26 @@ export function DividendGrowthChart() {
   const [data, setData] = useState<TickerData[]>([]);
   const [cuts, setCuts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
 
-  useEffect(() => {
+  const load = () => {
+    setError(false);
+    setLoading(true);
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
     fetch("/api/dividend-growth")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => {
         setData(d.tickers ?? []);
         setCuts(d.cuts ?? []);
         setSelected("__portfolio__");
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { setError(true); setLoading(false); });
+  };
+
+  useEffect(() => { load(); }, []);
 
   // Portfolio aggregate: for each year, sum DPS × shares across all tickers (USD→CAD via fxRate)
   const portfolioHistory = useMemo((): YearRow[] => {
@@ -91,6 +96,15 @@ export function DividendGrowthChart() {
 
   if (loading) {
     return <div className="text-muted-foreground text-xs text-center py-12">LOADING...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-2 border border-dashed border-border text-xs">
+        <span className="text-negative">FAILED TO LOAD</span>
+        <button className="btn-retro text-[10px] px-3 py-1" onClick={load}>RETRY</button>
+      </div>
+    );
   }
 
   if (data.length === 0) {

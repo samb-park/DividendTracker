@@ -3,9 +3,5 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 export function GET() {
-  return NextResponse.json({
-    ok: true,
-    uptime: Math.floor(process.uptime()),
-    ts: new Date().toISOString(),
-  });
+  return NextResponse.json({ ok: true });
 }

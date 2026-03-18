@@ -43,6 +43,8 @@ model Transaction {
   notes      String?
   holding    Holding           @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   createdAt  DateTime          @default(now())
+
+  @@index([holdingId, action, date])
 }
 
 model CashTransaction {
