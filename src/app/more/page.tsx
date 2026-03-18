@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { CashFlow } from "@/components/cash-flow";
 
 const TABS = [
@@ -34,12 +34,60 @@ function sym(currency: "USD" | "CAD") {
   return currency === "CAD" ? "C$" : "$";
 }
 
+function Dropdown({ value, options, onChange, placeholder }: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5 min-w-[7rem]"
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className="flex-1 text-left truncate">{value || placeholder}</span>
+        <span className="text-muted-foreground">▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full max-h-60 overflow-y-auto">
+          <button
+            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${!value ? "text-accent" : ""}`}
+            onClick={() => { onChange(""); setOpen(false); }}
+          >
+            ALL
+          </button>
+          {options.map(o => (
+            <button
+              key={o}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${value === o ? "text-accent" : ""}`}
+              onClick={() => { onChange(o); setOpen(false); }}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MorePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("cashflow");
   const [fxRate, setFxRate] = useState(1.35);
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState("");
+  const [selectedPortfolio, setSelectedPortfolio] = useState("");
+  const [selectedTicker, setSelectedTicker] = useState("");
 
   useEffect(() => {
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
@@ -55,9 +103,24 @@ export default function MorePage() {
     }
   }, [activeTab, txns]);
 
+  // reset ticker when portfolio changes
+  useEffect(() => { setSelectedTicker(""); }, [selectedPortfolio]);
+
+  const portfolioOptions = useMemo(() =>
+    [...new Set((txns ?? []).map(t => t.holding.portfolio.name))].sort(),
+    [txns]
+  );
+
+  const tickerOptions = useMemo(() => {
+    const base = selectedPortfolio
+      ? (txns ?? []).filter(t => t.holding.portfolio.name === selectedPortfolio)
+      : (txns ?? []);
+    return [...new Set(base.map(t => t.holding.ticker))].sort();
+  }, [txns, selectedPortfolio]);
+
   const filtered = (txns ?? []).filter(t =>
-    t.holding.ticker.includes(filter.toUpperCase()) ||
-    t.holding.portfolio.name.toLowerCase().includes(filter.toLowerCase())
+    (!selectedPortfolio || t.holding.portfolio.name === selectedPortfolio) &&
+    (!selectedTicker || t.holding.ticker === selectedTicker)
   );
 
   const tradeTxns = filtered.filter(t => t.action === "BUY" || t.action === "SELL");
@@ -82,12 +145,18 @@ export default function MorePage() {
 
       {(activeTab === "transactions" || activeTab === "dividends") && (
         <>
-          <div className="mb-4 max-w-xs">
-            <input
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              placeholder="FILTER BY TICKER OR PORTFOLIO..."
-              className="text-xs"
+          <div className="flex items-center gap-2 mb-4">
+            <Dropdown
+              value={selectedPortfolio}
+              options={portfolioOptions}
+              onChange={setSelectedPortfolio}
+              placeholder="ACCOUNT"
+            />
+            <Dropdown
+              value={selectedTicker}
+              options={tickerOptions}
+              onChange={setSelectedTicker}
+              placeholder="TICKER"
             />
           </div>
 
