@@ -224,6 +224,11 @@ export function PortfolioCharts({
       };
     });
 
+    // Add cash to the most recent point so it matches Total Assets
+    if (result.length > 0) {
+      result[result.length - 1].value = Math.round((result[result.length - 1].value + totalCashCAD) * 100) / 100;
+    }
+
     setEquityData(result);
     setLoadingPnl(false);
   }, [holdingsWithTransactions, fxRate, range]);

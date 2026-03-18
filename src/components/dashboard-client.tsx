@@ -77,6 +77,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
+  const [fxFallback, setFxFallback] = useState(false);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<"all" | string>("all");
   const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);
@@ -100,7 +101,10 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [divShowMonthly, setDivShowMonthly] = useState(false);
 
   useEffect(() => {
-    fetch("/api/fx").then((r) => r.json()).then((d) => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
+    fetch("/api/fx").then((r) => r.json()).then((d) => {
+      if (d.rate) setFxRate(d.rate);
+      if (d.fallback) setFxFallback(true);
+    }).catch(() => setFxFallback(true));
   }, []);
 
   useEffect(() => {
@@ -207,6 +211,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           )}
         </div>
       </div>
+      {fxFallback && (
+        <div className="text-[10px] text-negative/70 text-right -mt-3 mb-2">
+          FX rate unavailable — using fallback
+        </div>
+      )}
 
       {/* Summary grid */}
       {holdingSummaries.length > 0 && (

@@ -233,38 +233,38 @@ export function HoldingsTable({
                   <th className="text-left w-32 hidden lg:table-cell">NAME</th>
                   <th className="text-right w-24">SHARES</th>
                   <th
-                    className="text-right w-24 cursor-pointer select-none"
+                    className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => setPriceMode(m => m === "price" ? "avg" : "price")}
-                    title="Click to toggle"
+                    title="Click to toggle PRICE / AVG COST"
                   >
                     {priceMode === "price" ? "PRICE" : "AVG"} ▾
                   </th>
                   <th className="text-right w-20 hidden sm:table-cell">DAY</th>
                   <th
-                    className="text-right w-28 cursor-pointer select-none"
+                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => setMktMode(m => m === "mkt" ? "cost" : "mkt")}
-                    title="Click to toggle"
+                    title="Click to toggle MKT VALUE / COST BASIS"
                   >
                     {mktMode === "mkt" ? "MKT" : "COST"} ▾
                   </th>
                   <th
-                    className="text-right w-16 cursor-pointer select-none"
+                    className="text-right w-16 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => setWgtMode(m => m === "pct" ? "alloc" : "pct")}
-                    title="Click to toggle"
+                    title="Click to toggle WEIGHT / ALLOCATION"
                   >
                     {wgtMode === "pct" ? "WGT" : "ALLOC"} ▾
                   </th>
                   <th
-                    className="text-right w-28 cursor-pointer select-none"
+                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={cycleColMode}
-                    title="Click to toggle"
+                    title="Click to toggle P&L $ / P&L %"
                   >
                     {colMode === "usd" ? "P&L $" : "P&L %"} ▾
                   </th>
                   <th
-                    className="text-right w-24 cursor-pointer select-none"
+                    className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => setW52Mode(m => m === "high" ? "low" : "high")}
-                    title="Click to toggle"
+                    title="Click to toggle 52W HIGH / LOW"
                   >
                     {w52Mode === "high" ? "52W H" : "52W L"} ▾
                   </th>

@@ -4,6 +4,6 @@ import { getFxRate } from "@/lib/price";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rate = await getFxRate();
-  return NextResponse.json({ rate });
+  const { rate, fallback } = await getFxRate();
+  return NextResponse.json({ rate, fallback });
 }

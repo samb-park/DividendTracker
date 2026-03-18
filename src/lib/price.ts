@@ -78,25 +78,29 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
   }
 }
 
+// --- History cache (30-min TTL) ---
+const historyCache = new Map<string, { data: { date: string; close: number }[]; fetchedAt: number }>();
+const HISTORY_TTL = 30 * 60 * 1000;
+
 // --- FX rate (USDCAD) with 5-min cache ---
 let fxCache: { rate: number; fetchedAt: number } | null = null;
 
-export async function getFxRate(): Promise<number> {
-  if (fxCache && Date.now() - fxCache.fetchedAt < TTL) return fxCache.rate;
+export async function getFxRate(): Promise<{ rate: number; fallback: boolean }> {
+  if (fxCache && Date.now() - fxCache.fetchedAt < TTL) return { rate: fxCache.rate, fallback: false };
 
   try {
     const quote = await yahooFinance.quote("USDCAD=X");
     const rate = quote?.regularMarketPrice;
     if (rate && rate > 0) {
       fxCache = { rate, fetchedAt: Date.now() };
-      return rate;
+      return { rate, fallback: false };
     }
   } catch {
     // fall through to fallback
   }
 
-  const fallback = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
-  return fxCache?.rate ?? fallback;
+  const fallbackRate = fxCache?.rate ?? parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
+  return { rate: fallbackRate, fallback: true };
 }
 
 export async function getCompanyName(ticker: string): Promise<string> {
@@ -113,6 +117,10 @@ export async function getHistory(
   range: string,
   from?: string
 ): Promise<{ date: string; close: number }[]> {
+  const cacheKey = `${ticker}-${range}-${from ?? ""}`;
+  const cached = historyCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < HISTORY_TTL) return cached.data;
+
   const now = new Date();
   let period1: Date;
   let interval: "1d" | "1wk";
@@ -142,10 +150,13 @@ export async function getHistory(
     interval,
   });
 
-  return (result.quotes ?? [])
+  const data = (result.quotes ?? [])
     .filter((q: any) => q.close != null)
     .map((q: any) => ({
       date: new Date(q.date).toISOString().split("T")[0],
       close: Math.round(q.close * 100) / 100,
     }));
+
+  historyCache.set(cacheKey, { data, fetchedAt: Date.now() });
+  return data;
 }
