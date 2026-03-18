@@ -218,7 +218,7 @@ tr.cursor-pointer {
 
 /* Mobile table padding */
 @media (max-width: 767px) {
-  th, td { padding: 6px 4px; font-size: 11px; }
+  th, td { padding: 10px 4px; font-size: 11px; }
 }
 
 /* iOS standalone: prevent content under status bar */
