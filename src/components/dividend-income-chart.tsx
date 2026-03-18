@@ -54,6 +54,32 @@ const _NOW = new Date();
 const CURRENT_YEAR = _NOW.getFullYear();
 const CURRENT_MONTH = _NOW.toISOString().slice(0, 7); // "YYYY-MM"
 
+function YearDropdown({ value, options, onChange }: { value: number; options: number[]; onChange: (y: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5 min-w-[5rem]" onClick={() => setOpen(v => !v)}>
+        <span className="flex-1 text-left tabular-nums">{value}</span>
+        <span className="text-muted-foreground">▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full max-h-48 overflow-y-auto">
+          {options.map(y => (
+            <button key={y} className={`w-full text-left px-3 py-1.5 text-xs tabular-nums hover:bg-border/30 ${value === y ? "text-accent" : ""}`}
+              onClick={() => { onChange(y); setOpen(false); }}>{y}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DividendIncomeChart({
   selectedPortfolioId,
   fxRate,
@@ -225,15 +251,11 @@ export function DividendIncomeChart({
 
       {/* Header: year nav + GROSS/NET toggle */}
       <div className="flex items-center justify-between mb-3">
-        <select
-          className="bg-background border border-border text-xs px-2 py-1 text-accent tabular-nums"
+        <YearDropdown
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-        >
-          {Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + 2 - i).map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          options={Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + 2 - i)}
+          onChange={setYear}
+        />
         <div className="relative" ref={netDropdownRef}>
           <button
             className="btn-retro btn-retro-primary text-[10px] px-2 py-1.5 flex items-center gap-1.5"
