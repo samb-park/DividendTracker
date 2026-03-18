@@ -50,9 +50,9 @@ function toDisplayAmt(amount: number, currency: string, displayCurrency: "CAD" |
   return currency === "CAD" ? amount / fxRate : amount;
 }
 
-const _NOW = new Date();
-const CURRENT_YEAR = _NOW.getFullYear();
-const CURRENT_MONTH = _NOW.toISOString().slice(0, 7); // "YYYY-MM"
+// NOTE: Do NOT use new Date() at module level — it evaluates at different
+// times on server (startup) vs client (JS load), causing hydration mismatches.
+// Use useState lazy initializer inside the component instead.
 
 function YearDropdown({ value, options, onChange }: { value: number; options: number[]; onChange: (y: number) => void }) {
   const [open, setOpen] = useState(false);
@@ -91,6 +91,14 @@ export function DividendIncomeChart({
   displayCurrency: "CAD" | "USD";
   onCurrentYearSummary?: (annualTotal: number, monthlyAvg: number) => void;
 }) {
+  // Computed once via lazy initializer — stable across SSR/hydration
+  const [today] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.toISOString().slice(0, 7) };
+  });
+  const CURRENT_YEAR = today.year;
+  const CURRENT_MONTH = today.month;
+
   const [showNet, setShowNet] = useState(false);
   const [netDropdownOpen, setNetDropdownOpen] = useState(false);
   const netDropdownRef = useRef<HTMLDivElement>(null);

@@ -3,6 +3,7 @@ import Google from "next-auth/providers/google";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true, // required for self-hosted behind reverse proxy (Cloudflare tunnel)
+  debug: false,    // suppress next-auth v5 beta internal /_log calls in dev console
   providers: [Google],
   pages: {
     signIn: "/login",
