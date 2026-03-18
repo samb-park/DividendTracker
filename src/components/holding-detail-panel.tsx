@@ -107,6 +107,7 @@ export function HoldingDetailPanel({
   const curDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
   const [showDivList, setShowDivList] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
 
@@ -311,6 +312,13 @@ export function HoldingDetailPanel({
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            className={`btn-retro p-1.5 ${showHistory ? "btn-retro-primary" : ""}`}
+            onClick={() => setShowHistory((v) => !v)}
+            title="Toggle history"
+          >
+            <Clock size={14} />
+          </button>
           <div className="relative" ref={curDropdownRef}>
             <button
               className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
@@ -553,6 +561,7 @@ export function HoldingDetailPanel({
           </div>
         )}
 
+        {showHistory && (<>
         {/* Tab bar */}
         <div className="flex gap-2 mb-3">
           <button
@@ -778,6 +787,7 @@ export function HoldingDetailPanel({
             </div>
           </>
         )}
+        </>)}
 
         {/* Delete button */}
         {!readOnly && (
