@@ -104,6 +104,7 @@ export function HoldingsTable({
   const [w52Mode, setW52Mode] = useState<"high" | "low">("high");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [dayMode, setDayMode] = useState<"day" | "yld">("day");
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.37);
@@ -193,7 +194,7 @@ export function HoldingsTable({
       switch (sortCol) {
         case "shares": va = a.shares; vb = b.shares; break;
         case "price": va = priceMode === "price" ? (a.price?.price ?? 0) : a.avgCost; vb = priceMode === "price" ? (b.price?.price ?? 0) : b.avgCost; break;
-        case "day": va = a.price?.changePercent ?? 0; vb = b.price?.changePercent ?? 0; break;
+        case "day": va = dayMode === "day" ? (a.price?.changePercent ?? 0) : (a.price?.dividendYield ?? a.price?.trailingAnnualDividendYield ?? 0); vb = dayMode === "day" ? (b.price?.changePercent ?? 0) : (b.price?.dividendYield ?? b.price?.trailingAnnualDividendYield ?? 0); break;
         case "mkt": va = mktMode === "mkt" ? a.marketValue : a.costBasis; vb = mktMode === "mkt" ? b.marketValue : b.costBasis; break;
         case "wgt": va = a.marketValue; vb = b.marketValue; break;
         case "pnl": va = colMode === "usd" ? a.unrealizedPnL : a.unrealizedPnLPct; vb = colMode === "usd" ? b.unrealizedPnL : b.unrealizedPnLPct; break;
@@ -201,7 +202,7 @@ export function HoldingsTable({
       }
       return sortDir === "asc" ? va - vb : vb - va;
     });
-  }, [rows, sortCol, sortDir, priceMode, mktMode, colMode, w52Mode]);
+  }, [rows, sortCol, sortDir, priceMode, mktMode, colMode, w52Mode, dayMode]);
 
   const totalsByCur = rows.reduce((acc, r) => {
     const c = r.holding.currency;
@@ -307,7 +308,13 @@ export function HoldingsTable({
                   >
                     {priceMode === "price" ? "PRICE" : "AVG"}{si("price") || " ▾"}
                   </th>
-                  <th className="text-right w-20 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("day")}>DAY{si("day")}</th>
+                  <th
+                    className="text-right w-20 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
+                    onClick={() => { setDayMode(m => m === "day" ? "yld" : "day"); cycleSort("day"); }}
+                    title="Click to sort / toggle DAY % / YLD %"
+                  >
+                    {dayMode === "day" ? "DAY" : "YLD"}{si("day") || " ▾"}
+                  </th>
                   <th
                     className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => { setMktMode(m => m === "mkt" ? "cost" : "mkt"); cycleSort("mkt"); }}
@@ -362,8 +369,18 @@ export function HoldingsTable({
                           ? (row.price ? `${cur}${fmt(row.price.price)}` : "—")
                           : (row.avgCost > 0 ? `${cur}${fmt(row.avgCost)}` : "—")}
                       </td>
-                      <td className={`text-right tabular-nums hidden sm:table-cell ${row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
-                        {row.price ? fmtPct(row.price.changePercent) : "—"}
+                      <td className={`text-right tabular-nums hidden sm:table-cell ${
+                        dayMode === "day"
+                          ? (row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : "")
+                          : "text-primary"
+                      }`}>
+                        {dayMode === "day"
+                          ? (row.price ? fmtPct(row.price.changePercent) : "—")
+                          : (() => {
+                              const yld = row.price?.dividendYield ?? row.price?.trailingAnnualDividendYield ?? null;
+                              return yld != null ? `${yld.toFixed(2)}%` : "—";
+                            })()
+                        }
                       </td>
                       <td className="text-right tabular-nums">
                         {mktMode === "mkt"

@@ -409,7 +409,7 @@ export function HoldingDetailPanel({
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
               <div className="text-[10px] text-muted-foreground">SHARES</div>
-              <div className="tabular-nums">{fmt(row.shares, 4)}</div>
+              <div className="tabular-nums">{Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}</div>
             </div>
             <div>
               <div className="text-[10px] text-muted-foreground">WEIGHT</div>
@@ -652,7 +652,7 @@ export function HoldingDetailPanel({
                       <span className={txn.action === "BUY" ? "text-positive" : "text-negative"}>
                         {txn.action}
                       </span>
-                      <span className="tabular-nums">{parseFloat(txn.quantity).toFixed(4)}</span>
+                      <span className="tabular-nums">{(() => { const q = parseFloat(txn.quantity); return Number.isInteger(q) ? fmt(q, 0) : fmt(q, q < 10 ? 4 : 2); })()}</span>
                       <span className="text-muted-foreground">@</span>
                       <span className="tabular-nums">{sym}{fmt(toDisp(parseFloat(txn.price)))}</span>
                     </div>

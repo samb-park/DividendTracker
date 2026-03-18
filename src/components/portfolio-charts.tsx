@@ -278,27 +278,27 @@ export function PortfolioCharts({
             <>
               <ResponsiveContainer width="100%" height={lineChartHeight}>
                 <LineChart data={equityData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#222" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="date"
                     tick={false}
-                    axisLine={{ stroke: "#333" }}
+                    axisLine={{ stroke: "hsl(var(--border))" }}
                     height={4}
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: "#666", fontFamily: "monospace" }}
-                    axisLine={{ stroke: "#333" }}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
+                    axisLine={{ stroke: "hsl(var(--border))" }}
                     tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
                     type="monotone"
                     dataKey="cost"
-                    stroke="#666"
+                    stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="4 3"
                     strokeWidth={1}
                     dot={false}
-                    activeDot={{ r: 2, fill: "#666" }}
+                    activeDot={{ r: 2, fill: "hsl(var(--muted-foreground))" }}
                   />
                   <Line
                     type="monotone"

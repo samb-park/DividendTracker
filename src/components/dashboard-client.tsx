@@ -211,6 +211,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             <div className="text-xs font-medium tabular-nums truncate text-primary">
               {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}
             </div>
+            {divAnnual !== null && holdingsValue > 0 && (
+              <div className="text-[10px] tabular-nums text-primary/70">
+                {((divAnnual / holdingsValue) * 100).toFixed(2)}% yield
+              </div>
+            )}
           </div>
         </div>
       )}
