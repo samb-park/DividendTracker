@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
-import { PortfolioCharts } from "./portfolio-charts";
-import { DividendIncomeChart } from "./dividend-income-chart";
-import { fmt, mergeHoldings } from "@/lib/utils";
+import { mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
 
 export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number; }) {
   const [portfolios] = useState(initialPortfolios);
   const [activeTab, setActiveTab] = useState<"all" | string>("all");
-  const [divAnnual, setDivAnnual] = useState<number | null>(null);
-  const [divMonthly, setDivMonthly] = useState<number | null>(null);
-  const [divShowMonthly, setDivShowMonthly] = useState(false);
+  const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
+  const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
+  const [fxRate, setFxRate] = useState(initialFxRate);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);
   const acctDropdownRef = useRef<HTMLDivElement>(null);
@@ -30,10 +29,6 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-  const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
-  const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
-  const [fxRate, setFxRate] = useState(initialFxRate);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/fx").then((r) => r.json()).then((d) => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
@@ -49,50 +44,12 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
   const displayPortfolioId = isAllMode ? "all" : activePortfolio?.id ?? "";
 
-  const toDisplay = useCallback((value: number, currency: "USD" | "CAD") => {
-    if (displayCurrency === "CAD") {
-      return currency === "USD" ? value * fxRate : value;
-    } else {
-      return currency === "CAD" ? value / fxRate : value;
-    }
-  }, [displayCurrency, fxRate]);
-
-  const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
-
-  const totalCash = useMemo(() => {
-    const sources = isAllMode ? portfolios : activePortfolio ? [activePortfolio] : [];
-    return sources.reduce((sum, p) => {
-      const cad = parseFloat(p.cashCAD ?? "0") || 0;
-      const usd = parseFloat(p.cashUSD ?? "0") || 0;
-      return sum + toDisplay(cad, "CAD") + toDisplay(usd, "USD");
-    }, 0);
-  }, [isAllMode, portfolios, activePortfolio, toDisplay]);
-
-  const totalCashCAD = useMemo(() => {
-    const sources = isAllMode ? portfolios : activePortfolio ? [activePortfolio] : [];
-    return sources.reduce((sum, p) => {
-      const cad = parseFloat(p.cashCAD ?? "0") || 0;
-      const usd = parseFloat(p.cashUSD ?? "0") || 0;
-      return sum + cad + usd * fxRate;
-    }, 0);
-  }, [isAllMode, portfolios, activePortfolio, fxRate]);
-
-  const holdingsValue = holdingSummaries.reduce((s, h) => s + toDisplay(h.marketValue, h.currency), 0);
-  const totalValue = holdingsValue + totalCash;
-  const totalCostBasis = holdingSummaries.reduce((s, h) => s + toDisplay(h.costBasis ?? h.marketValue - h.unrealizedPnL, h.currency), 0);
-  const openPnL = holdingsValue - totalCostBasis;
-  const openPnLPct = totalCostBasis > 0 ? (openPnL / totalCostBasis) * 100 : 0;
-  const todayPnL = holdingSummaries.reduce((s, h) => s + toDisplay(h.dayChange ?? 0, h.currency), 0);
-  const todayPnLPct = holdingsValue > 0 ? (todayPnL / (holdingsValue - todayPnL)) * 100 : 0;
-
-  const onDivSummary = useCallback((annual: number, monthly: number) => {
-    setDivAnnual(annual);
-    setDivMonthly(monthly);
-  }, []);
+  // suppress unused warning — summaries still needed by HoldingsTable callback
+  void holdingSummaries;
 
   return (
     <div className={`transition-[padding] duration-200 ${detailOpen ? "md:pr-[29rem] lg:pr-[33rem] xl:pr-[50%]" : ""}`}>
-      {/* Portfolio tabs + currency toggle */}
+      {/* Account selector + currency toggle */}
       <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
         <div className="relative" ref={acctDropdownRef}>
           <button
@@ -148,69 +105,6 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           )}
         </div>
-      </div>
-
-      {/* P&L Line Chart */}
-      {holdingSummaries.length > 0 && (
-        <PortfolioCharts
-          holdings={holdingSummaries}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          holdingsWithTransactions={displayHoldings as any}
-          fxRate={fxRate}
-          totalCashCAD={totalCashCAD}
-        />
-      )}
-
-      {/* Summary bar between chart and positions */}
-      {holdingSummaries.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-px border border-border bg-border mb-6">
-          <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">TOTAL ASSETS</div>
-            <div className="text-sm font-medium tabular-nums">{currencySymbol}{fmt(totalValue)}</div>
-          </div>
-          <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">MARKET VALUE</div>
-            <div className="text-sm font-medium tabular-nums">{currencySymbol}{fmt(holdingsValue)}</div>
-          </div>
-          {totalCash > 0 && (
-            <div className="bg-card p-3">
-              <div className="text-[10px] text-muted-foreground tracking-widest mb-1">CASH</div>
-              <div className="text-sm font-medium tabular-nums">{currencySymbol}{fmt(totalCash)}</div>
-            </div>
-          )}
-          <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">OPEN P&amp;L</div>
-            <div className={`text-sm font-medium tabular-nums ${openPnL >= 0 ? "text-positive" : "text-negative"}`}>
-              {openPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(openPnL))}
-              <span className="text-xs ml-1">({openPnL >= 0 ? "+" : ""}{openPnLPct.toFixed(2)}%)</span>
-            </div>
-          </div>
-          <div className="bg-card p-3">
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">TODAY&apos;S P&amp;L</div>
-            <div className={`text-sm font-medium tabular-nums ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
-              {todayPnL >= 0 ? "+" : ""}{currencySymbol}{fmt(Math.abs(todayPnL))}
-              <span className="text-xs ml-1">({todayPnL >= 0 ? "+" : ""}{todayPnLPct.toFixed(2)}%)</span>
-            </div>
-          </div>
-          <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
-            <div className="text-[10px] text-muted-foreground tracking-widest mb-1">
-              {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
-            </div>
-            <div className="text-sm font-medium tabular-nums text-primary">
-              {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hidden — fetch dividend data for summary tile only */}
-      <div style={{ position: "absolute", visibility: "hidden", height: 0, overflow: "hidden" }}>
-        <DividendIncomeChart
-          selectedPortfolioId={isAllMode ? "all" : activeTab}
-          fxRate={fxRate}
-          displayCurrency={displayCurrency}
-          onCurrentYearSummary={onDivSummary}
-        />
       </div>
 
       {/* Holdings table */}
