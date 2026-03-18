@@ -20,8 +20,8 @@ export const viewport: Viewport = {
   themeColor: "#0d0d0d",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,    // allow pinch-zoom up to 5× for accessibility
+  userScalable: true,
   viewportFit: "cover",
 };
 

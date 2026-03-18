@@ -5,6 +5,8 @@ import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { AllocationBars } from "./allocation-bars";
 import { DividendIncomeChart } from "./dividend-income-chart";
+import { PerformanceChart } from "./performance-chart";
+import { SkeletonBlock } from "./skeleton";
 import { fmt, mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
 
@@ -37,15 +39,35 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [divMonthly, setDivMonthly] = useState<number | null>(null);
   const [divShowMonthly, setDivShowMonthly] = useState(false);
   const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
+  const [divPortfolioCagr, setDivPortfolioCagr] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/settings/investment").then(r => r.json()).catch(() => ({})),
       fetch("/api/fx").then(r => r.json()).catch(() => ({ fallback: true })),
-    ]).then(([inv, fx]) => {
+      fetch("/api/dividend-growth").then(r => r.json()).catch(() => ({ tickers: [] })),
+    ]).then(([inv, fx, growth]) => {
       if (inv.incomeGoal) setIncomeGoal(inv.incomeGoal);
       if (fx.rate) setFxRate(fx.rate);
       if (fx.fallback) setFxFallback(true);
+
+      // Compute weighted-average portfolio dividend CAGR from all tickers with 3+ years of data
+      const tickers: Array<{ ticker: string; history: Array<{ year: number; annualDPS: number }> }> =
+        growth.tickers ?? [];
+      const cagrValues: number[] = [];
+      for (const t of tickers) {
+        const h = t.history.filter((r: { annualDPS: number }) => r.annualDPS > 0);
+        if (h.length < 3) continue;
+        const first = h[0];
+        const last = h[h.length - 1];
+        const years = last.year - first.year;
+        if (years > 0 && first.annualDPS > 0) {
+          cagrValues.push((Math.pow(last.annualDPS / first.annualDPS, 1 / years) - 1) * 100);
+        }
+      }
+      if (cagrValues.length > 0) {
+        setDivPortfolioCagr(cagrValues.reduce((a, b) => a + b, 0) / cagrValues.length);
+      }
     });
   }, []);
 
@@ -170,9 +192,18 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Loading skeleton */}
       {loadingData && holdingSummaries.length === 0 && (
-        <div className="text-muted-foreground text-xs text-center py-12 tracking-wide">LOADING...</div>
+        <div className="space-y-4 mb-6">
+          <div className="grid grid-cols-3 gap-px bg-border border border-border">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-card p-3 space-y-2">
+                <SkeletonBlock className="h-2.5 w-16" />
+                <SkeletonBlock className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Summary grid */}
@@ -237,12 +268,25 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                   <div className="text-[9px] text-muted-foreground mt-0.5 tabular-nums">
                     {pct.toFixed(0)}% of {currencySymbol}{fmt(goalInDisplay)} goal
                   </div>
+                  {/* Prediction: years to reach goal at current dividend CAGR */}
+                  {divPortfolioCagr !== null && divPortfolioCagr > 0 && divAnnual !== null && divAnnual < goalInDisplay && (() => {
+                    const yearsToGoal = Math.log(goalInDisplay / divAnnual) / Math.log(1 + divPortfolioCagr / 100);
+                    const targetYear = new Date().getFullYear() + Math.ceil(yearsToGoal);
+                    return (
+                      <div className="text-[9px] text-primary/80 mt-0.5 tabular-nums">
+                        ≈ {Math.ceil(yearsToGoal)} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
           </div>
         </div>
       )}
+
+      {/* CAGR / MDD Performance chart (snapshot-based) */}
+      <PerformanceChart />
 
       {/* Total Equity line chart */}
       {holdingSummaries.length > 0 && (

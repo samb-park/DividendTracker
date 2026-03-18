@@ -20,6 +20,10 @@ export default auth((req) => {
   if (pathname.startsWith("/api/cron")) return NextResponse.next();
 
   if (!isLoggedIn) {
+    // API routes: return 401 JSON (don't redirect to HTML login page)
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
