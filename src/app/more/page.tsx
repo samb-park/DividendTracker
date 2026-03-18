@@ -152,7 +152,7 @@ export default function MorePage() {
 
       {(activeTab === "transactions" || activeTab === "dividends") && (
         <>
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <Dropdown
               value={selectedYear}
               options={yearOptions}
@@ -183,14 +183,14 @@ export default function MorePage() {
                 <thead>
                   <tr>
                     <th>DATE</th>
-                    <th>PORTFOLIO</th>
+                    <th className="hidden sm:table-cell">PORTFOLIO</th>
                     <th>TICKER</th>
                     <th>ACTION</th>
                     <th className="text-right">QTY</th>
                     <th className="text-right">PRICE</th>
-                    <th className="text-right">COMM</th>
+                    <th className="hidden sm:table-cell text-right">COMM</th>
                     <th className="text-right">TOTAL</th>
-                    <th>NOTES</th>
+                    <th className="hidden md:table-cell">NOTES</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -202,20 +202,20 @@ export default function MorePage() {
                     return (
                       <tr key={t.id}>
                         <td className="text-muted-foreground text-xs">{t.date.slice(0, 10)}</td>
-                        <td className="text-xs text-muted-foreground">{t.holding.portfolio.name}</td>
+                        <td className="hidden sm:table-cell text-xs text-muted-foreground">{t.holding.portfolio.name}</td>
                         <td className="font-medium text-accent">{t.holding.ticker}</td>
                         <td className={`text-xs ${t.action === "BUY" ? "text-positive" : "text-negative"}`}>
                           {t.action}
                         </td>
                         <td className="text-right tabular-nums">{fmt(qty, 4)}</td>
                         <td className="text-right tabular-nums">{sym(t.holding.currency)}{fmt(price)}</td>
-                        <td className="text-right tabular-nums text-muted-foreground">
+                        <td className="hidden sm:table-cell text-right tabular-nums text-muted-foreground">
                           {comm > 0 ? `$${fmt(comm)}` : "—"}
                         </td>
                         <td className={`text-right tabular-nums ${t.action === "BUY" ? "text-negative" : "text-positive"}`}>
                           {t.action === "BUY" ? "-" : "+"}{sym(t.holding.currency)}{fmt(Math.abs(total))}
                         </td>
-                        <td className="text-xs text-muted-foreground max-w-32 truncate">{t.notes || "—"}</td>
+                        <td className="hidden md:table-cell text-xs text-muted-foreground max-w-32 truncate">{t.notes || "—"}</td>
                       </tr>
                     );
                   })}
@@ -233,10 +233,10 @@ export default function MorePage() {
                 <thead>
                   <tr>
                     <th>DATE</th>
-                    <th>PORTFOLIO</th>
+                    <th className="hidden sm:table-cell">PORTFOLIO</th>
                     <th>TICKER</th>
                     <th className="text-right">AMOUNT</th>
-                    <th>NOTES</th>
+                    <th className="hidden md:table-cell">NOTES</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -245,12 +245,12 @@ export default function MorePage() {
                     return (
                       <tr key={t.id}>
                         <td className="text-muted-foreground text-xs">{t.date.slice(0, 10)}</td>
-                        <td className="text-xs text-muted-foreground">{t.holding.portfolio.name}</td>
+                        <td className="hidden sm:table-cell text-xs text-muted-foreground">{t.holding.portfolio.name}</td>
                         <td className="font-medium text-accent">{t.holding.ticker}</td>
                         <td className="text-right tabular-nums text-primary">
                           {sym(t.holding.currency)}{fmt(amount)}
                         </td>
-                        <td className="text-xs text-muted-foreground max-w-32 truncate">{t.notes || "—"}</td>
+                        <td className="hidden md:table-cell text-xs text-muted-foreground max-w-32 truncate">{t.notes || "—"}</td>
                       </tr>
                     );
                   })}
@@ -258,9 +258,9 @@ export default function MorePage() {
                 {divTxns.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td colSpan={3} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
+                      <td colSpan={2} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
+                      <td className="hidden sm:table-cell" />
                       <td className="text-right tabular-nums text-primary font-medium pt-2">
-                        {/* CAD total only — mixed currencies shown as-is */}
                         {divTxns.every(t => t.holding.currency === divTxns[0].holding.currency)
                           ? `${sym(divTxns[0].holding.currency)}${fmt(divTxns.reduce((s, t) => s + parseFloat(t.price), 0))}`
                           : `${fmt(divTxns.reduce((s, t) => {
@@ -269,7 +269,7 @@ export default function MorePage() {
                             }, 0))} CAD`
                         }
                       </td>
-                      <td />
+                      <td className="hidden md:table-cell" />
                     </tr>
                   </tfoot>
                 )}

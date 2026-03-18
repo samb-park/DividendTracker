@@ -116,6 +116,7 @@ tr:hover td {
   border: 1px solid hsl(var(--border));
   color: hsl(var(--foreground));
   padding: 4px 12px;
+  min-height: 36px;
   font-family: inherit;
   font-size: 11px;
   cursor: pointer;
