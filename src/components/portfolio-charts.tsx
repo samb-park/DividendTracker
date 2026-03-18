@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
   XAxis,
@@ -42,14 +39,6 @@ interface HoldingWithTxn {
   transactions: Transaction[];
 }
 
-const COLORS = [
-  "hsl(142, 69%, 58%)",
-  "hsl(38, 92%, 55%)",
-  "hsl(196, 80%, 60%)",
-  "hsl(270, 60%, 65%)",
-  "hsl(0, 70%, 70%)",
-  "hsl(180, 60%, 50%)",
-];
 
 const RETRO_TOOLTIP_STYLE = {
   backgroundColor: "#161616",
@@ -107,13 +96,11 @@ export function PortfolioCharts({
   holdings,
   holdingsWithTransactions,
   fxRate,
-  showAllocation = false,
   totalCashCAD = 0,
 }: {
   holdings: HoldingData[];
   holdingsWithTransactions?: HoldingWithTxn[];
   fxRate?: number;
-  showAllocation?: boolean;
   totalCashCAD?: number;
 }) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("3M");
@@ -132,14 +119,6 @@ export function PortfolioCharts({
   const [equityData, setEquityData] = useState<EquityPoint[]>([]);
   const [loadingPnl, setLoadingPnl] = useState(false);
   const lineChartHeight = useChartHeight(160, 220);
-  const pieChartHeight = useChartHeight(160, 200);
-
-  const pieData = holdings
-    .filter((h) => h.marketValue > 0)
-    .map((h) => ({
-      name: h.ticker,
-      value: Math.round(h.marketValue * 100) / 100,
-    }));
 
   const fetchEquityData = useCallback(async () => {
     if (!holdingsWithTransactions || holdingsWithTransactions.length === 0) return;
@@ -348,57 +327,6 @@ export function PortfolioCharts({
         </div>
       )}
 
-      {/* Allocation Pie Chart */}
-      {showAllocation && (
-        <div className="border border-border p-4 bg-card">
-          <div className="text-accent text-xs tracking-widest mb-4">&#9654; ALLOCATION</div>
-          <div className="flex gap-4 items-center">
-            <div className="flex-shrink-0" style={{ width: pieChartHeight, height: pieChartHeight }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius="45%"
-                    label={false}
-                    labelLine={false}
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={RETRO_TOOLTIP_STYLE}
-                    formatter={(v: number) => [`$${v.toFixed(2)}`, "Value"]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            {/* External legend */}
-            <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-              {pieData.map((entry, i) => {
-                const total = pieData.reduce((s, d) => s + d.value, 0);
-                const pct = total > 0 ? (entry.value / total) * 100 : 0;
-                return (
-                  <div key={entry.name} className="flex items-center gap-2 text-[11px]">
-                    <span
-                      className="flex-shrink-0 inline-block w-2.5 h-2.5"
-                      style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                    />
-                    <span className="text-foreground font-medium truncate">{entry.name}</span>
-                    <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
-                      {pct.toFixed(1)}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

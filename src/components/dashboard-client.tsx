@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
+import { AllocationBars } from "./allocation-bars";
 import { DividendIncomeChart } from "./dividend-income-chart";
 import { fmt, mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
@@ -199,14 +200,22 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         </div>
       )}
 
-      {/* Charts */}
+      {/* Total Equity line chart */}
       {holdingSummaries.length > 0 && (
         <PortfolioCharts
           holdings={holdingSummaries}
           holdingsWithTransactions={allHoldings}
           fxRate={fxRate}
-          showAllocation
           totalCashCAD={totalCashCAD}
+        />
+      )}
+
+      {/* Allocation + Dividend Distribution horizontal bars */}
+      {holdingSummaries.length > 0 && (
+        <AllocationBars
+          holdings={holdingSummaries}
+          fxRate={fxRate}
+          displayCurrency={displayCurrency}
         />
       )}
 

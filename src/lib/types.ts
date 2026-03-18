@@ -33,5 +33,6 @@ export interface HoldingSummary {
   unrealizedPnL: number;
   unrealizedPnLPct: number;
   dayChange: number;
+  annualDividend?: number; // trailing annual dividend income in native currency
   currency: "USD" | "CAD";
 }

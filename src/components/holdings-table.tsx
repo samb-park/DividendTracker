@@ -88,7 +88,7 @@ export function HoldingsTable({
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
-  onHoldingsChange: (rows: Array<{ ticker: string; name?: string | null; marketValue: number; costBasis: number; unrealizedPnL: number; unrealizedPnLPct: number; dayChange: number; currency: "USD" | "CAD" }>) => void;
+  onHoldingsChange: (rows: Array<{ ticker: string; name?: string | null; marketValue: number; costBasis: number; unrealizedPnL: number; unrealizedPnLPct: number; dayChange: number; annualDividend?: number; currency: "USD" | "CAD" }>) => void;
   onDetailOpen?: (open: boolean) => void;
   readOnly?: boolean;
   displayCurrency?: "USD" | "CAD";
@@ -203,6 +203,9 @@ export function HoldingsTable({
         unrealizedPnL: r.unrealizedPnL,
         unrealizedPnLPct: r.unrealizedPnLPct,
         dayChange: r.price ? r.price.change * r.shares : 0,
+        annualDividend: r.price
+          ? ((r.price.trailingAnnualDividendRate ?? r.price.dividendRate ?? 0) * r.shares)
+          : 0,
         name: r.holding.name,
         currency: r.holding.currency,
       }))
