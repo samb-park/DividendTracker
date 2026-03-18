@@ -300,37 +300,50 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                 {((divAnnual / holdingsValue) * 100).toFixed(2)}% yield
               </div>
             )}
-            {incomeGoal && divAnnual !== null && (() => {
-              const goalInDisplay = incomeGoal.currency === displayCurrency
-                ? incomeGoal.annualTarget
-                : displayCurrency === "CAD"
-                  ? incomeGoal.annualTarget * fxRate
-                  : incomeGoal.annualTarget / fxRate;
-              const pct = Math.min((divAnnual / goalInDisplay) * 100, 100);
-              return (
-                <div className="mt-1.5">
-                  <div className="h-1 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
-                    {pct.toFixed(0)}% of {currencySymbol}{fmt(goalInDisplay)} goal
-                  </div>
-                  {/* Prediction: years to reach goal at current dividend CAGR */}
-                  {divPortfolioCagr !== null && divPortfolioCagr > 0 && divAnnual !== null && divAnnual < goalInDisplay && (() => {
-                    const yearsToGoal = Math.log(goalInDisplay / divAnnual) / Math.log(1 + divPortfolioCagr / 100);
-                    const targetYear = new Date().getFullYear() + Math.ceil(yearsToGoal);
-                    return (
-                      <div className="text-[10px] text-primary/80 mt-0.5 tabular-nums">
-                        ≈ {Math.ceil(yearsToGoal)} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}
+
+      {/* Income Goal progress — shown below KPI grid when goal is set */}
+      {incomeGoal && divAnnual !== null && (() => {
+        const goalInDisplay = toDisplay(incomeGoal.annualTarget, incomeGoal.currency);
+        const pct = Math.min((divAnnual / goalInDisplay) * 100, 100);
+        const currentYear = new Date().getFullYear();
+        const yearsToGoal = (divPortfolioCagr !== null && divPortfolioCagr > 0
+          && divAnnual > 0 && divAnnual < goalInDisplay)
+          ? Math.ceil(Math.log(goalInDisplay / divAnnual) / Math.log(1 + divPortfolioCagr / 100))
+          : null;
+        const targetYear = yearsToGoal !== null ? currentYear + yearsToGoal : null;
+
+        return (
+          <div className="border border-border bg-card p-3 mb-6">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-2">INCOME GOAL</div>
+            <div
+              role="progressbar"
+              aria-valuenow={Math.round(pct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Income goal progress"
+              className="h-1 bg-border rounded-full overflow-hidden mb-1.5"
+            >
+              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] tabular-nums text-muted-foreground">
+                {currencySymbol}{fmt(divAnnual)} / {currencySymbol}{fmt(goalInDisplay)}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] tabular-nums min-w-0">
+                <span className="text-primary/80 shrink-0">{pct.toFixed(0)}%</span>
+                {yearsToGoal !== null && divPortfolioCagr !== null && (
+                  <span className="text-muted-foreground truncate min-w-0">
+                    · ≈ {yearsToGoal} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* CAGR / MDD Performance chart (snapshot-based) */}
       <PerformanceChart />
