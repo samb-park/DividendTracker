@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { AddTransactionDialog } from "./add-transaction-dialog";
-import { X } from "lucide-react";
+import { X, Clock } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -105,7 +106,17 @@ export function HoldingDetailPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
+  const [showDivList, setShowDivList] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  // Lock body scroll while panel is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
   const [fxRate, setFxRate] = useState(1.35);
   const [displayCur, setDisplayCur] = useState<"USD" | "CAD">(displayCurrency ?? row.holding.currency);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);
@@ -282,63 +293,25 @@ export function HoldingDetailPanel({
     ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
     : null;
 
-  return (
-    <div
-      ref={panelRef}
-      className="fixed inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:w-[28rem] lg:w-[32rem] xl:w-1/2 bg-background md:border-l border-border z-50 overflow-y-auto"
-    >
-      {/* Mobile header — safe-top ensures it clears the iOS status bar */}
-      <div className="flex items-center justify-between px-3 pt-3 pb-3 border-b border-border md:hidden safe-top">
-        <div>
+  const panel = (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        className="relative ml-auto w-full md:w-[28rem] lg:w-[32rem] xl:w-1/2 bg-background border-l border-border overflow-y-auto"
+      >
+      {/* Unified header */}
+      <div className="flex items-center justify-between px-4 border-b border-border safe-top" style={{ paddingBottom: "12px", paddingTop: "12px" }}>
+        <div className="min-w-0">
           <div className="text-accent font-medium tracking-widest">{row.holding.ticker}</div>
           {row.holding.name && (
             <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{row.holding.name}</div>
           )}
         </div>
-        <button className="btn-retro p-1.5" onClick={onClose}><X size={16} /></button>
-      </div>
-
-      <div className="p-4 md:p-6">
-        {/* Desktop Header */}
-        <div className="hidden md:flex items-center justify-between mb-4">
-          <div>
-            <div className="text-accent text-lg font-medium">{row.holding.ticker}</div>
-            {row.holding.name && (
-              <div className="text-xs text-muted-foreground">{row.holding.name}</div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative" ref={curDropdownRef}>
-              <button
-                className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
-                onClick={() => setCurDropdownOpen((v) => !v)}
-              >
-                <span className="flex-1 text-left">{displayCur}</span>
-                <span className="text-muted-foreground">▾</span>
-              </button>
-              {curDropdownOpen && (
-                <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
-                  {(["CAD", "USD"] as const).map((c) => (
-                    <button
-                      key={c}
-                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${displayCur === c ? "text-accent" : ""}`}
-                      onClick={() => { setDisplayCur(c); setCurDropdownOpen(false); }}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button className="btn-retro p-1" onClick={onClose}>
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile currency toggle */}
-        <div className="flex items-center justify-between mb-4 md:hidden">
-          <div className="relative" ref={undefined}>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="relative" ref={curDropdownRef}>
             <button
               className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
               onClick={() => setCurDropdownOpen((v) => !v)}
@@ -347,7 +320,7 @@ export function HoldingDetailPanel({
               <span className="text-muted-foreground">▾</span>
             </button>
             {curDropdownOpen && (
-              <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              <div className="absolute top-full right-0 mt-0.5 z-[60] bg-card border border-border min-w-full">
                 {(["CAD", "USD"] as const).map((c) => (
                   <button
                     key={c}
@@ -360,8 +333,11 @@ export function HoldingDetailPanel({
               </div>
             )}
           </div>
-          <div className="text-[10px] text-muted-foreground">{row.holding.currency} STOCK</div>
+          <button className="btn-retro p-1.5" onClick={onClose}><X size={16} /></button>
         </div>
+      </div>
+
+      <div className="p-4">
 
         {/* Price info */}
         <div className="border border-border bg-card p-4 mb-3">
@@ -721,60 +697,83 @@ export function HoldingDetailPanel({
               </div>
             )}
 
-            {/* Dividend transactions list */}
+            {/* Dividend transactions list — toggled by clock icon */}
             <div className="border border-border bg-card p-4 mb-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] text-muted-foreground tracking-widest">
-                  RECEIVED ({filteredDivs.length}/{dividendTxns.length})
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] text-muted-foreground tracking-widest">
+                    RECEIVED ({dividendTxns.length})
+                  </div>
+                  {totalDivsAllTime > 0 && (
+                    <span className="text-[10px] text-primary tabular-nums">{sym}{fmt(toDisp(totalDivsAllTime))}</span>
+                  )}
                 </div>
-                {!readOnly && (
-                  <AddTransactionDialog
-                    holdingId={row.holding.id}
-                    ticker={row.holding.ticker}
-                    onAdd={onRefresh}
-                  />
-                )}
+                <div className="flex items-center gap-2">
+                  {dividendTxns.length > 0 && (
+                    <button
+                      className={`btn-retro p-1 ${showDivList ? "btn-retro-primary" : ""}`}
+                      onClick={() => setShowDivList(v => !v)}
+                      title="Toggle transaction history"
+                    >
+                      <Clock size={13} />
+                    </button>
+                  )}
+                  {!readOnly && (
+                    <AddTransactionDialog
+                      holdingId={row.holding.id}
+                      ticker={row.holding.ticker}
+                      onAdd={onRefresh}
+                    />
+                  )}
+                </div>
               </div>
-              {dividendTxns.length > 0 && (
-                <div className="flex items-center gap-2 mb-3 text-[10px]">
-                  <span className="text-muted-foreground">FROM</span>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="!w-auto !p-1 !text-[10px] tabular-nums"
-                  />
-                  <span className="text-muted-foreground">TO</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="!w-auto !p-1 !text-[10px] tabular-nums"
-                  />
-                </div>
-              )}
-              {filteredDivs.length > 0 && (
-                <div className="flex items-center justify-between text-xs mb-3 p-2 border border-primary/30 bg-primary/5">
-                  <span className="text-muted-foreground">TOTAL RECEIVED</span>
-                  <span className="tabular-nums text-primary font-medium">{sym}{fmt(toDisp(totalDivsReceived))}</span>
-                </div>
-              )}
-              {filteredDivs.length === 0 ? (
-                <div className="text-muted-foreground text-xs text-center py-4">
-                  {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY" : "NO DIVIDENDS IN DATE RANGE"}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {[...filteredDivs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
-                    <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-primary">DIV</span>
-                        <span className="text-muted-foreground tabular-nums">{txn.date?.slice(0, 10) ?? "—"}</span>
-                      </div>
-                      <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price)))}</div>
+              {showDivList && (
+                <>
+                  {dividendTxns.length > 0 && (
+                    <div className="flex items-center gap-2 mb-3 text-[10px]">
+                      <span className="text-muted-foreground">FROM</span>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="!w-auto !p-1 !text-[10px] tabular-nums"
+                      />
+                      <span className="text-muted-foreground">TO</span>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="!w-auto !p-1 !text-[10px] tabular-nums"
+                      />
                     </div>
-                  ))}
-                </div>
+                  )}
+                  {filteredDivs.length > 1 && (
+                    <div className="flex items-center justify-between text-xs mb-3 p-2 border border-primary/30 bg-primary/5">
+                      <span className="text-muted-foreground">PERIOD TOTAL</span>
+                      <span className="tabular-nums text-primary font-medium">{sym}{fmt(toDisp(totalDivsReceived))}</span>
+                    </div>
+                  )}
+                  {filteredDivs.length === 0 ? (
+                    <div className="text-muted-foreground text-xs text-center py-4">
+                      {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY" : "NO DIVIDENDS IN DATE RANGE"}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...filteredDivs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
+                        <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-primary">DIV</span>
+                            <span className="text-muted-foreground tabular-nums">{txn.date?.slice(0, 10) ?? "—"}</span>
+                          </div>
+                          <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price)))}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+              {!showDivList && dividendTxns.length === 0 && (
+                <div className="text-muted-foreground text-xs text-center py-4">NO DIVIDEND HISTORY</div>
               )}
             </div>
           </>
@@ -790,6 +789,10 @@ export function HoldingDetailPanel({
           </button>
         )}
       </div>
+      </div>
     </div>
   );
+
+  if (!mounted) return null;
+  return createPortal(panel, document.body);
 }
