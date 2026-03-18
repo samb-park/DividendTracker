@@ -102,6 +102,8 @@ export function HoldingsTable({
   const [mktMode, setMktMode] = useState<"mkt" | "cost">("mkt");
   const [wgtMode, setWgtMode] = useState<"pct" | "alloc">("pct");
   const [w52Mode, setW52Mode] = useState<"high" | "low">("high");
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.37);
@@ -119,6 +121,17 @@ export function HoldingsTable({
   }, []);
 
   const cycleColMode = () => setColMode(m => m === "usd" ? "pct" : "usd");
+
+  const cycleSort = (col: string) => {
+    if (sortCol === col) {
+      if (sortDir === "desc") setSortDir("asc");
+      else setSortCol(null);
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  };
+  const si = (col: string) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
 
   const selectRow = useCallback((id: string | null) => {
     setSelectedRowId(id);
@@ -144,7 +157,7 @@ export function HoldingsTable({
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/portfolios`);
     const all = await res.json();
-    const portfolio = all.find((p: any) => p.id === portfolioId);
+    const portfolio = (all as { id: string; holdings: Holding[] }[]).find(p => p.id === portfolioId);
     if (portfolio) {
       setHoldings(portfolio.holdings);
       await fetchPrices(portfolio.holdings);
@@ -168,6 +181,27 @@ export function HoldingsTable({
     .filter((r) => r.shares > 0 || (r.holding.quantity === null && r.holding.transactions.length === 0));
 
   const totalMarketValue = rows.reduce((s, r) => s + r.marketValue, 0);
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return rows;
+    return [...rows].sort((a, b) => {
+      let va = 0, vb = 0;
+      if (sortCol === "ticker") {
+        const cmp = a.holding.ticker.localeCompare(b.holding.ticker);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      switch (sortCol) {
+        case "shares": va = a.shares; vb = b.shares; break;
+        case "price": va = priceMode === "price" ? (a.price?.price ?? 0) : a.avgCost; vb = priceMode === "price" ? (b.price?.price ?? 0) : b.avgCost; break;
+        case "day": va = a.price?.changePercent ?? 0; vb = b.price?.changePercent ?? 0; break;
+        case "mkt": va = mktMode === "mkt" ? a.marketValue : a.costBasis; vb = mktMode === "mkt" ? b.marketValue : b.costBasis; break;
+        case "wgt": va = a.marketValue; vb = b.marketValue; break;
+        case "pnl": va = colMode === "usd" ? a.unrealizedPnL : a.unrealizedPnLPct; vb = colMode === "usd" ? b.unrealizedPnL : b.unrealizedPnLPct; break;
+        case "w52": va = w52Mode === "high" ? (a.price?.fromHighPct ?? 0) : (a.price?.fromLowPct ?? 0); vb = w52Mode === "high" ? (b.price?.fromHighPct ?? 0) : (b.price?.fromLowPct ?? 0); break;
+      }
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+  }, [rows, sortCol, sortDir, priceMode, mktMode, colMode, w52Mode]);
 
   const totalsByCur = rows.reduce((acc, r) => {
     const c = r.holding.currency;
@@ -244,7 +278,7 @@ export function HoldingsTable({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prices, holdings]);
 
-  const selectedRow = rows.find((r) => r.holding.id === selectedRowId) ?? null;
+  const selectedRow = sortedRows.find((r) => r.holding.id === selectedRowId) ?? null;
 
   return (
     <div>
@@ -263,49 +297,49 @@ export function HoldingsTable({
             <table className="min-w-max">
               <thead>
                 <tr>
-                  <th className="w-20">TICKER</th>
-                  <th className="text-left w-32 hidden lg:table-cell">NAME</th>
-                  <th className="text-right w-24">SHARES</th>
+                  <th className="w-20 cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("ticker")}>TICKER{si("ticker")}</th>
+                  <th className="text-left w-32 hidden lg:table-cell cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("ticker")}>NAME{si("ticker")}</th>
+                  <th className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("shares")}>SHARES{si("shares")}</th>
                   <th
                     className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => setPriceMode(m => m === "price" ? "avg" : "price")}
-                    title="Click to toggle PRICE / AVG COST"
+                    onClick={() => { setPriceMode(m => m === "price" ? "avg" : "price"); cycleSort("price"); }}
+                    title="Click to sort / toggle PRICE / AVG COST"
                   >
-                    {priceMode === "price" ? "PRICE" : "AVG"} ▾
+                    {priceMode === "price" ? "PRICE" : "AVG"}{si("price") || " ▾"}
                   </th>
-                  <th className="text-right w-20 hidden sm:table-cell">DAY</th>
+                  <th className="text-right w-20 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("day")}>DAY{si("day")}</th>
                   <th
                     className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => setMktMode(m => m === "mkt" ? "cost" : "mkt")}
-                    title="Click to toggle MKT VALUE / COST BASIS"
+                    onClick={() => { setMktMode(m => m === "mkt" ? "cost" : "mkt"); cycleSort("mkt"); }}
+                    title="Click to sort / toggle MKT VALUE / COST BASIS"
                   >
-                    {mktMode === "mkt" ? "MKT" : "COST"} ▾
+                    {mktMode === "mkt" ? "MKT" : "COST"}{si("mkt") || " ▾"}
                   </th>
                   <th
                     className="text-right w-16 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => setWgtMode(m => m === "pct" ? "alloc" : "pct")}
-                    title="Click to toggle WEIGHT / ALLOCATION"
+                    onClick={() => { setWgtMode(m => m === "pct" ? "alloc" : "pct"); cycleSort("wgt"); }}
+                    title="Click to sort / toggle WEIGHT / ALLOCATION"
                   >
-                    {wgtMode === "pct" ? "WGT" : "ALLOC"} ▾
+                    {wgtMode === "pct" ? "WGT" : "ALLOC"}{si("wgt") || " ▾"}
                   </th>
                   <th
                     className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={cycleColMode}
-                    title="Click to toggle P&L $ / P&L %"
+                    onClick={() => { cycleColMode(); cycleSort("pnl"); }}
+                    title="Click to sort / toggle P&L $ / P&L %"
                   >
-                    {colMode === "usd" ? "P&L $" : "P&L %"} ▾
+                    {colMode === "usd" ? "P&L $" : "P&L %"}{si("pnl") || " ▾"}
                   </th>
                   <th
                     className="text-right w-24 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => setW52Mode(m => m === "high" ? "low" : "high")}
-                    title="Click to toggle 52W HIGH / LOW"
+                    onClick={() => { setW52Mode(m => m === "high" ? "low" : "high"); cycleSort("w52"); }}
+                    title="Click to sort / toggle 52W HIGH / LOW"
                   >
-                    {w52Mode === "high" ? "52W H" : "52W L"} ▾
+                    {w52Mode === "high" ? "52W H" : "52W L"}{si("w52") || " ▾"}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {sortedRows.map((row) => {
                   const cur = row.holding.currency === "CAD" ? "C$" : "$";
                   const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
                   return (

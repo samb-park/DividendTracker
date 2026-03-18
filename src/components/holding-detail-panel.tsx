@@ -38,6 +38,7 @@ interface PriceData {
   trailingAnnualDividendYield: number | null;
   exDividendDate: string | null;
   dividendDate: string | null;
+  payoutRatio: number | null;
 }
 
 interface HoldingRow {
@@ -106,7 +107,8 @@ export function HoldingDetailPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
-const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
 
@@ -153,14 +155,14 @@ const [showHistory, setShowHistory] = useState(false);
     [row.holding.transactions]
   );
 
-  const filterByDate = (txns: Transaction[]) =>
+  const filterByDate = useCallback((txns: Transaction[]) =>
     txns.filter((txn) => {
       const d = txn.date?.slice(0, 10) ?? "";
       if (!d) return true;
       if (dateFrom && d < dateFrom) return false;
       if (dateTo && d > dateTo) return false;
       return true;
-    });
+    }), [dateFrom, dateTo]);
 
   const filteredTxns = useMemo(() => filterByDate(buysSells), [buysSells, dateFrom, dateTo]);
   const filteredDivs = useMemo(() => filterByDate(dividendTxns), [dividendTxns, dateFrom, dateTo]);
@@ -197,6 +199,23 @@ const [showHistory, setShowHistory] = useState(false);
   const totalReturnPct = totalReturn != null && row.costBasis > 0
     ? (totalReturn / row.costBasis) * 100
     : null;
+
+  // Dividend CAGR from actual transactions
+  const divCAGR = useMemo(() => {
+    if (dividendTxns.length < 2) return null;
+    const byYear: Record<number, number> = {};
+    for (const t of dividendTxns) {
+      const yr = parseInt(t.date?.slice(0, 4) ?? "0");
+      if (yr > 2000) byYear[yr] = (byYear[yr] ?? 0) + parseFloat(t.price);
+    }
+    const years = Object.keys(byYear).map(Number).sort();
+    if (years.length < 2) return null;
+    const n = years[years.length - 1] - years[0];
+    if (n < 1) return null;
+    const first = byYear[years[0]], last = byYear[years[years.length - 1]];
+    if (first <= 0 || last <= 0) return null;
+    return { cagr: (Math.pow(last / first, 1 / n) - 1) * 100, years: n };
+  }, [dividendTxns]);
 
   // Dividend history chart data: group actual by month, project future months
   const divChartData = useMemo(() => {
@@ -282,7 +301,6 @@ const [showHistory, setShowHistory] = useState(false);
   }, [readOnly, row.holding.ticker]);
 
   const deleteHolding = async () => {
-    if (!confirm("Delete this holding and all its transactions?")) return;
     await fetch(`/api/holdings/${row.holding.id}`, { method: "DELETE" });
     onRefresh();
     onClose();
@@ -499,6 +517,20 @@ const [showHistory, setShowHistory] = useState(false);
                   <div className="tabular-nums">{p.dividendDate}</div>
                 </div>
               )}
+              {p?.payoutRatio != null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">PAYOUT RATIO</div>
+                  <div className="tabular-nums">{p.payoutRatio}%</div>
+                </div>
+              )}
+              {divCAGR !== null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">DIV CAGR</div>
+                  <div className={`tabular-nums ${divCAGR.cagr >= 0 ? "text-positive" : "text-negative"}`}>
+                    {divCAGR.cagr >= 0 ? "+" : ""}{divCAGR.cagr.toFixed(1)}% ({divCAGR.years}Y)
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -666,12 +698,12 @@ const [showHistory, setShowHistory] = useState(false);
                   <BarChart data={divChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={14}>
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={(v) => v > 0 ? `${sym}${v.toFixed(0)}` : ""}
@@ -774,12 +806,29 @@ const [showHistory, setShowHistory] = useState(false);
 
         {/* Delete button */}
         {!readOnly && (
-          <button
-            className="btn-retro text-xs text-negative border-negative/30 hover:border-negative w-full py-2"
-            onClick={deleteHolding}
-          >
-            [DELETE HOLDING]
-          </button>
+          !confirmDelete ? (
+            <button
+              className="btn-retro text-xs text-negative border-negative/30 hover:border-negative w-full py-2"
+              onClick={() => setConfirmDelete(true)}
+            >
+              DELETE HOLDING
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                className="btn-retro text-xs text-negative border-negative/30 hover:border-negative flex-1 py-2"
+                onClick={deleteHolding}
+              >
+                CONFIRM DELETE
+              </button>
+              <button
+                className="btn-retro text-xs flex-1 py-2"
+                onClick={() => setConfirmDelete(false)}
+              >
+                CANCEL
+              </button>
+            </div>
+          )
         )}
       </div>
       </div>

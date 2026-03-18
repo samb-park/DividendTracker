@@ -43,6 +43,8 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [targets, setTargets] = useState<Record<string, { pct: string }>>({});
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTargets, setSavingTargets] = useState(false);
+  const [confirmDeletePortfolioId, setConfirmDeletePortfolioId] = useState<string | null>(null);
+  const [confirmDeleteToken, setConfirmDeleteToken] = useState(false);
 
   const loadStatus = async () => {
     const res = await fetch("/api/questrade/token");
@@ -115,8 +117,8 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   };
 
   const handleDeleteToken = async () => {
-    if (!confirm("Remove Questrade token?")) return;
     await fetch("/api/questrade/token", { method: "DELETE" });
+    setConfirmDeleteToken(false);
     setSyncResult(null);
     setSuccess(null);
     setError(null);
@@ -130,8 +132,8 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   };
 
   const deletePortfolio = async (id: string) => {
-    if (!confirm("Delete this portfolio and all its holdings?")) return;
     await fetch(`/api/portfolios/${id}`, { method: "DELETE" });
+    setConfirmDeletePortfolioId(null);
     await refreshPortfolios();
   };
 
@@ -147,14 +149,18 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             <div className="text-muted-foreground text-xs text-center py-4">NO PORTFOLIOS</div>
           ) : (
             portfolios.map((p) => (
-              <div key={p.id} className="flex items-center justify-between text-sm">
-                <span>{p.name}</span>
-                <button
-                  onClick={() => deletePortfolio(p.id)}
-                  className="btn-retro text-negative border-negative/30 hover:border-negative p-1"
-                >
-                  <Trash2 size={14} />
-                </button>
+              <div key={p.id} className="flex items-center justify-between text-sm gap-2">
+                <span className="truncate">{p.name}</span>
+                {confirmDeletePortfolioId === p.id ? (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => deletePortfolio(p.id)} className="btn-retro text-xs text-negative border-negative/30 hover:border-negative px-2 py-0.5">CONFIRM</button>
+                    <button onClick={() => setConfirmDeletePortfolioId(null)} className="btn-retro text-xs px-2 py-0.5">CANCEL</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDeletePortfolioId(p.id)} className="btn-retro text-negative border-negative/30 hover:border-negative p-1 flex-shrink-0">
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             ))
           )}
@@ -202,12 +208,16 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 </div>
               )}
             </div>
-            <button
-              onClick={handleDeleteToken}
-              className="btn-retro text-negative border-negative/30 hover:border-negative p-1"
-            >
-              <Trash2 size={14} />
-            </button>
+            {confirmDeleteToken ? (
+              <div className="flex gap-1">
+                <button onClick={handleDeleteToken} className="btn-retro text-xs text-negative border-negative/30 hover:border-negative px-2 py-0.5">CONFIRM</button>
+                <button onClick={() => setConfirmDeleteToken(false)} className="btn-retro text-xs px-2 py-0.5">CANCEL</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDeleteToken(true)} className="btn-retro text-negative border-negative/30 hover:border-negative p-1">
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         )}
 
@@ -354,7 +364,16 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         <div>
           <div className="text-accent text-xs tracking-wide mb-4">TICKER TARGETS</div>
           <div className="border border-border bg-card p-4 space-y-3">
-            <div className="text-[10px] text-muted-foreground mb-1">ALLOCATION TARGET (%) — MUST SUM TO 100</div>
+            {(() => {
+              const total = tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
+              const ok = Math.abs(total - 100) < 0.01;
+              return (
+                <div className={`flex items-center justify-between text-[10px] mb-2 ${ok ? "text-positive" : total > 100 ? "text-negative" : "text-muted-foreground"}`}>
+                  <span>ALLOCATION TARGET (%) — MUST SUM TO 100</span>
+                  <span className="tabular-nums font-medium">{total.toFixed(1)}%</span>
+                </div>
+              );
+            })()}
             {tickers.map(ticker => {
               const t = targets[ticker] ?? { pct: "" };
               return (

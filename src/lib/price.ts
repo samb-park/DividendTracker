@@ -19,6 +19,7 @@ interface PriceData {
   trailingAnnualDividendYield: number | null;
   exDividendDate: string | null;
   dividendDate: string | null;
+  payoutRatio: number | null;
   fetchedAt: number;
 }
 
@@ -73,6 +74,7 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
         : null,
       exDividendDate: (quote as any).exDividendDate ? new Date((quote as any).exDividendDate).toISOString().split("T")[0] : null,
       dividendDate: (quote as any).dividendDate ? new Date((quote as any).dividendDate).toISOString().split("T")[0] : null,
+      payoutRatio: (quote as any).payoutRatio ? Math.round((quote as any).payoutRatio * 100) : null,
       fetchedAt: Date.now(),
     };
 

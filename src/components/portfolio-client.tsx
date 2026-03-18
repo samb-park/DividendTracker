@@ -8,7 +8,7 @@ import type { Portfolio, HoldingSummary } from "@/lib/types";
 export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number; }) {
   const [portfolios] = useState(initialPortfolios);
   const [activeTab, setActiveTab] = useState<"all" | string>("all");
-  const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
+  const [_holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -43,9 +43,6 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
   }, [isAllMode, activePortfolio, portfolios]);
 
   const displayPortfolioId = isAllMode ? "all" : activePortfolio?.id ?? "";
-
-  // suppress unused warning — summaries still needed by HoldingsTable callback
-  void holdingSummaries;
 
   return (
     <div className={`transition-[padding] duration-200 ${detailOpen ? "md:pr-[29rem] lg:pr-[33rem] xl:pr-[50%]" : ""}`}>

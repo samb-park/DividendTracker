@@ -297,12 +297,12 @@ export function DividendIncomeChart({
             >
               <XAxis
                 dataKey="month"
-                tick={{ fontSize: 9, fill: "#666", fontFamily: "monospace" }}
+                tick={{ fontSize: 10, fill: "#666", fontFamily: "monospace" }}
                 axisLine={{ stroke: "#333" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 9, fill: "#666", fontFamily: "monospace" }}
+                tick={{ fontSize: 10, fill: "#666", fontFamily: "monospace" }}
                 axisLine={{ stroke: "#333" }}
                 tickLine={false}
                 tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))}

@@ -11,6 +11,7 @@ import type { Portfolio, HoldingSummary } from "@/lib/types";
 export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
   const [portfolios] = useState(initialPortfolios);
   const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
   const [fxFallback, setFxFallback] = useState(false);
@@ -93,6 +94,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
     setDivMonthly(monthly);
   }, []);
 
+  const handleHoldingsChange = useCallback((rows: HoldingSummary[]) => {
+    setHoldingSummaries(rows);
+    setLoadingData(false);
+  }, []);
+
   return (
     <div>
       {/* Account selector + currency toggle */}
@@ -156,6 +162,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         <div className="text-[10px] text-negative/70 text-right -mt-3 mb-2">
           FX rate unavailable — using fallback
         </div>
+      )}
+
+      {/* Loading state */}
+      {loadingData && holdingSummaries.length === 0 && (
+        <div className="text-muted-foreground text-xs text-center py-12 tracking-wide">LOADING...</div>
       )}
 
       {/* Summary grid */}
@@ -236,7 +247,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         <HoldingsTable
           portfolioId="all"
           initialHoldings={allHoldings}
-          onHoldingsChange={setHoldingSummaries}
+          onHoldingsChange={handleHoldingsChange}
           readOnly
           displayCurrency={displayCurrency}
         />
