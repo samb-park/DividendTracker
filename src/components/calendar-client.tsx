@@ -21,6 +21,7 @@ interface DayEvent {
   ticker: string;
   name: string;
   type: "exdiv" | "payment";
+  predicted: boolean;
   amount: number | null;
   currency: string;
   sharesHeld: number;
@@ -86,24 +87,26 @@ function buildEventMap(
     const base = { ticker: ev.ticker, name: ev.name, amount: ev.amountPerShare, currency: ev.currency, sharesHeld: ev.sharesHeld };
 
     // Ex-dividend dates (real + predicted)
-    const exDates: string[] = [];
     if (ev.exDividendDate) {
-      exDates.push(ev.exDividendDate.split("T")[0]);
+      const realEx = ev.exDividendDate.split("T")[0];
+      addToMap(realEx, { ...base, type: "exdiv", predicted: false });
       if (ev.frequency) {
-        exDates.push(...projectDates(ev.exDividendDate.split("T")[0], ev.frequency));
+        for (const d of projectDates(realEx, ev.frequency)) {
+          if (d !== realEx) addToMap(d, { ...base, type: "exdiv", predicted: true });
+        }
       }
     }
-    for (const d of exDates) addToMap(d, { ...base, type: "exdiv" });
 
     // Payment dates (real + predicted)
-    const payDates: string[] = [];
     if (ev.paymentDate) {
-      payDates.push(ev.paymentDate.split("T")[0]);
+      const realPay = ev.paymentDate.split("T")[0];
+      addToMap(realPay, { ...base, type: "payment", predicted: false });
       if (ev.frequency) {
-        payDates.push(...projectDates(ev.paymentDate.split("T")[0], ev.frequency));
+        for (const d of projectDates(realPay, ev.frequency)) {
+          if (d !== realPay) addToMap(d, { ...base, type: "payment", predicted: true });
+        }
       }
     }
-    for (const d of payDates) addToMap(d, { ...base, type: "payment" });
   }
 
   return map;
@@ -126,12 +129,17 @@ function buildUpcoming(events: DividendCalendarEvent[]): {
 
     const addIfUpcoming = (dateStr: string | null, type: "exdiv" | "payment") => {
       if (!dateStr) return;
-      const allDates: string[] = [dateStr.split("T")[0]];
-      if (ev.frequency) allDates.push(...projectDates(dateStr.split("T")[0], ev.frequency));
-      for (const d of allDates) {
+      const realDate = dateStr.split("T")[0];
+      const allDates: { d: string; predicted: boolean }[] = [{ d: realDate, predicted: false }];
+      if (ev.frequency) {
+        for (const d of projectDates(realDate, ev.frequency)) {
+          if (d !== realDate) allDates.push({ d, predicted: true });
+        }
+      }
+      for (const { d, predicted } of allDates) {
         const dt = new Date(d);
         if (dt >= today && dt <= cutoff) {
-          upcoming.push({ date: d, event: { ...base, type } });
+          upcoming.push({ date: d, event: { ...base, type, predicted } });
         }
       }
     };
@@ -301,10 +309,12 @@ export function CalendarClient() {
           const dayEvents = eventMap.get(dateStr) ?? [];
           const hasExDiv = dayEvents.some((e) => e.type === "exdiv");
           const hasPayment = dayEvents.some((e) => e.type === "payment");
+          const allPredicted = dayEvents.length > 0 && dayEvents.every((e) => e.predicted);
           const isToday = dateStr === todayStr;
           const isSelected = dateStr === selectedDay;
 
           let cellClass = "cal-day relative rounded-[2px] p-1 text-center cursor-pointer transition-all min-h-[40px]";
+          if (allPredicted) cellClass += " opacity-50";
           if (hasExDiv && hasPayment) cellClass += " cal-both";
           else if (hasExDiv) cellClass += " cal-exdiv";
           else if (hasPayment) cellClass += " cal-payment";
@@ -409,7 +419,7 @@ export function CalendarClient() {
                   const ev = events.find((e) => e.ticker === u.event.ticker);
                   const portfolio = ev?.portfolios.join(", ") ?? "";
                   return (
-                    <tr key={i}>
+                    <tr key={i} className={u.event.predicted ? "opacity-50" : ""}>
                       <td className="font-medium">{u.event.ticker}</td>
                       <td>
                         <span
@@ -421,6 +431,7 @@ export function CalendarClient() {
                           }}
                         >
                           {u.event.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
+                          {u.event.predicted && <span className="text-muted-foreground ml-1">*</span>}
                         </span>
                       </td>
                       <td className="tabular-nums">

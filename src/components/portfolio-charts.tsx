@@ -188,12 +188,6 @@ export function PortfolioCharts({
       let totalValue = 0;
       let totalCost = 0;
 
-      // Reconstruct cash at this historical date by undoing post-date transactions.
-      // totalCashCAD is the current balance; we reverse BUY/SELL/DIVIDEND that happened
-      // after `date` to avoid the dip artifact caused by static current-cash being
-      // added to pre-sell share values.
-      let cashAtDate = totalCashCAD;
-
       for (const h of holdingsWithTransactions) {
         const hist = histories[h.ticker];
         const currencyMult = h.currency === "USD" ? fx : 1;
@@ -201,32 +195,19 @@ export function PortfolioCharts({
         const avgCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
         const txns = h.transactions;
 
-        // Reconstruct shares and cash at this date
+        // Reconstruct shares held at this historical date
         let sharesAtDate = currentQty;
         if (txns && txns.length > 0) {
           for (const txn of txns) {
             const txnDate = txn.date ? txn.date.slice(0, 10) : "";
             if (txnDate > date) {
               const qty = parseFloat(txn.quantity);
-              const price = parseFloat(txn.price);
-              const commission = parseFloat(txn.commission ?? "0");
-              if (txn.action === "BUY") {
-                sharesAtDate -= qty;
-                // Undo buy: cash was spent, so restore it
-                cashAtDate += (qty * price + commission) * currencyMult;
-              } else if (txn.action === "SELL") {
-                sharesAtDate += qty;
-                // Undo sell: cash was received, so remove it
-                cashAtDate -= (qty * price - commission) * currencyMult;
-              } else if (txn.action === "DIVIDEND") {
-                // Undo dividend receipt (price field stores netAmount for dividends)
-                cashAtDate -= price * currencyMult;
-              }
+              if (txn.action === "BUY") sharesAtDate -= qty;
+              else if (txn.action === "SELL") sharesAtDate += qty;
             }
           }
         }
         if (sharesAtDate < 0) sharesAtDate = 0;
-        if (cashAtDate < 0) cashAtDate = 0;
 
         if (!hist) continue;
         const point = hist.filter((p) => p.date <= date).pop();
@@ -238,7 +219,7 @@ export function PortfolioCharts({
 
       return {
         date,
-        value: Math.round((totalValue + cashAtDate) * 100) / 100,
+        value: Math.round(totalValue * 100) / 100,
         cost: Math.round(totalCost * 100) / 100,
       };
     });

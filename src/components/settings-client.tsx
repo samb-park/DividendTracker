@@ -16,6 +16,7 @@ interface SyncResult {
   accountsSynced: number;
   holdingsSynced: number;
   transactionsAdded: number;
+  cashTransactionsAdded: number;
   errors: string[];
 }
 
@@ -41,7 +42,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [contribCurrency, setContribCurrency] = useState<"USD" | "CAD">("CAD");
   const [targets, setTargets] = useState<Record<string, { pct: string }>>({});
   const [savingPlan, setSavingPlan] = useState(false);
-  const [savingTarget, setSavingTarget] = useState<string | null>(null);
+  const [savingTargets, setSavingTargets] = useState(false);
 
   const loadStatus = async () => {
     const res = await fetch("/api/questrade/token");
@@ -261,7 +262,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         {syncResult && (
           <div className="border border-border bg-card p-4 mt-4 text-xs space-y-2">
             <div className="text-accent tracking-widest mb-2">SYNC RESULT</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div>
                 <div className="text-lg font-medium tabular-nums text-primary">
                   {syncResult.accountsSynced}
@@ -279,6 +280,12 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                   {syncResult.transactionsAdded}
                 </div>
                 <div className="text-muted-foreground text-[10px]">NEW TXN</div>
+              </div>
+              <div>
+                <div className="text-lg font-medium tabular-nums text-primary">
+                  {syncResult.cashTransactionsAdded ?? 0}
+                </div>
+                <div className="text-muted-foreground text-[10px]">NEW DEPOSITS</div>
               </div>
             </div>
             {syncResult.errors.length > 0 && (
@@ -358,23 +365,29 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                     onChange={e => setTargets(prev => ({ ...prev, [ticker]: { pct: e.target.value } }))}
                     className="flex-1 !py-1" />
                   <span className="text-xs text-muted-foreground">%</span>
-                  <button
-                    disabled={savingTarget === ticker || !t.pct}
-                    className="btn-retro text-[10px] disabled:opacity-40"
-                    onClick={async () => {
-                      setSavingTarget(ticker);
-                      await fetch("/api/settings/investment", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(t.pct) }),
-                      });
-                      setSavingTarget(null);
-                    }}>
-                    {savingTarget === ticker ? "..." : "[SAVE]"}
-                  </button>
                 </div>
               );
             })}
+            <button
+              disabled={savingTargets}
+              className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40 mt-2"
+              onClick={async () => {
+                setSavingTargets(true);
+                await Promise.all(
+                  tickers
+                    .filter(ticker => targets[ticker]?.pct)
+                    .map(ticker =>
+                      fetch("/api/settings/investment", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(targets[ticker].pct) }),
+                      })
+                    )
+                );
+                setSavingTargets(false);
+              }}>
+              {savingTargets ? "SAVING..." : "[ SAVE ALL ]"}
+            </button>
           </div>
         </div>
       )}

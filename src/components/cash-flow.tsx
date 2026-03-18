@@ -117,6 +117,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!confirm("Delete this entry?")) return;
     await fetch(`/api/cash-transactions/${id}`, { method: "DELETE" });
     setItems((prev) => prev.filter((i) => i.id !== id));
   };
