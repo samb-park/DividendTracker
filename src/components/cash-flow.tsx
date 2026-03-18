@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { fmt } from "@/lib/utils";
 
 interface CashItem {
@@ -114,12 +114,6 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
     setShowForm(false);
     setForm((f) => ({ ...f, amount: "", notes: "" }));
     fetchData(year);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this entry?")) return;
-    await fetch(`/api/cash-transactions/${id}`, { method: "DELETE" });
-    setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
   return (
@@ -298,12 +292,6 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
                             <span className={`text-[11px] tabular-nums flex-shrink-0 ${isDeposit ? "text-positive" : "text-negative"}`}>
                               {isDeposit ? "+" : "-"}{sym}{fmt(item.amount)}
                             </span>
-                            <button
-                              className="text-muted-foreground hover:text-negative flex-shrink-0 ml-1"
-                              onClick={() => handleDelete(item.id)}
-                            >
-                              <Trash2 size={11} />
-                            </button>
                           </div>
                         );
                       })}
