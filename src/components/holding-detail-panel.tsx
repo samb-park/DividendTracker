@@ -106,8 +106,7 @@ export function HoldingDetailPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
-  const [showDivList, setShowDivList] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+const [showHistory, setShowHistory] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
 
@@ -718,15 +717,6 @@ export function HoldingDetailPanel({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {dividendTxns.length > 0 && (
-                    <button
-                      className={`btn-retro p-1 ${showDivList ? "btn-retro-primary" : ""}`}
-                      onClick={() => setShowDivList(v => !v)}
-                      title="Toggle transaction history"
-                    >
-                      <Clock size={13} />
-                    </button>
-                  )}
                   {!readOnly && (
                     <AddTransactionDialog
                       holdingId={row.holding.id}
@@ -736,53 +726,46 @@ export function HoldingDetailPanel({
                   )}
                 </div>
               </div>
-              {showDivList && (
-                <>
-                  {dividendTxns.length > 0 && (
-                    <div className="flex items-center gap-2 mb-3 text-[10px]">
-                      <span className="text-muted-foreground">FROM</span>
-                      <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="!w-auto !p-1 !text-[10px] tabular-nums"
-                      />
-                      <span className="text-muted-foreground">TO</span>
-                      <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="!w-auto !p-1 !text-[10px] tabular-nums"
-                      />
-                    </div>
-                  )}
-                  {filteredDivs.length > 1 && (
-                    <div className="flex items-center justify-between text-xs mb-3 p-2 border border-primary/30 bg-primary/5">
-                      <span className="text-muted-foreground">PERIOD TOTAL</span>
-                      <span className="tabular-nums text-primary font-medium">{sym}{fmt(toDisp(totalDivsReceived))}</span>
-                    </div>
-                  )}
-                  {filteredDivs.length === 0 ? (
-                    <div className="text-muted-foreground text-xs text-center py-4">
-                      {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY" : "NO DIVIDENDS IN DATE RANGE"}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {[...filteredDivs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
-                        <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-primary">DIV</span>
-                            <span className="text-muted-foreground tabular-nums">{txn.date?.slice(0, 10) ?? "—"}</span>
-                          </div>
-                          <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price)))}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
+              {dividendTxns.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 text-[10px]">
+                  <span className="text-muted-foreground">FROM</span>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="!w-auto !p-1 !text-[10px] tabular-nums"
+                  />
+                  <span className="text-muted-foreground">TO</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="!w-auto !p-1 !text-[10px] tabular-nums"
+                  />
+                </div>
               )}
-              {!showDivList && dividendTxns.length === 0 && (
-                <div className="text-muted-foreground text-xs text-center py-4">NO DIVIDEND HISTORY</div>
+              {filteredDivs.length > 1 && (
+                <div className="flex items-center justify-between text-xs mb-3 p-2 border border-primary/30 bg-primary/5">
+                  <span className="text-muted-foreground">PERIOD TOTAL</span>
+                  <span className="tabular-nums text-primary font-medium">{sym}{fmt(toDisp(totalDivsReceived))}</span>
+                </div>
+              )}
+              {filteredDivs.length === 0 ? (
+                <div className="text-muted-foreground text-xs text-center py-4">
+                  {dividendTxns.length === 0 ? "NO DIVIDEND HISTORY" : "NO DIVIDENDS IN DATE RANGE"}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {[...filteredDivs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
+                    <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary">DIV</span>
+                        <span className="text-muted-foreground tabular-nums">{txn.date?.slice(0, 10) ?? "—"}</span>
+                      </div>
+                      <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price)))}</div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </>
