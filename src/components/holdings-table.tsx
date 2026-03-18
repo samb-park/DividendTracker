@@ -105,7 +105,8 @@ export function HoldingsTable({
   const [w52Mode, setW52Mode] = useState<"high" | "low">("high");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [dayMode, setDayMode] = useState<"day" | "yld">("day");
+  const [dayMode, setDayMode] = useState<"day" | "yld" | "yoc">("day");
+  const [streaks, setStreaks] = useState<Record<string, number>>({});
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
@@ -120,6 +121,11 @@ export function HoldingsTable({
       if (d.contribution) setInvestContrib({ amount: d.contribution.amount, currency: d.contribution.currency });
     }).catch(() => {});
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
+    fetch("/api/dividend-growth").then(r => r.json()).then(d => {
+      const map: Record<string, number> = {};
+      for (const t of (d.tickers ?? [])) map[t.ticker] = t.streak ?? 0;
+      setStreaks(map);
+    }).catch(() => {});
   }, []);
 
   const cycleColMode = () => setColMode(m => m === "usd" ? "pct" : "usd");
@@ -345,6 +351,11 @@ export function HoldingsTable({
                     <span className="text-muted-foreground tabular-nums flex-shrink-0">
                       {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
                     </span>
+                    {(streaks[row.holding.ticker] ?? 0) > 0 && (
+                      <span className={`tabular-nums text-[11px] flex-shrink-0 ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`}>
+                        ↑{streaks[row.holding.ticker]}Y
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -368,10 +379,10 @@ export function HoldingsTable({
                   </th>
                   <th
                     className="text-right w-20 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setDayMode(m => m === "day" ? "yld" : "day"); cycleSort("day"); }}
-                    title="Click to sort / toggle DAY % / YLD %"
+                    onClick={() => { setDayMode(m => m === "day" ? "yld" : m === "yld" ? "yoc" : "day"); cycleSort("day"); }}
+                    title="Click to sort / toggle DAY % / YLD % / YOC"
                   >
-                    {dayMode === "day" ? "DAY" : "YLD"}{si("day") || " ▾"}
+                    {dayMode === "day" ? "DAY" : dayMode === "yld" ? "YLD" : "YOC"}{si("day") || " ▾"}
                   </th>
                   <th
                     className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
@@ -413,7 +424,14 @@ export function HoldingsTable({
                       className={`cursor-pointer ${selectedRowId === row.holding.id ? "bg-border/30" : ""}`}
                       onClick={() => selectRow(row.holding.id)}
                     >
-                      <td className="font-medium text-accent">{row.holding.ticker}</td>
+                      <td className="font-medium text-accent">
+                        <span>{row.holding.ticker}</span>
+                        {(streaks[row.holding.ticker] ?? 0) > 0 && (
+                          <span className={`ml-1 text-[9px] ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`}>
+                            ↑{streaks[row.holding.ticker]}
+                          </span>
+                        )}
+                      </td>
                       <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
                         {row.holding.name || "—"}
                       </td>
@@ -434,9 +452,17 @@ export function HoldingsTable({
                       }`}>
                         {dayMode === "day"
                           ? (row.price ? fmtPct(row.price.changePercent) : "—")
-                          : (() => {
+                          : dayMode === "yld"
+                          ? (() => {
                               const yld = row.price?.dividendYield ?? row.price?.trailingAnnualDividendYield ?? null;
                               return yld != null ? `${yld.toFixed(2)}%` : "—";
+                            })()
+                          : (() => {
+                              const annualDivRate = row.price?.trailingAnnualDividendRate ?? row.price?.dividendRate ?? 0;
+                              const yoc = (annualDivRate > 0 && row.costBasis > 0)
+                                ? (annualDivRate * row.shares / row.costBasis) * 100
+                                : null;
+                              return yoc != null ? `${yoc.toFixed(2)}%` : "—";
                             })()
                         }
                       </td>

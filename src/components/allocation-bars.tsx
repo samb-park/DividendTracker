@@ -101,16 +101,29 @@ export function AllocationBars({
   const [divShowPct, setDivShowPct] = useState(true);
   const [sectorMap, setSectorMap] = useState<SectorMap>({});
   const [sectorError, setSectorError] = useState(false);
+  const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    fetch("/api/sector")
-      .then((r) => r.json())
-      .then((d: { sectors: { ticker: string; sector: string }[] }) => {
-        const map: SectorMap = {};
-        for (const item of d.sectors ?? []) map[item.ticker] = item.sector;
-        setSectorMap(map);
-      })
-      .catch(() => { setSectorError(true); });
+    Promise.all([
+      fetch("/api/sector")
+        .then(r => r.json())
+        .then((d: { sectors: { ticker: string; sector: string }[] }) => {
+          const map: SectorMap = {};
+          for (const item of d.sectors ?? []) map[item.ticker] = item.sector;
+          setSectorMap(map);
+        })
+        .catch(() => { setSectorError(true); }),
+      fetch("/api/settings/investment")
+        .then(r => r.json())
+        .then(d => {
+          const t: Record<string, number> = {};
+          for (const [ticker, val] of Object.entries(d.targets ?? {})) {
+            t[ticker] = (val as { pct: number }).pct;
+          }
+          setInvestTargets(t);
+        })
+        .catch(() => {}),
+    ]);
   }, []);
 
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
@@ -208,6 +221,16 @@ export function AllocationBars({
           .sort((a, b) => b.value - a.value);
         const sectorTotal = sectorEntries.reduce((s, e) => s + e.value, 0);
         if (sectorEntries.length === 0) return null;
+
+        // Compute per-sector target % (sum of ticker targets in each sector)
+        const hasSectorTargets = Object.keys(investTargets).length > 0;
+        const sectorGaps = hasSectorTargets ? sectorEntries.map(e => {
+          const tickersInSector = holdings.filter(h => (sectorMap[h.ticker] ?? "Other") === e.ticker);
+          const targetPct = tickersInSector.reduce((s, h) => s + (investTargets[h.ticker] ?? 0), 0);
+          const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
+          return { sector: e.ticker, currentPct, targetPct, gap: currentPct - targetPct };
+        }) : null;
+
         return (
           <div className="border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
@@ -217,12 +240,26 @@ export function AllocationBars({
               </div>
             </div>
             <HorizontalBar entries={sectorEntries} total={sectorTotal} />
-            <BarLegend
-              entries={sectorEntries}
-              total={sectorTotal}
-              showPct={true}
-              currencySymbol={currencySymbol}
-            />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {sectorEntries.map((e) => {
+                const gap = sectorGaps?.find(g => g.sector === e.ticker);
+                const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
+                return (
+                  <div key={e.ticker} className="flex items-center gap-2 text-[11px] min-w-0">
+                    <span className="flex-shrink-0 inline-block w-2.5 h-2.5 rounded-[1px]" style={{ backgroundColor: e.color }} />
+                    <span className="font-medium truncate">{e.ticker}</span>
+                    <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
+                      {currentPct.toFixed(1)}%
+                      {gap && gap.targetPct > 0 && (
+                        <span className={`ml-1 text-[9px] ${gap.gap > 1 ? "text-yellow-500" : gap.gap < -1 ? "text-muted-foreground/60" : "text-positive"}`}>
+                          {gap.gap >= 0 ? "+" : ""}{gap.gap.toFixed(1)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })()}

@@ -92,7 +92,7 @@ export function HoldingDetailPanel({
   displayCurrency,
   allocAmount = 0,
   contribCAD = 0,
-  fxRateForAlloc = 1.37,
+  fxRateForAlloc = 1.35,
 }: {
   row: HoldingRow;
   readOnly: boolean;
@@ -119,7 +119,8 @@ export function HoldingDetailPanel({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
-  const [fxRate, setFxRate] = useState(1.35);
+  const [fxRate, setFxRate] = useState(fxRateForAlloc);
+  useEffect(() => { setFxRate(fxRateForAlloc); }, [fxRateForAlloc]);
   const [displayCur, setDisplayCur] = useState<"USD" | "CAD">(displayCurrency ?? row.holding.currency);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);
 

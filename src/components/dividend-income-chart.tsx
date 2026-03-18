@@ -119,6 +119,7 @@ export function DividendIncomeChart({
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -217,11 +218,24 @@ export function DividendIncomeChart({
     return months;
   }, [pastData, futureData, year, CURRENT_YEAR, CURRENT_MONTH]);
 
+  const accountTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const m of mergedMonths) {
+      for (const item of m.items) {
+        if (item.accountType) types.add(item.accountType);
+      }
+    }
+    return Array.from(types).sort();
+  }, [mergedMonths]);
+
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
 
   const chartData = useMemo(() => {
     return mergedMonths.map((m) => {
-      const monthValue = m.items.reduce((sum, item) => {
+      const filteredItems = selectedAccount
+        ? m.items.filter(item => item.accountType === selectedAccount)
+        : m.items;
+      const monthValue = filteredItems.reduce((sum, item) => {
         const amt = showNet ? item.net : item.amount;
         return sum + toDisplayAmt(amt, item.currency, displayCurrency, fxRate);
       }, 0);
@@ -234,7 +248,7 @@ export function DividendIncomeChart({
         isCurrentMonth: m.month === CURRENT_MONTH && year === CURRENT_YEAR,
       };
     });
-  }, [mergedMonths, showNet, displayCurrency, fxRate]);
+  }, [mergedMonths, showNet, displayCurrency, fxRate, selectedAccount]);
 
   const { annualTotal, monthlyAvg } = useMemo(() => {
     const activeMonths = chartData.filter((d) => d.value > 0);
@@ -289,6 +303,26 @@ export function DividendIncomeChart({
           )}
         </div>
       </div>
+
+      {accountTypes.length > 1 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          <button
+            className={`btn-retro text-[10px] px-2 py-0.5 ${selectedAccount === null ? "btn-retro-primary" : ""}`}
+            onClick={() => setSelectedAccount(null)}
+          >
+            ALL
+          </button>
+          {accountTypes.map(type => (
+            <button
+              key={type}
+              className={`btn-retro text-[10px] px-2 py-0.5 ${selectedAccount === type ? "btn-retro-primary" : ""}`}
+              onClick={() => setSelectedAccount(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bar Chart */}
       {loading ? (
@@ -391,48 +425,55 @@ export function DividendIncomeChart({
               <span className="text-[10px] text-muted-foreground border border-border/50 px-1">PROJECTED</span>
             )}
           </div>
-          <div className="space-y-1.5">
-            {selectedData.items
-              .slice()
-              .sort((a, b) => {
-                const aAmt = toDisplayAmt(showNet ? a.net : a.amount, a.currency, displayCurrency, fxRate);
-                const bAmt = toDisplayAmt(showNet ? b.net : b.amount, b.currency, displayCurrency, fxRate);
-                return bAmt - aAmt;
-              })
-              .map((item, i) => {
-                const grossDisp = toDisplayAmt(item.amount, item.currency, displayCurrency, fxRate);
-                const netDisp = toDisplayAmt(item.net, item.currency, displayCurrency, fxRate);
-                const displayAmt = showNet ? netDisp : grossDisp;
-                return (
-                  <div key={i} className="flex items-center justify-between text-xs gap-2 py-0.5">
-                    <span className="font-medium min-w-[48px]">{item.ticker}</span>
-                    <span className="text-muted-foreground text-[10px] flex-1">{item.accountType}</span>
-                    <span className="tabular-nums text-primary">
-                      {currencySymbol}{fmt(displayAmt)}
-                      {showNet && item.net < item.amount && (
-                        <span className="text-muted-foreground ml-1 text-[10px]">
-                          (gross {currencySymbol}{fmt(grossDisp)})
+          {(() => {
+            const displayItems = selectedData.items.filter(item =>
+              selectedAccount === null || item.accountType === selectedAccount
+            );
+            return (
+              <div className="space-y-1.5">
+                {displayItems
+                  .slice()
+                  .sort((a, b) => {
+                    const aAmt = toDisplayAmt(showNet ? a.net : a.amount, a.currency, displayCurrency, fxRate);
+                    const bAmt = toDisplayAmt(showNet ? b.net : b.amount, b.currency, displayCurrency, fxRate);
+                    return bAmt - aAmt;
+                  })
+                  .map((item, i) => {
+                    const grossDisp = toDisplayAmt(item.amount, item.currency, displayCurrency, fxRate);
+                    const netDisp = toDisplayAmt(item.net, item.currency, displayCurrency, fxRate);
+                    const displayAmt = showNet ? netDisp : grossDisp;
+                    return (
+                      <div key={i} className="flex items-center justify-between text-xs gap-2 py-0.5">
+                        <span className="font-medium min-w-[48px]">{item.ticker}</span>
+                        <span className="text-muted-foreground text-[10px] flex-1">{item.accountType}</span>
+                        <span className="tabular-nums text-primary">
+                          {currencySymbol}{fmt(displayAmt)}
+                          {showNet && item.net < item.amount && (
+                            <span className="text-muted-foreground ml-1 text-[10px]">
+                              (gross {currencySymbol}{fmt(grossDisp)})
+                            </span>
+                          )}
                         </span>
+                      </div>
+                    );
+                  })}
+                {/* Month subtotal */}
+                {displayItems.length > 1 && (
+                  <div className="flex items-center justify-between text-xs gap-2 pt-1.5 border-t border-border">
+                    <span className="text-muted-foreground">SUBTOTAL</span>
+                    <span className="tabular-nums text-primary font-medium">
+                      {currencySymbol}{fmt(
+                        displayItems.reduce((sum, item) => {
+                          const amt = showNet ? item.net : item.amount;
+                          return sum + toDisplayAmt(amt, item.currency, displayCurrency, fxRate);
+                        }, 0)
                       )}
                     </span>
                   </div>
-                );
-              })}
-            {/* Month subtotal */}
-            {selectedData.items.length > 1 && (
-              <div className="flex items-center justify-between text-xs gap-2 pt-1.5 border-t border-border">
-                <span className="text-muted-foreground">SUBTOTAL</span>
-                <span className="tabular-nums text-primary font-medium">
-                  {currencySymbol}{fmt(
-                    selectedData.items.reduce((sum, item) => {
-                      const amt = showNet ? item.net : item.amount;
-                      return sum + toDisplayAmt(amt, item.currency, displayCurrency, fxRate);
-                    }, 0)
-                  )}
-                </span>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
       )}
 

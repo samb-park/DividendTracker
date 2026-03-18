@@ -58,6 +58,15 @@ async function getDividendHistory(ticker: string): Promise<YearlyDiv[]> {
   }
 }
 
+function computeStreak(history: YearlyDiv[]): number {
+  let streak = 0;
+  for (let i = history.length - 1; i > 0; i--) {
+    if (history[i].annualDPS > history[i - 1].annualDPS) streak++;
+    else break;
+  }
+  return streak;
+}
+
 export async function GET() {
   const holdings = await prisma.holding.findMany({
     where: { quantity: { gt: 0 } },
@@ -78,7 +87,7 @@ export async function GET() {
           : null;
         return { ...row, growthPct };
       });
-      return { ticker, history: withGrowth };
+      return { ticker, history: withGrowth, streak: computeStreak(history) };
     })
   );
 
