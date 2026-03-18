@@ -24,6 +24,7 @@ export function BottomNav() {
             <Link
               key={href}
               href={href}
+              replace
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] tracking-widest transition-colors ${
                 active
                   ? "text-primary"
