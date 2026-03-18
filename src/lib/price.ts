@@ -56,7 +56,12 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
           : 0,
       dividendRate: (quote as any).dividendRate
         || (quote as any).trailingAnnualDividendRate
-        || null,
+        // Fallback: compute from yield × price when explicit rate is unavailable
+        || ((quote as any).dividendYield && quote.regularMarketPrice
+          ? Math.round(quote.regularMarketPrice * ((quote as any).dividendYield / 100) * 10000) / 10000
+          : ((quote as any).trailingAnnualDividendYield && quote.regularMarketPrice
+            ? Math.round(quote.regularMarketPrice * (quote as any).trailingAnnualDividendYield * 10000) / 10000
+            : null)),
       dividendYield: (quote as any).dividendYield
         ? (quote as any).dividendYield  // Yahoo quote returns dividendYield already as % (e.g. 3.58)
         : ((quote as any).trailingAnnualDividendYield
