@@ -38,6 +38,7 @@ interface PriceData {
   trailingAnnualDividendYield: number | null;
   exDividendDate: string | null;
   dividendDate: string | null;
+  payoutRatio: number | null;
 }
 
 export interface HoldingRow {
@@ -280,8 +281,7 @@ export function HoldingsTable({
         currency: r.holding.currency,
       }))
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prices, holdings, loadingPrices]);
+  }, [prices, holdings, loadingPrices, onHoldingsChange]);
 
   const selectedRow = sortedRows.find((r) => r.holding.id === selectedRowId) ?? null;
 

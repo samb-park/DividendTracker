@@ -1,6 +1,6 @@
 export interface Transaction {
   id: string;
-  action: "BUY" | "SELL" | "DIVIDEND" | "REINVEST" | "DEPOSIT" | "WITHDRAWAL" | "FEE" | "INTEREST";
+  action: "BUY" | "SELL" | "DIVIDEND";
   quantity: string;
   price: string;
   commission: string;

@@ -24,7 +24,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const curDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (acctDropdownRef.current && !acctDropdownRef.current.contains(e.target as Node)) {
         setAcctDropdownOpen(false);
       }
@@ -32,14 +32,25 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         setCurDropdownOpen(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAcctDropdownOpen(false);
+        setCurDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
   const [divAnnual, setDivAnnual] = useState<number | null>(null);
   const [divMonthly, setDivMonthly] = useState<number | null>(null);
   const [divShowMonthly, setDivShowMonthly] = useState(false);
   const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
   const [divPortfolioCagr, setDivPortfolioCagr] = useState<number | null>(null);
+  const [growthTickers, setGrowthTickers] = useState<Array<{ ticker: string; history: Array<{ year: number; annualDPS: number }> }>>([]);
 
   useEffect(() => {
     Promise.all([
@@ -50,26 +61,38 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
       if (inv.incomeGoal) setIncomeGoal(inv.incomeGoal);
       if (fx.rate) setFxRate(fx.rate);
       if (fx.fallback) setFxFallback(true);
-
-      // Compute weighted-average portfolio dividend CAGR from all tickers with 3+ years of data
-      const tickers: Array<{ ticker: string; history: Array<{ year: number; annualDPS: number }> }> =
-        growth.tickers ?? [];
-      const cagrValues: number[] = [];
-      for (const t of tickers) {
-        const h = t.history.filter((r: { annualDPS: number }) => r.annualDPS > 0);
-        if (h.length < 3) continue;
-        const first = h[0];
-        const last = h[h.length - 1];
-        const years = last.year - first.year;
-        if (years > 0 && first.annualDPS > 0) {
-          cagrValues.push((Math.pow(last.annualDPS / first.annualDPS, 1 / years) - 1) * 100);
-        }
-      }
-      if (cagrValues.length > 0) {
-        setDivPortfolioCagr(cagrValues.reduce((a, b) => a + b, 0) / cagrValues.length);
-      }
+      setGrowthTickers(growth.tickers ?? []);
     });
   }, []);
+
+  // Compute market-value-weighted portfolio dividend CAGR
+  // Re-runs when holdingSummaries (prices) load so weights reflect actual position sizes
+  useEffect(() => {
+    if (!growthTickers.length) return;
+
+    const cadValueByTicker: Record<string, number> = {};
+    for (const s of holdingSummaries) {
+      cadValueByTicker[s.ticker] = s.currency === "USD" ? s.marketValue * fxRate : s.marketValue;
+    }
+
+    let weightedSum = 0;
+    let totalWeight = 0;
+    for (const t of growthTickers) {
+      const h = t.history.filter((r: { annualDPS: number }) => r.annualDPS > 0);
+      if (h.length < 3) continue;
+      const first = h[0];
+      const last = h[h.length - 1];
+      const years = last.year - first.year;
+      if (years <= 0 || first.annualDPS <= 0) continue;
+      const cagr = (Math.pow(last.annualDPS / first.annualDPS, 1 / years) - 1) * 100;
+      const weight = cadValueByTicker[t.ticker] ?? 1; // equal weight fallback before prices load
+      weightedSum += cagr * weight;
+      totalWeight += weight;
+    }
+    if (totalWeight > 0) {
+      setDivPortfolioCagr(weightedSum / totalWeight);
+    }
+  }, [growthTickers, holdingSummaries, fxRate]);
 
   useEffect(() => {
     setHoldingSummaries([]);
@@ -135,17 +158,22 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           <button
             className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
             onClick={() => setAcctDropdownOpen((v) => !v)}
+            aria-label="Select portfolio"
+            aria-haspopup="listbox"
+            aria-expanded={acctDropdownOpen}
           >
             <span className="flex-1 text-left">
               {selectedPortfolioId === "all"
                 ? "ALL"
                 : portfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "ALL"}
             </span>
-            <span className="text-muted-foreground">▾</span>
+            <span className="text-muted-foreground" aria-hidden="true">▾</span>
           </button>
           {acctDropdownOpen && (
-            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full" role="listbox" aria-label="Portfolio">
               <button
+                role="option"
+                aria-selected={selectedPortfolioId === "all"}
                 className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === "all" ? "text-accent" : ""}`}
                 onClick={() => { setSelectedPortfolioId("all"); setAcctDropdownOpen(false); }}
               >
@@ -154,6 +182,8 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               {portfolios.map((p) => (
                 <button
                   key={p.id}
+                  role="option"
+                  aria-selected={selectedPortfolioId === p.id}
                   className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === p.id ? "text-accent" : ""}`}
                   onClick={() => { setSelectedPortfolioId(p.id); setAcctDropdownOpen(false); }}
                 >
@@ -167,15 +197,20 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           <button
             className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
             onClick={() => setCurDropdownOpen((v) => !v)}
+            aria-label="Select display currency"
+            aria-haspopup="listbox"
+            aria-expanded={curDropdownOpen}
           >
             <span className="flex-1 text-left">{displayCurrency}</span>
-            <span className="text-muted-foreground">▾</span>
+            <span className="text-muted-foreground" aria-hidden="true">▾</span>
           </button>
           {curDropdownOpen && (
-            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full" role="listbox" aria-label="Display currency">
               {(["CAD", "USD"] as const).map((c) => (
                 <button
                   key={c}
+                  role="option"
+                  aria-selected={displayCurrency === c}
                   className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${displayCurrency === c ? "text-accent" : ""}`}
                   onClick={() => { setDisplayCurrency(c); setCurDropdownOpen(false); }}
                 >
@@ -202,6 +237,18 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                 <SkeletonBlock className="h-4 w-20" />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state — no holdings loaded yet */}
+      {!loadingData && holdingSummaries.length === 0 && allHoldings.length === 0 && (
+        <div className="border border-dashed border-border p-8 text-center mb-6">
+          <div className="text-accent text-xs tracking-wide mb-3">▶ GETTING STARTED</div>
+          <div className="text-xs text-muted-foreground space-y-1.5">
+            <div>1. Go to <span className="text-foreground">SETTINGS</span> → create a portfolio</div>
+            <div>2. Add stocks via the <span className="text-foreground">HOLDINGS</span> tab</div>
+            <div>3. Or import automatically via <span className="text-foreground">SETTINGS → BROKER SYNC</span></div>
           </div>
         </div>
       )}
@@ -241,7 +288,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               ({todayPnL >= 0 ? "+" : ""}{todayPnLPct.toFixed(2)}%)
             </div>
           </div>
-          <div className="bg-card p-3 cursor-pointer select-none" onClick={() => setDivShowMonthly((v) => !v)}>
+          <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors" onClick={() => setDivShowMonthly((v) => !v)} role="button" aria-label={`Toggle between annual and monthly dividend view. Currently showing ${divShowMonthly ? "monthly" : "annual"}`}>
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
               {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
             </div>
@@ -265,7 +312,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                   <div className="h-1 bg-border rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
-                  <div className="text-[9px] text-muted-foreground mt-0.5 tabular-nums">
+                  <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
                     {pct.toFixed(0)}% of {currencySymbol}{fmt(goalInDisplay)} goal
                   </div>
                   {/* Prediction: years to reach goal at current dividend CAGR */}
@@ -273,7 +320,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
                     const yearsToGoal = Math.log(goalInDisplay / divAnnual) / Math.log(1 + divPortfolioCagr / 100);
                     const targetYear = new Date().getFullYear() + Math.ceil(yearsToGoal);
                     return (
-                      <div className="text-[9px] text-primary/80 mt-0.5 tabular-nums">
+                      <div className="text-[10px] text-primary/80 mt-0.5 tabular-nums">
                         ≈ {Math.ceil(yearsToGoal)} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
                       </div>
                     );
