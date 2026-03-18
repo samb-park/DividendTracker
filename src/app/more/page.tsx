@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { CashFlow } from "@/components/cash-flow";
+import { DividendGrowthChart } from "@/components/dividend-growth-chart";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const TABS = [
   { key: "cashflow", label: "CASH FLOW" },
   { key: "transactions", label: "TRANSACTIONS" },
   { key: "dividends", label: "DIV HISTORY" },
+  { key: "divgrowth", label: "DIV GROWTH" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -152,6 +155,12 @@ export default function MorePage() {
       </div>
 
       {activeTab === "cashflow" && <CashFlow fxRate={fxRate} />}
+
+      {activeTab === "divgrowth" && (
+        <ErrorBoundary label="DIV GROWTH">
+          <DividendGrowthChart />
+        </ErrorBoundary>
+      )}
 
       {(activeTab === "transactions" || activeTab === "dividends") && (
         <>

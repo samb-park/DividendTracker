@@ -79,3 +79,15 @@ model Setting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// Daily portfolio value snapshots for CAGR / MDD charting
+model PortfolioSnapshot {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  totalCAD     Decimal  @db.Decimal(18, 2)
+  costBasisCAD Decimal  @db.Decimal(18, 2)
+  cashCAD      Decimal  @db.Decimal(18, 2)
+  createdAt    DateTime @default(now())
+
+  @@unique([date])
+}

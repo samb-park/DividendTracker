@@ -23,11 +23,15 @@ interface SyncResult {
 interface PortfolioItem {
   id: string;
   name: string;
+  cashCAD: string | null;
+  cashUSD: string | null;
 }
 
 export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: PortfolioItem[] }) {
   const router = useRouter();
   const [portfolios, setPortfolios] = useState(initialPortfolios);
+  const [cashEdits, setCashEdits] = useState<Record<string, { cad: string; usd: string }>>({});
+  const [savingCash, setSavingCash] = useState<string | null>(null);
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -49,6 +53,15 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [confirmDeletePortfolioId, setConfirmDeletePortfolioId] = useState<string | null>(null);
   const [confirmDeleteToken, setConfirmDeleteToken] = useState(false);
 
+  // TFSA/RRSP contribution limits
+  const CURRENT_YEAR = new Date().getFullYear();
+  const TFSA_ANNUAL_LIMIT = 7000; // 2026 limit
+  const FHSA_ANNUAL_LIMIT = 8000; // 2026 limit
+  interface ContribRoom { tfsaCarryover: string; rrspLimit: string; fhsaCarryover: string }
+  const [contribRoom, setContribRoom] = useState<ContribRoom>({ tfsaCarryover: "", rrspLimit: "", fhsaCarryover: "" });
+  const [contribDeposits, setContribDeposits] = useState<{ tfsa: number; rrsp: number; fhsa: number }>({ tfsa: 0, rrsp: 0, fhsa: 0 });
+  const [savingRoom, setSavingRoom] = useState(false);
+
   const loadStatus = async () => {
     const res = await fetch("/api/questrade/token");
     const data = await res.json();
@@ -69,6 +82,9 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         setGoalAmount(String(data.incomeGoal.annualTarget));
         setGoalCurrency(data.incomeGoal.currency);
       }
+      if (data.contribRoom) {
+        setContribRoom(data.contribRoom);
+      }
       const t: Record<string, { pct: string }> = {};
       for (const [tk, v] of Object.entries(data.targets ?? {})) {
         t[tk] = { pct: String((v as any).pct) };
@@ -76,6 +92,25 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
       setTargets(t);
     });
   }, []);
+
+  useEffect(() => {
+    // Compute this year's deposits per account type from cash transactions
+    fetch(`/api/cash-transactions?year=${CURRENT_YEAR}`)
+      .then(r => r.json())
+      .then(d => {
+        let tfsa = 0, rrsp = 0, fhsa = 0;
+        for (const item of (d.items ?? [])) {
+          if (item.action !== "DEPOSIT") continue;
+          const name = (item.portfolioName ?? "").toUpperCase();
+          const amount = item.currency === "USD" ? item.amount * 1.35 : item.amount;
+          if (name.includes("TFSA")) tfsa += amount;
+          else if (name.includes("RRSP")) rrsp += amount;
+          else if (name.includes("FHSA")) fhsa += amount;
+        }
+        setContribDeposits({ tfsa, rrsp, fhsa });
+      })
+      .catch(() => {});
+  }, [CURRENT_YEAR]);
 
   const handleSave = async () => {
     if (!tokenInput.trim()) return;
@@ -135,7 +170,29 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const refreshPortfolios = async () => {
     const res = await fetch("/api/portfolios");
     const data = await res.json();
-    setPortfolios(data.map((p: any) => ({ id: p.id, name: p.name })));
+    setPortfolios(data.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      cashCAD: p.cashCAD ?? null,
+      cashUSD: p.cashUSD ?? null,
+    })));
+  };
+
+  const handleSaveCash = async (id: string) => {
+    const edit = cashEdits[id];
+    if (!edit) return;
+    setSavingCash(id);
+    await fetch(`/api/portfolios/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cashCAD: edit.cad ? parseFloat(edit.cad) : 0,
+        cashUSD: edit.usd ? parseFloat(edit.usd) : 0,
+      }),
+    });
+    setSavingCash(null);
+    setCashEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
+    await refreshPortfolios();
   };
 
   const deletePortfolio = async (id: string) => {
@@ -449,6 +506,189 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
           </div>
         </div>
       )}
+
+      {/* Contribution Room */}
+      <div>
+        <div className="text-accent text-xs tracking-wide mb-4">CONTRIBUTION ROOM — {CURRENT_YEAR}</div>
+        <div className="border border-border bg-card p-4 space-y-5">
+          <div className="text-[10px] text-muted-foreground">Track TFSA / RRSP / FHSA room. Enter your carryover to see remaining space.</div>
+
+          {/* TFSA */}
+          {(() => {
+            const carryover = parseFloat(contribRoom.tfsaCarryover) || 0;
+            const total = TFSA_ANNUAL_LIMIT + carryover;
+            const used = contribDeposits.tfsa;
+            const remaining = Math.max(0, total - used);
+            const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-primary">TFSA</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    Used C${used.toLocaleString("en-CA", { maximumFractionDigits: 0 })} / C${total.toLocaleString("en-CA", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-border overflow-hidden">
+                  <div className={`h-full ${pct >= 90 ? "bg-negative" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+                </div>
+                <div className={`text-xs tabular-nums ${remaining > 0 ? "text-positive" : "text-negative"}`}>
+                  C${remaining.toLocaleString("en-CA", { maximumFractionDigits: 0 })} remaining
+                  <span className="text-muted-foreground ml-1">(annual ${TFSA_ANNUAL_LIMIT.toLocaleString()} + carryover)</span>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CARRYOVER FROM PRIOR YEARS</div>
+                  <input type="number" min="0" step="any" placeholder="0"
+                    value={contribRoom.tfsaCarryover}
+                    onChange={e => setContribRoom(r => ({ ...r, tfsaCarryover: e.target.value }))}
+                    className="w-full !py-1 text-xs" />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* RRSP */}
+          {(() => {
+            const limit = parseFloat(contribRoom.rrspLimit) || 0;
+            const used = contribDeposits.rrsp;
+            const remaining = Math.max(0, limit - used);
+            const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-accent">RRSP</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    Used C${used.toLocaleString("en-CA", { maximumFractionDigits: 0 })} / C${limit.toLocaleString("en-CA", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                {limit > 0 && (
+                  <div className="h-1.5 bg-border overflow-hidden">
+                    <div className={`h-full ${pct >= 90 ? "bg-negative" : "bg-accent"}`} style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+                <div className={`text-xs tabular-nums ${limit > 0 ? (remaining > 0 ? "text-positive" : "text-negative") : "text-muted-foreground"}`}>
+                  {limit > 0 ? `C$${remaining.toLocaleString("en-CA", { maximumFractionDigits: 0 })} remaining` : "Enter your limit from your NOA"}
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MY DEDUCTION LIMIT (FROM NOA)</div>
+                  <input type="number" min="0" step="any" placeholder="e.g. 45000"
+                    value={contribRoom.rrspLimit}
+                    onChange={e => setContribRoom(r => ({ ...r, rrspLimit: e.target.value }))}
+                    className="w-full !py-1 text-xs" />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* FHSA */}
+          {(() => {
+            const carryover = parseFloat(contribRoom.fhsaCarryover) || 0;
+            const total = FHSA_ANNUAL_LIMIT + carryover;
+            const used = contribDeposits.fhsa;
+            const remaining = Math.max(0, total - used);
+            const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: "hsl(var(--chart-3))" }}>FHSA</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    Used C${used.toLocaleString("en-CA", { maximumFractionDigits: 0 })} / C${total.toLocaleString("en-CA", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-border overflow-hidden">
+                  <div className={`h-full ${pct >= 90 ? "bg-negative" : ""}`} style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? undefined : "hsl(var(--chart-3))" }} />
+                </div>
+                <div className={`text-xs tabular-nums ${remaining > 0 ? "text-positive" : "text-negative"}`}>
+                  C${remaining.toLocaleString("en-CA", { maximumFractionDigits: 0 })} remaining
+                  <span className="text-muted-foreground ml-1">(annual ${FHSA_ANNUAL_LIMIT.toLocaleString()} + carryover, $40K lifetime)</span>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CARRYOVER FROM PRIOR YEAR (MAX $8K)</div>
+                  <input type="number" min="0" max="8000" step="any" placeholder="0"
+                    value={contribRoom.fhsaCarryover}
+                    onChange={e => setContribRoom(r => ({ ...r, fhsaCarryover: e.target.value }))}
+                    className="w-full !py-1 text-xs" />
+                </div>
+              </div>
+            );
+          })()}
+
+          <button
+            disabled={savingRoom}
+            onClick={async () => {
+              setSavingRoom(true);
+              await fetch("/api/settings/investment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "contrib_room", ...contribRoom }),
+              });
+              setSavingRoom(false);
+            }}
+            className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40"
+          >
+            {savingRoom ? "SAVING..." : "[ SAVE ROOM ]"}
+          </button>
+        </div>
+      </div>
+
+      {/* Cash Balances */}
+      <div>
+        <div className="text-accent text-xs tracking-wide mb-4">CASH BALANCES</div>
+        <div className="border border-border bg-card p-4 space-y-4">
+          <div className="text-[10px] text-muted-foreground">Current cash per account (CAD + USD)</div>
+          {portfolios.map((p) => {
+            const edit = cashEdits[p.id];
+            const cadVal = edit?.cad ?? (p.cashCAD ? parseFloat(p.cashCAD).toFixed(2) : "0.00");
+            const usdVal = edit?.usd ?? (p.cashUSD ? parseFloat(p.cashUSD).toFixed(2) : "0.00");
+            return (
+              <div key={p.id} className="space-y-2">
+                <div className="text-xs font-medium text-accent">{p.name}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAD ($)</div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={cadVal}
+                      onChange={e => setCashEdits(prev => ({
+                        ...prev,
+                        [p.id]: { cad: e.target.value, usd: prev[p.id]?.usd ?? usdVal },
+                      }))}
+                      className="w-full !py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground tracking-wide mb-1">USD ($)</div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={usdVal}
+                      onChange={e => setCashEdits(prev => ({
+                        ...prev,
+                        [p.id]: { cad: prev[p.id]?.cad ?? cadVal, usd: e.target.value },
+                      }))}
+                      className="w-full !py-1 text-xs"
+                    />
+                  </div>
+                </div>
+                {cashEdits[p.id] && (
+                  <button
+                    disabled={savingCash === p.id}
+                    onClick={() => handleSaveCash(p.id)}
+                    className="btn-retro btn-retro-primary text-xs px-3 py-1 w-full disabled:opacity-40"
+                  >
+                    {savingCash === p.id ? "SAVING..." : "[ SAVE CASH ]"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {portfolios.length === 0 && (
+            <div className="text-muted-foreground text-xs text-center py-4">NO PORTFOLIOS</div>
+          )}
+        </div>
+      </div>
 
       {/* App Info */}
       <div>

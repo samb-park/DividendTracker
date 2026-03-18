@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { DashboardClient } from "@/components/dashboard-client";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,11 @@ export default async function Home() {
 
   return (
     <div>
-      <DashboardClient initialPortfolios={serialized} fxRate={fxRate} />
+      <ErrorBoundary label="DASHBOARD">
+        <Suspense fallback={<div className="text-muted-foreground text-xs text-center py-12 tracking-wide">LOADING...</div>}>
+          <DashboardClient initialPortfolios={serialized} fxRate={fxRate} />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

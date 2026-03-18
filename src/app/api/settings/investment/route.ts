@@ -20,6 +20,9 @@ export async function GET() {
   const incomeGoalSetting = settings.find(s => s.key === "investment:income_goal");
   const incomeGoal = incomeGoalSetting ? JSON.parse(incomeGoalSetting.value) : null;
 
+  const contribRoomSetting = settings.find(s => s.key === "investment:contrib_room");
+  const contribRoom = contribRoomSetting ? JSON.parse(contribRoomSetting.value) : null;
+
   const targets: Record<string, { pct: number }> = {};
   for (const s of settings) {
     if (s.key.startsWith("investment:target:")) {
@@ -31,6 +34,7 @@ export async function GET() {
   return NextResponse.json({
     contribution,
     incomeGoal,
+    contribRoom,
     targets,
     tickers: holdings.map(h => h.ticker),
   });
@@ -59,6 +63,13 @@ export async function POST(req: Request) {
       where: { key: "investment:income_goal" },
       update: { value: JSON.stringify({ annualTarget, currency }) },
       create: { key: "investment:income_goal", value: JSON.stringify({ annualTarget, currency }) },
+    });
+  } else if (body.type === "contrib_room") {
+    const { tfsaCarryover, rrspLimit, fhsaCarryover } = body;
+    await prisma.setting.upsert({
+      where: { key: "investment:contrib_room" },
+      update: { value: JSON.stringify({ tfsaCarryover, rrspLimit, fhsaCarryover }) },
+      create: { key: "investment:contrib_room", value: JSON.stringify({ tfsaCarryover, rrspLimit, fhsaCarryover }) },
     });
   }
   return NextResponse.json({ ok: true });
