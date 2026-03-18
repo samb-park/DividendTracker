@@ -85,5 +85,13 @@ export async function GET() {
   // Filter to tickers that actually have dividend history
   const filtered = results.filter((r) => r.history.length > 0);
 
-  return NextResponse.json({ tickers: filtered });
+  // Flag tickers with a dividend cut in the most recent year
+  const cuts = filtered
+    .filter((r) => {
+      const last = r.history[r.history.length - 1];
+      return last?.growthPct !== null && (last?.growthPct ?? 0) < 0;
+    })
+    .map((r) => r.ticker);
+
+  return NextResponse.json({ tickers: filtered, cuts });
 }

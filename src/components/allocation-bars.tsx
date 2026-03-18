@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { fmt } from "@/lib/utils";
 import type { HoldingSummary } from "@/lib/types";
@@ -84,6 +84,10 @@ function BarLegend({
   );
 }
 
+interface SectorMap {
+  [ticker: string]: string;
+}
+
 export function AllocationBars({
   holdings,
   fxRate,
@@ -95,6 +99,18 @@ export function AllocationBars({
 }) {
   const [allocShowPct, setAllocShowPct] = useState(true);
   const [divShowPct, setDivShowPct] = useState(true);
+  const [sectorMap, setSectorMap] = useState<SectorMap>({});
+
+  useEffect(() => {
+    fetch("/api/sector")
+      .then((r) => r.json())
+      .then((d: { sectors: { ticker: string; sector: string }[] }) => {
+        const map: SectorMap = {};
+        for (const item of d.sectors ?? []) map[item.ticker] = item.sector;
+        setSectorMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
 
@@ -169,6 +185,40 @@ export function AllocationBars({
           </Link>
         </div>
       </div>
+
+      {/* Sector Allocation */}
+      {Object.keys(sectorMap).length > 0 && (() => {
+        // Group holdings by sector, sum market value
+        const sectorValues = new Map<string, number>();
+        for (const h of holdings) {
+          const sector = sectorMap[h.ticker] ?? "Other";
+          const val = toDisplay(h.marketValue, h.currency, displayCurrency, fxRate);
+          sectorValues.set(sector, (sectorValues.get(sector) ?? 0) + val);
+        }
+        const sectorEntries: BarEntry[] = Array.from(sectorValues.entries())
+          .map(([sector, value]) => ({ ticker: sector, value, color: tickerColor(sector) }))
+          .filter((e) => e.value > 0)
+          .sort((a, b) => b.value - a.value);
+        const sectorTotal = sectorEntries.reduce((s, e) => s + e.value, 0);
+        if (sectorEntries.length === 0) return null;
+        return (
+          <div className="border border-border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-accent text-xs tracking-wide">&#9654; SECTOR ALLOCATION</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">By Market Value</div>
+              </div>
+            </div>
+            <HorizontalBar entries={sectorEntries} total={sectorTotal} />
+            <BarLegend
+              entries={sectorEntries}
+              total={sectorTotal}
+              showPct={true}
+              currencySymbol={currencySymbol}
+            />
+          </div>
+        );
+      })()}
 
       {/* Dividend Distribution */}
       {divTotal > 0 && (

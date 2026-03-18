@@ -16,8 +16,9 @@ export default auth((req) => {
 
   if (isPublic) return NextResponse.next();
 
-  // Allow cron endpoint with Bearer token (no session needed)
+  // Allow cron and health endpoints (no session needed)
   if (pathname.startsWith("/api/cron")) return NextResponse.next();
+  if (pathname === "/api/health") return NextResponse.next();
 
   if (!isLoggedIn) {
     // API routes: return 401 JSON (don't redirect to HTML login page)

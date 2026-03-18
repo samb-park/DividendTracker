@@ -240,6 +240,16 @@ export default function MorePage() {
           )}
 
           {!loading && activeTab === "dividends" && (
+            <div>
+              <div className="flex justify-end mb-3">
+                <a
+                  href={`/api/tax-report?year=${selectedYear || new Date().getFullYear()}`}
+                  download
+                  className="btn-retro text-[10px] px-3 py-1.5 tracking-wide"
+                >
+                  ↓ CSV ({selectedYear || new Date().getFullYear()})
+                </a>
+              </div>
             <div className="overflow-x-auto">
               <table>
                 <thead>
@@ -288,6 +298,7 @@ export default function MorePage() {
               {divTxns.length === 0 && (
                 <div className="text-muted-foreground text-xs py-8 text-center">NO DIVIDEND HISTORY FOUND</div>
               )}
+            </div>
             </div>
           )}
         </>

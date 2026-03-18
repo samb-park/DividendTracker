@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,6 +22,11 @@ interface Snapshot {
 
 const RANGES = ["3m", "6m", "1y", "all"] as const;
 type Range = (typeof RANGES)[number];
+
+interface BenchmarkPoint {
+  date: string;
+  value: number;
+}
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -48,6 +54,8 @@ function computeCAGR(start: number, end: number, days: number): number | null {
 export function PerformanceChart() {
   const [range, setRange] = useState<Range>("1y");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [benchmark, setBenchmark] = useState<BenchmarkPoint[]>([]);
+  const [showBenchmark, setShowBenchmark] = useState(false);
   const [loading, setLoading] = useState(true);
   const [allLoaded, setAllLoaded] = useState(false);
 
@@ -64,6 +72,14 @@ export function PerformanceChart() {
       .catch(() => setLoading(false));
   }, [range, allLoaded]);
 
+  useEffect(() => {
+    if (!showBenchmark) return;
+    fetch(`/api/benchmarks?range=${range}`)
+      .then((r) => r.json())
+      .then((d) => setBenchmark(d.prices ?? []))
+      .catch(() => setBenchmark([]));
+  }, [range, showBenchmark]);
+
   const { cagr, mdd, totalReturn, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { cagr: null, mdd: null, totalReturn: null, chartData: [] };
 
@@ -79,16 +95,28 @@ export function PerformanceChart() {
       ? ((last.totalCAD - first.totalCAD) / first.totalCAD) * 100
       : null;
 
-    const chartData = snapshots.map((s) => ({
-      date: s.date.slice(5), // MM-DD
-      fullDate: s.date,
-      total: Math.round(s.totalCAD),
-      cost: Math.round(s.costBasisCAD),
-      gain: Math.round(s.totalCAD - s.costBasisCAD),
-    }));
+    // Build benchmark lookup by date
+    const benchMap = new Map(benchmark.map((b) => [b.date, b.value]));
+
+    // Normalize portfolio to 100 for benchmark overlay
+    const portfolioBase = first.totalCAD;
+
+    const chartData = snapshots.map((s) => {
+      const normalizedPortfolio = portfolioBase > 0 ? (s.totalCAD / portfolioBase) * 100 : null;
+      const spyValue = benchMap.get(s.date) ?? null;
+      return {
+        date: s.date.slice(5), // MM-DD
+        fullDate: s.date,
+        total: Math.round(s.totalCAD),
+        cost: Math.round(s.costBasisCAD),
+        gain: Math.round(s.totalCAD - s.costBasisCAD),
+        portfolioNorm: normalizedPortfolio,
+        spyNorm: spyValue,
+      };
+    });
 
     return { cagr, mdd, totalReturn, chartData };
-  }, [snapshots]);
+  }, [snapshots, benchmark]);
 
   const hasSufficientData = snapshots.length >= 2;
   const lastSnapshot = snapshots[snapshots.length - 1];
@@ -96,7 +124,16 @@ export function PerformanceChart() {
   return (
     <div className="border border-border bg-card p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <div className="text-[10px] text-accent tracking-wide">PERFORMANCE</div>
+        <div className="flex items-center gap-2">
+          <div className="text-[10px] text-accent tracking-wide">PERFORMANCE</div>
+          <button
+            onClick={() => setShowBenchmark((v) => !v)}
+            className={`btn-retro text-[10px] px-2 py-0.5 ${showBenchmark ? "btn-retro-primary" : ""}`}
+            title="Toggle SPY benchmark overlay"
+          >
+            SPY
+          </button>
+        </div>
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <button
@@ -146,69 +183,136 @@ export function PerformanceChart() {
           )}
         </div>
       ) : (
-        <div className="h-36">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `$${fmt(v)}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  fontSize: 11,
-                  fontFamily: "inherit",
-                }}
-                formatter={(value: number, name: string) => {
-                  if (name === "total") return [`C$${value.toLocaleString("en-CA")}`, "Portfolio"];
-                  if (name === "cost") return [`C$${value.toLocaleString("en-CA")}`, "Cost Basis"];
-                  return [value, name];
-                }}
-                labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
-              />
-              <Area
-                type="monotone"
-                dataKey="cost"
-                stroke="hsl(var(--border))"
-                strokeWidth={1}
-                fill="transparent"
-                dot={false}
-                strokeDasharray="4 2"
-              />
-              <Area
-                type="monotone"
-                dataKey="total"
-                stroke="hsl(var(--primary))"
-                strokeWidth={1.5}
-                fill="url(#totalGrad)"
-                dot={false}
-              />
-              {/* Zero gain reference line */}
-              <ReferenceLine
-                y={chartData[0]?.cost}
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth={0.5}
-                strokeOpacity={0.4}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div>
+          {showBenchmark && (
+            <div className="flex items-center gap-4 mb-2 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
+                PORTFOLIO
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 border-t border-dashed border-accent" />
+                SPY
+              </span>
+              <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
+            </div>
+          )}
+          <div className="h-36">
+            <ResponsiveContainer width="100%" height="100%">
+              {showBenchmark ? (
+                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v.toFixed(0)}`}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      fontSize: 11,
+                      fontFamily: "inherit",
+                    }}
+                    formatter={(value: number, name: string) => {
+                      if (name === "portfolioNorm") return [`${value.toFixed(1)}`, "Portfolio"];
+                      if (name === "spyNorm") return [`${value.toFixed(1)}`, "SPY"];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="portfolioNorm"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={1.5}
+                    dot={false}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="spyNorm"
+                    stroke="hsl(var(--accent))"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeDasharray="4 2"
+                    connectNulls
+                  />
+                  <ReferenceLine y={100} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} strokeOpacity={0.4} />
+                </ComposedChart>
+              ) : (
+                <ComposedChart data={chartData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `$${fmt(v)}`}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      fontSize: 11,
+                      fontFamily: "inherit",
+                    }}
+                    formatter={(value: number, name: string) => {
+                      if (name === "total") return [`C$${value.toLocaleString("en-CA")}`, "Portfolio"];
+                      if (name === "cost") return [`C$${value.toLocaleString("en-CA")}`, "Cost Basis"];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="hsl(var(--border))"
+                    strokeWidth={1}
+                    fill="transparent"
+                    dot={false}
+                    strokeDasharray="4 2"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={1.5}
+                    fill="url(#totalGrad)"
+                    dot={false}
+                  />
+                  <ReferenceLine
+                    y={chartData[0]?.cost}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={0.5}
+                    strokeOpacity={0.4}
+                  />
+                </ComposedChart>
+              )}
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>

@@ -91,7 +91,7 @@ table {
 
 th {
   color: hsl(var(--accent));
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border-bottom: 1px solid hsl(var(--border));
@@ -103,7 +103,7 @@ th {
 td {
   padding: 8px;
   border-bottom: 1px solid hsl(var(--border) / 0.5);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 tr:hover td {
@@ -218,7 +218,7 @@ tr.cursor-pointer {
 
 /* Mobile table padding */
 @media (max-width: 767px) {
-  th, td { padding: 10px 4px; font-size: 11px; }
+  th, td { padding: 10px 4px; font-size: 12px; }
 }
 
 /* iOS standalone: prevent content under status bar */

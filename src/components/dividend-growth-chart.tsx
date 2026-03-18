@@ -30,6 +30,7 @@ function fmt(n: number, d = 2) {
 
 export function DividendGrowthChart() {
   const [data, setData] = useState<TickerData[]>([]);
+  const [cuts, setCuts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -38,6 +39,7 @@ export function DividendGrowthChart() {
       .then((r) => r.json())
       .then((d) => {
         setData(d.tickers ?? []);
+        setCuts(d.cuts ?? []);
         if (d.tickers?.length > 0) setSelected(d.tickers[0].ticker);
         setLoading(false);
       })
@@ -73,17 +75,28 @@ export function DividendGrowthChart() {
 
   return (
     <div>
+      {/* Dividend cut warning banner */}
+      {cuts.length > 0 && (
+        <div className="mb-4 px-3 py-2 border border-negative/40 bg-negative/5 text-negative text-[10px] tracking-wide">
+          ⚠ DIVIDEND CUT DETECTED: {cuts.join(", ")} — latest year DPS below prior year
+        </div>
+      )}
+
       {/* Ticker selector */}
       <div className="flex flex-wrap gap-1.5 mb-6">
-        {data.map((d) => (
-          <button
-            key={d.ticker}
-            className={`btn-retro text-xs px-2 py-0.5 ${selected === d.ticker ? "btn-retro-primary" : ""}`}
-            onClick={() => setSelected(d.ticker)}
-          >
-            {d.ticker}
-          </button>
-        ))}
+        {data.map((d) => {
+          const hasCut = cuts.includes(d.ticker);
+          return (
+            <button
+              key={d.ticker}
+              className={`btn-retro text-xs px-2 py-0.5 relative ${selected === d.ticker ? "btn-retro-primary" : ""} ${hasCut ? "border-negative/60" : ""}`}
+              onClick={() => setSelected(d.ticker)}
+            >
+              {d.ticker}
+              {hasCut && <span className="ml-1 text-negative text-[9px]">▼</span>}
+            </button>
+          );
+        })}
       </div>
 
       {current && (
