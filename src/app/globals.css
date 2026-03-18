@@ -38,7 +38,12 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
+  height: 100%;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: 'IBM Plex Mono', 'Courier New', monospace;
@@ -159,6 +164,19 @@ input:focus, select:focus {
 /* PWA safe area */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* App shell layout */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-shell-main {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Accent text */

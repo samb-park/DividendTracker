@@ -4,73 +4,8 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { DividendIncomeChart } from "./dividend-income-chart";
-import { fmt } from "@/lib/utils";
-
-interface Transaction {
-  id: string;
-  action: "BUY" | "SELL";
-  quantity: string;
-  price: string;
-  commission: string;
-  date: string;
-}
-
-interface Holding {
-  id: string;
-  ticker: string;
-  name: string | null;
-  currency: "USD" | "CAD";
-  quantity: string | null;
-  avgCost: string | null;
-  transactions: Transaction[];
-}
-
-interface Portfolio {
-  id: string;
-  name: string;
-  cashCAD: string | null;
-  cashUSD: string | null;
-  holdings: Holding[];
-}
-
-interface HoldingSummary {
-  ticker: string;
-  name?: string | null;
-  marketValue: number;
-  costBasis: number;
-  unrealizedPnL: number;
-  unrealizedPnLPct: number;
-  dayChange: number;
-  currency: "USD" | "CAD";
-}
-
-function mergeHoldings(portfolios: Portfolio[]): Holding[] {
-  const map = new Map<string, Holding>();
-  for (const p of portfolios) {
-    for (const h of p.holdings) {
-      const existing = map.get(h.ticker);
-      if (existing) {
-        const existingQty = existing.quantity != null ? parseFloat(existing.quantity) : 0;
-        const existingCost = existing.avgCost != null ? parseFloat(existing.avgCost) : 0;
-        const newQty = h.quantity != null ? parseFloat(h.quantity) : 0;
-        const newCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
-        const totalQty = existingQty + newQty;
-        const weightedAvgCost = totalQty > 0
-          ? (existingQty * existingCost + newQty * newCost) / totalQty
-          : 0;
-        map.set(h.ticker, {
-          ...existing,
-          quantity: totalQty.toString(),
-          avgCost: weightedAvgCost.toString(),
-          transactions: [...existing.transactions, ...h.transactions],
-        });
-      } else {
-        map.set(h.ticker, { ...h, transactions: [...h.transactions] });
-      }
-    }
-  }
-  return Array.from(map.values());
-}
+import { fmt, mergeHoldings } from "@/lib/utils";
+import type { Portfolio, HoldingSummary } from "@/lib/types";
 
 export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
   const [portfolios] = useState(initialPortfolios);
@@ -151,6 +86,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const openPnLPct = totalCostBasis > 0 ? (openPnL / totalCostBasis) * 100 : 0;
   const todayPnL = holdingSummaries.reduce((s, h) => s + toDisplay(h.dayChange ?? 0, h.currency), 0);
   const todayPnLPct = holdingsValue > 0 ? (todayPnL / (holdingsValue - todayPnL)) * 100 : 0;
+
+  const onDivSummary = useCallback((annual: number, monthly: number) => {
+    setDivAnnual(annual);
+    setDivMonthly(monthly);
+  }, []);
 
   return (
     <div>
@@ -275,14 +215,11 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         selectedPortfolioId={selectedPortfolioId}
         fxRate={fxRate}
         displayCurrency={displayCurrency}
-        onCurrentYearSummary={useCallback((annual: number, monthly: number) => {
-          setDivAnnual(annual);
-          setDivMonthly(monthly);
-        }, [])}
+        onCurrentYearSummary={onDivSummary}
       />
 
       {/* Hidden table just to fetch prices and compute summaries */}
-      <div className="hidden">
+      <div style={{ position: "absolute", visibility: "hidden", height: 0, overflow: "hidden" }}>
         <HoldingsTable
           portfolioId="all"
           initialHoldings={allHoldings}

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
+import { PageHeader } from "@/components/page-header";
 import { PwaRegister } from "@/components/pwa-register";
 
 export const metadata: Metadata = {
@@ -34,15 +35,15 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
       <body>
-        <div className="min-h-screen flex flex-col">
-          <header className="border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 safe-top">
-            <span className="text-primary font-medium tracking-widest text-sm">▶ PORTFOLIO</span>
+        <div className="app-shell">
+          <header className="flex-shrink-0 border-b border-border px-4 py-3 flex items-center gap-3 safe-top">
+            <PageHeader />
           </header>
-          <main className="flex-1 px-4 py-5 pb-24">
+          <main className="app-shell-main px-4 py-5">
             {children}
           </main>
+          <BottomNav />
         </div>
-        <BottomNav />
         <PwaRegister />
       </body>
     </html>

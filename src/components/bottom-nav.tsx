@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 safe-bottom">
+    <nav className="flex-shrink-0 border-t border-border bg-background safe-bottom">
       <div className="flex">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;

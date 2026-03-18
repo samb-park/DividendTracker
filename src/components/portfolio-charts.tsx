@@ -349,33 +349,56 @@ export function PortfolioCharts({
       )}
 
       {/* Allocation Pie Chart */}
-      {showAllocation && <div className="border border-border p-4 bg-card">
-        <div className="text-accent text-xs tracking-widest mb-4">&#9654; ALLOCATION</div>
-        <ResponsiveContainer width="100%" height={pieChartHeight}>
-          <PieChart>
-            <Pie
-              data={pieData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={80}
-              label={({ name, percent }) =>
-                `${name} ${(percent * 100).toFixed(0)}%`
-              }
-              labelLine={false}
-            >
-              {pieData.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={RETRO_TOOLTIP_STYLE}
-              formatter={(v: number) => [`$${v.toFixed(2)}`, "Value"]}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>}
+      {showAllocation && (
+        <div className="border border-border p-4 bg-card">
+          <div className="text-accent text-xs tracking-widest mb-4">&#9654; ALLOCATION</div>
+          <div className="flex gap-4 items-center">
+            <div className="flex-shrink-0" style={{ width: pieChartHeight, height: pieChartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius="45%"
+                    label={false}
+                    labelLine={false}
+                  >
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={RETRO_TOOLTIP_STYLE}
+                    formatter={(v: number) => [`$${v.toFixed(2)}`, "Value"]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* External legend */}
+            <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+              {pieData.map((entry, i) => {
+                const total = pieData.reduce((s, d) => s + d.value, 0);
+                const pct = total > 0 ? (entry.value / total) * 100 : 0;
+                return (
+                  <div key={entry.name} className="flex items-center gap-2 text-[11px]">
+                    <span
+                      className="flex-shrink-0 inline-block w-2.5 h-2.5"
+                      style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                    />
+                    <span className="text-foreground font-medium truncate">{entry.name}</span>
+                    <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
+                      {pct.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
