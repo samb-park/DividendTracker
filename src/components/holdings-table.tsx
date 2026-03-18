@@ -170,16 +170,19 @@ export function HoldingsTable({
     fetchPrices(initialHoldings);
   }, [initialHoldings, fetchPrices]);
 
-  const rows: HoldingRow[] = holdings
-    .map((h) => {
-      const base = calcHolding(h);
-      const price = prices[h.ticker] ?? null;
-      const marketValue = price ? base.shares * price.price : 0;
-      const unrealizedPnL = marketValue - base.costBasis;
-      const unrealizedPnLPct = base.costBasis > 0 ? (unrealizedPnL / base.costBasis) * 100 : 0;
-      return { ...base, price, marketValue, unrealizedPnL, unrealizedPnLPct };
-    })
-    .filter((r) => r.shares > 0 || (r.holding.quantity === null && r.holding.transactions.length === 0));
+  const rows: HoldingRow[] = useMemo(() =>
+    holdings
+      .map((h) => {
+        const base = calcHolding(h);
+        const price = prices[h.ticker] ?? null;
+        const marketValue = price ? base.shares * price.price : 0;
+        const unrealizedPnL = marketValue - base.costBasis;
+        const unrealizedPnLPct = base.costBasis > 0 ? (unrealizedPnL / base.costBasis) * 100 : 0;
+        return { ...base, price, marketValue, unrealizedPnL, unrealizedPnLPct };
+      })
+      .filter((r) => r.shares > 0 || (r.holding.quantity === null && r.holding.transactions.length === 0)),
+    [holdings, prices]
+  );
 
   const totalMarketValue = rows.reduce((s, r) => s + r.marketValue, 0);
 

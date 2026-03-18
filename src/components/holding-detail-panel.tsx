@@ -164,8 +164,8 @@ export function HoldingDetailPanel({
       return true;
     }), [dateFrom, dateTo]);
 
-  const filteredTxns = useMemo(() => filterByDate(buysSells), [buysSells, dateFrom, dateTo]);
-  const filteredDivs = useMemo(() => filterByDate(dividendTxns), [dividendTxns, dateFrom, dateTo]);
+  const filteredTxns = useMemo(() => filterByDate(buysSells), [buysSells, filterByDate]);
+  const filteredDivs = useMemo(() => filterByDate(dividendTxns), [dividendTxns, filterByDate]);
 
   const totalDivsReceived = useMemo(() =>
     filteredDivs.reduce((s, t) => s + parseFloat(t.price), 0),
@@ -462,6 +462,8 @@ export function HoldingDetailPanel({
         {(p?.dividendYield != null || estimatedAnnual != null || totalDivsAllTime > 0) && (
           <div className="border border-border bg-card p-4 mb-3">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-3">DIVIDENDS</div>
+
+            {/* Group 1: Rate & Yield */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               {p?.dividendYield != null && (
                 <div>
@@ -498,61 +500,73 @@ export function HoldingDetailPanel({
                   <div className="tabular-nums text-primary">{sym}{fmt(toDisp(estimatedAnnual))}</div>
                 </div>
               )}
-              {actualDivs12m > 0 && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">12M RECEIVED</div>
-                  <div className="tabular-nums">{sym}{fmt(toDisp(actualDivs12m))}</div>
-                </div>
-              )}
-              {totalDivsAllTime > 0 && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">ALL-TIME DIVS</div>
-                  <div className="tabular-nums text-primary">{sym}{fmt(toDisp(totalDivsAllTime))}</div>
-                </div>
-              )}
-              {totalDivsAllTime > 0 && row.costBasis > 0 && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">BASIS REDUCED</div>
-                  <div className="tabular-nums text-positive">
-                    {((totalDivsAllTime / row.costBasis) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              )}
-              {totalDivsAllTime > 0 && row.costBasis > 0 && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">EFF. COST</div>
-                  <div className="tabular-nums">
-                    {sym}{fmt(toDisp(Math.max(0, row.costBasis - totalDivsAllTime)))}
-                  </div>
-                </div>
-              )}
-              {p?.exDividendDate && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">EX-DIV DATE</div>
-                  <div className="tabular-nums">{p.exDividendDate}</div>
-                </div>
-              )}
-              {p?.dividendDate && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">PAY DATE</div>
-                  <div className="tabular-nums">{p.dividendDate}</div>
-                </div>
-              )}
-              {p?.payoutRatio != null && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">PAYOUT RATIO</div>
-                  <div className="tabular-nums">{p.payoutRatio}%</div>
-                </div>
-              )}
-              {divCAGR !== null && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">DIV CAGR</div>
-                  <div className={`tabular-nums ${divCAGR.cagr >= 0 ? "text-positive" : "text-negative"}`}>
-                    {divCAGR.cagr >= 0 ? "+" : ""}{divCAGR.cagr.toFixed(1)}% ({divCAGR.years}Y)
-                  </div>
-                </div>
-              )}
             </div>
+
+            {/* Group 2: History */}
+            {(actualDivs12m > 0 || totalDivsAllTime > 0 || divCAGR !== null) && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mt-3 pt-3 border-t border-border/50">
+                {actualDivs12m > 0 && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">12M RECEIVED</div>
+                    <div className="tabular-nums">{sym}{fmt(toDisp(actualDivs12m))}</div>
+                  </div>
+                )}
+                {totalDivsAllTime > 0 && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">ALL-TIME DIVS</div>
+                    <div className="tabular-nums text-primary">{sym}{fmt(toDisp(totalDivsAllTime))}</div>
+                  </div>
+                )}
+                {totalDivsAllTime > 0 && row.costBasis > 0 && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">BASIS REDUCED</div>
+                    <div className="tabular-nums text-positive">
+                      {((totalDivsAllTime / row.costBasis) * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                )}
+                {totalDivsAllTime > 0 && row.costBasis > 0 && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">EFF. COST</div>
+                    <div className="tabular-nums">
+                      {sym}{fmt(toDisp(Math.max(0, row.costBasis - totalDivsAllTime)))}
+                    </div>
+                  </div>
+                )}
+                {divCAGR !== null && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">DIV CAGR</div>
+                    <div className={`tabular-nums ${divCAGR.cagr >= 0 ? "text-positive" : "text-negative"}`}>
+                      {divCAGR.cagr >= 0 ? "+" : ""}{divCAGR.cagr.toFixed(1)}% ({divCAGR.years}Y)
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Group 3: Schedule */}
+            {(p?.exDividendDate || p?.dividendDate || p?.payoutRatio != null) && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mt-3 pt-3 border-t border-border/50">
+                {p?.exDividendDate && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">EX-DIV DATE</div>
+                    <div className="tabular-nums">{p.exDividendDate}</div>
+                  </div>
+                )}
+                {p?.dividendDate && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">PAY DATE</div>
+                    <div className="tabular-nums">{p.dividendDate}</div>
+                  </div>
+                )}
+                {p?.payoutRatio != null && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">PAYOUT RATIO</div>
+                    <div className="tabular-nums">{p.payoutRatio}%</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

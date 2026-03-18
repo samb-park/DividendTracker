@@ -39,16 +39,14 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings/investment").then(r => r.json()).then(d => {
-      if (d.incomeGoal) setIncomeGoal(d.incomeGoal);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/fx").then((r) => r.json()).then((d) => {
-      if (d.rate) setFxRate(d.rate);
-      if (d.fallback) setFxFallback(true);
-    }).catch(() => setFxFallback(true));
+    Promise.all([
+      fetch("/api/settings/investment").then(r => r.json()).catch(() => ({})),
+      fetch("/api/fx").then(r => r.json()).catch(() => ({ fallback: true })),
+    ]).then(([inv, fx]) => {
+      if (inv.incomeGoal) setIncomeGoal(inv.incomeGoal);
+      if (fx.rate) setFxRate(fx.rate);
+      if (fx.fallback) setFxFallback(true);
+    });
   }, []);
 
   useEffect(() => {
