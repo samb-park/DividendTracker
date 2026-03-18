@@ -9,7 +9,7 @@ export function PageHeader() {
   const label = current?.label ?? "DASHBOARD";
 
   return (
-    <span className="text-primary font-medium tracking-widest text-sm">
+    <span className="text-primary font-medium tracking-wide text-sm">
       ▶ {label}
     </span>
   );

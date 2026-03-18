@@ -297,7 +297,8 @@ export function CalendarClient() {
       <div className="grid grid-cols-7 gap-1">
         {DAYS.map((d) => (
           <div key={d} className="text-center text-[9px] text-muted-foreground tracking-widest py-1">
-            {d}
+            <span className="hidden sm:inline">{d}</span>
+            <span className="sm:hidden">{d[0]}</span>
           </div>
         ))}
 

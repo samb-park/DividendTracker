@@ -265,7 +265,7 @@ export function HoldingsTable({
                     {colMode === "usd" ? "P&L $" : "P&L %"} ▾
                   </th>
                   <th
-                    className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors"
+                    className="text-right w-24 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
                     onClick={() => setW52Mode(m => m === "high" ? "low" : "high")}
                     title="Click to toggle 52W HIGH / LOW"
                   >
@@ -288,7 +288,7 @@ export function HoldingsTable({
                         {row.holding.name || "—"}
                       </td>
                       <td className="text-right tabular-nums">
-                        {fmt(row.shares, 4)}
+                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}
                       </td>
                       <td className="text-right tabular-nums">
                         {loadingPrices ? (
@@ -320,7 +320,7 @@ export function HoldingsTable({
                             : fmtPct(row.unrealizedPnLPct)
                         ) : "—"}
                       </td>
-                      <td className={`text-right tabular-nums ${
+                      <td className={`hidden sm:table-cell text-right tabular-nums ${
                         w52Mode === "high"
                           ? (row.price && row.price.fromHighPct < -10 ? "text-negative" : "text-muted-foreground")
                           : (row.price && row.price.fromLowPct > 30 ? "text-positive" : "text-muted-foreground")

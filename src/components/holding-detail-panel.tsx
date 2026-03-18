@@ -302,8 +302,8 @@ const [showHistory, setShowHistory] = useState(false);
         ref={panelRef}
         className="relative ml-auto w-full md:w-[28rem] lg:w-[32rem] xl:w-1/2 bg-background border-l border-border overflow-y-auto"
       >
-      {/* Unified header */}
-      <div className="flex items-center justify-between px-4 border-b border-border safe-top" style={{ paddingBottom: "12px", paddingTop: "12px" }}>
+      {/* Unified header — sticky */}
+      <div className="sticky top-0 z-10 bg-background flex items-center justify-between px-4 border-b border-border safe-top" style={{ paddingBottom: "12px", paddingTop: "12px" }}>
         <div className="min-w-0">
           <div className="text-accent font-medium tracking-widest">{row.holding.ticker}</div>
           {row.holding.name && (
