@@ -136,7 +136,7 @@ export function MoreClient({ initialTxns, initialFxRate }: { initialTxns: Txn[];
   const divTxns = useMemo(() => filtered.filter(t => t.action === "DIVIDEND"), [filtered]);
 
   // Derive the year for the CSV link: use selected year, or most recent year in filtered dividends, or current year
-  const csvYear = selectedYear || activeYearOptions[0] || new Date().getFullYear().toString();
+
 
   return (
     <div>
@@ -249,15 +249,6 @@ export function MoreClient({ initialTxns, initialFxRate }: { initialTxns: Txn[];
 
           {activeTab === "dividends" && (
             <div>
-              <div className="flex justify-end mb-3">
-                <a
-                  href={`/api/tax-report?year=${csvYear}`}
-                  download
-                  className="btn-retro text-[10px] px-3 py-1.5 tracking-wide"
-                >
-                  ↓ CSV ({csvYear})
-                </a>
-              </div>
               <div className="overflow-x-auto">
                 <table>
                   <thead>
@@ -288,7 +279,8 @@ export function MoreClient({ initialTxns, initialFxRate }: { initialTxns: Txn[];
                   {divTxns.length > 0 && (
                     <tfoot>
                       <tr>
-                        <td colSpan={3} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
+                        <td colSpan={2} className="sm:hidden text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
+                        <td colSpan={3} className="hidden sm:table-cell text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
                         <td className="text-right tabular-nums text-primary font-medium pt-2">
                           {divTxns.every(t => t.holding.currency === divTxns[0].holding.currency)
                             ? `${sym(divTxns[0].holding.currency)}${fmt(divTxns.reduce((s, t) => s + parseFloat(t.price) * parseFloat(t.quantity), 0))}`

@@ -367,6 +367,9 @@ export function HoldingsTable({
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
                       <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
+                      <div className="text-muted-foreground/60 text-[10px] mt-0.5 tabular-nums">
+                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}sh
+                      </div>
                       {row.holding.name && row.holding.name !== row.holding.ticker && (
                         <div className="text-muted-foreground text-[10px] mt-0.5 truncate" title={row.holding.name}>{row.holding.name}</div>
                       )}
@@ -391,9 +394,6 @@ export function HoldingsTable({
                   <div className="flex items-center justify-between text-[11px] gap-2">
                     <span className="text-muted-foreground tabular-nums">
                       {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
-                      <span className="text-muted-foreground/50 ml-1">
-                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}sh
-                      </span>
                     </span>
                     <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
                       {row.marketValue > 0

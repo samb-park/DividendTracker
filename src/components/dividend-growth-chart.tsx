@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
-  ComposedChart,
-  Bar,
+  LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
 
 interface YearRow {
@@ -38,6 +36,8 @@ export function DividendGrowthChart() {
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
     setError(false);
@@ -55,6 +55,12 @@ export function DividendGrowthChart() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (dropRef.current && !dropRef.current.contains(e.target as Node)) setDropOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
   // Portfolio aggregate: for each year, sum DPS × shares across all tickers (USD→CAD via fxRate)
   const portfolioHistory = useMemo((): YearRow[] => {
@@ -125,30 +131,41 @@ export function DividendGrowthChart() {
         </div>
       )}
 
-      {/* Ticker selector */}
-      <div className="flex flex-wrap gap-1.5 mb-6">
-        {/* Portfolio aggregate button */}
+      {/* Ticker selector dropdown */}
+      <div className="relative mb-6" ref={dropRef}>
         <button
-          className={`btn-retro text-xs px-2 py-0.5 ${isPortfolio ? "btn-retro-primary" : ""}`}
-          onClick={() => setSelected("__portfolio__")}
-          title="Weighted sum: DPS × shares across all holdings (USD→CAD)"
+          className="btn-retro btn-retro-primary text-xs flex items-center gap-2 min-w-[8rem]"
+          onClick={() => setDropOpen(v => !v)}
         >
-          PORTFOLIO
+          <span className="flex-1 text-left">
+            {isPortfolio ? "PORTFOLIO" : selected ?? "—"}
+            {!isPortfolio && selected && cuts.includes(selected) && <span className="ml-1 text-negative text-[9px]">▼</span>}
+          </span>
+          <span className="text-muted-foreground">▾</span>
         </button>
-        <span className="text-border self-center">|</span>
-        {data.map((d) => {
-          const hasCut = cuts.includes(d.ticker);
-          return (
+        {dropOpen && (
+          <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full max-h-60 overflow-y-auto">
             <button
-              key={d.ticker}
-              className={`btn-retro text-xs px-2 py-0.5 relative ${selected === d.ticker ? "btn-retro-primary" : ""} ${hasCut ? "border-negative/60" : ""}`}
-              onClick={() => setSelected(d.ticker)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${isPortfolio ? "text-accent" : ""}`}
+              onClick={() => { setSelected("__portfolio__"); setDropOpen(false); }}
             >
-              {d.ticker}
-              {hasCut && <span className="ml-1 text-negative text-[9px]">▼</span>}
+              PORTFOLIO
             </button>
-          );
-        })}
+            <div className="border-t border-border/50" />
+            {data.map((d) => {
+              const hasCut = cuts.includes(d.ticker);
+              return (
+                <button
+                  key={d.ticker}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selected === d.ticker ? "text-accent" : ""} ${hasCut ? "text-negative/80" : ""}`}
+                  onClick={() => { setSelected(d.ticker); setDropOpen(false); }}
+                >
+                  {d.ticker}{hasCut && <span className="ml-1 text-[9px]">▼ CUT</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {currentHistory.length > 0 && (
@@ -189,7 +206,7 @@ export function DividendGrowthChart() {
           {/* Chart */}
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={currentHistory} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+              <LineChart data={currentHistory} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="year"
@@ -198,15 +215,6 @@ export function DividendGrowthChart() {
                   tickLine={false}
                 />
                 <YAxis
-                  yAxisId="dps"
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => isPortfolio ? `C$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : fmt(v, 0)}` : `$${fmt(v, 2)}`}
-                />
-                <YAxis
-                  yAxisId="growth"
-                  orientation="right"
                   tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
                   axisLine={false}
                   tickLine={false}
@@ -214,31 +222,9 @@ export function DividendGrowthChart() {
                 />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "inherit" }}
-                  formatter={(value: number, name: string) => {
-                    if (name === "annualDPS") return [
-                      isPortfolio ? `C$${fmt(value)}` : `$${fmt(value)}`,
-                      isPortfolio ? "Total Annual Div" : "Annual DPS",
-                    ];
-                    if (name === "growthPct") return [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"];
-                    return [value, name];
-                  }}
+                  formatter={(value: number) => [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"]}
                 />
-                <Bar yAxisId="dps" dataKey="annualDPS" maxBarSize={32} radius={[2, 2, 0, 0]}>
-                  {currentHistory.map((row, i) => (
-                    <Cell
-                      key={i}
-                      fill={
-                        row.growthPct === null
-                          ? "hsl(var(--primary))"
-                          : row.growthPct >= 0
-                          ? "hsl(var(--primary))"
-                          : "hsl(var(--negative))"
-                      }
-                    />
-                  ))}
-                </Bar>
                 <Line
-                  yAxisId="growth"
                   dataKey="growthPct"
                   type="monotone"
                   stroke="hsl(var(--accent))"
@@ -246,7 +232,7 @@ export function DividendGrowthChart() {
                   dot={{ r: 2, fill: "hsl(var(--accent))" }}
                   connectNulls
                 />
-              </ComposedChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
 
@@ -262,7 +248,6 @@ export function DividendGrowthChart() {
               <thead>
                 <tr>
                   <th>YEAR</th>
-                  <th className="text-right">{isPortfolio ? "TOTAL DIV (CAD)" : "ANNUAL DPS"}</th>
                   <th className="text-right">YoY GROWTH</th>
                 </tr>
               </thead>
@@ -270,9 +255,6 @@ export function DividendGrowthChart() {
                 {[...currentHistory].reverse().map((row) => (
                   <tr key={row.year}>
                     <td className="text-muted-foreground text-xs">{row.year}</td>
-                    <td className="text-right tabular-nums text-primary">
-                      {isPortfolio ? "C$" : "$"}{fmt(row.annualDPS)}
-                    </td>
                     <td className={`text-right tabular-nums text-xs ${row.growthPct === null ? "text-muted-foreground" : row.growthPct >= 0 ? "text-positive" : "text-negative"}`}>
                       {row.growthPct === null
                         ? "—"
