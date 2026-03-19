@@ -118,41 +118,33 @@ export function AiPanel() {
         )}
 
         {current.result && !current.loading && (
-          <div className="text-xs whitespace-pre-wrap leading-relaxed text-foreground border border-border bg-background p-3">
+          <div className="text-xs whitespace-pre-wrap break-words leading-relaxed text-foreground border border-border bg-background p-3 overflow-hidden">
             {current.result}
           </div>
         )}
 
-        {/* Footer row: cache badge + admin buttons */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {current.cached && !current.loading && (
-            <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5">
-              CACHED
-            </span>
-          )}
-          {remaining === 0 && !current.loading && (
-            <span className="text-[10px] text-negative">DAILY LIMIT REACHED</span>
-          )}
-
-          {isAdmin && (
-            <div className="flex items-center gap-2 ml-auto">
+        {/* Footer row: status badges + admin button — single line */}
+        {(!current.loading && (current.cached || remaining === 0 || isAdmin)) && (
+          <div className="flex items-center gap-2 pt-1">
+            {current.cached && (
+              <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5">
+                CACHED
+              </span>
+            )}
+            {remaining === 0 && (
+              <span className="text-[10px] text-negative">DAILY LIMIT REACHED</span>
+            )}
+            {isAdmin && (
               <button
                 onClick={clearCache}
-                disabled={clearingCache || current.loading}
-                className="btn-retro text-[10px] px-2 py-0.5 text-negative border-negative/30 hover:border-negative disabled:opacity-30"
+                disabled={clearingCache}
+                className="btn-retro text-[10px] px-2 py-0.5 text-negative border-negative/30 hover:border-negative disabled:opacity-30 ml-auto"
               >
                 {clearingCache ? "CLEARING..." : "[ CLEAR CACHE ]"}
               </button>
-              <button
-                onClick={onRefresh}
-                disabled={current.loading || remaining === 0 || remaining === null}
-                className="btn-retro text-[10px] px-2 py-0.5 disabled:opacity-30"
-              >
-                [ REFRESH ]
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
