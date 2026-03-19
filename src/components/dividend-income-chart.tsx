@@ -351,7 +351,7 @@ export function DividendIncomeChart({
           <ResponsiveContainer width="100%" height={180}>
             <BarChart
               data={chartData}
-              margin={{ top: 4, right: 4, left: 4, bottom: 0 }}
+              margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
               onClick={(payload) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const monthStr = (payload?.activePayload as any)?.[0]?.payload?.monthStr as string | undefined;
@@ -365,9 +365,9 @@ export function DividendIncomeChart({
                 tickLine={false}
               />
               <YAxis
-                width={38}
+                width={36}
                 tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
+                axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))}
               />
@@ -503,9 +503,6 @@ export function DividendIncomeChart({
           qualify for the federal Dividend Tax Credit (~20.7% of gross), significantly reducing effective tax.
         </div>
       )}
-      <div className="text-[9px] text-muted-foreground/40 mt-2 text-right">
-        For reference only — consult a tax professional
-      </div>
     </div>
   );
 }
