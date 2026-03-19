@@ -206,7 +206,7 @@ export function DividendGrowthChart() {
           {/* Chart */}
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={currentHistory} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+              <LineChart data={currentHistory} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="year"
@@ -215,6 +215,7 @@ export function DividendGrowthChart() {
                   tickLine={false}
                 />
                 <YAxis
+                  width={36}
                   tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
                   axisLine={false}
                   tickLine={false}
