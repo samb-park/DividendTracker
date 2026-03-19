@@ -138,7 +138,7 @@ export function PerformanceChart() {
     <div className="border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="text-[10px] text-accent tracking-wide">PERFORMANCE</div>
+          <div className="text-accent text-xs tracking-wide">&#9654; PERFORMANCE</div>
           <button
             onClick={() => setShowBenchmark((v) => !v)}
             className={`btn-retro text-[10px] px-2 py-0.5 ${showBenchmark ? "btn-retro-primary" : ""}`}
