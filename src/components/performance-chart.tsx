@@ -223,13 +223,7 @@ export function PerformanceChart() {
                     tickLine={false}
                     interval="preserveStartEnd"
                   />
-                  <YAxis
-                    width={38}
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${v.toFixed(0)}`}
-                  />
+                  <YAxis hide />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
                     contentStyle={{
@@ -280,13 +274,7 @@ export function PerformanceChart() {
                     tickLine={false}
                     interval="preserveStartEnd"
                   />
-                  <YAxis
-                    width={38}
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `C$${fmt(v)}`}
-                  />
+                  <YAxis hide />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
                     contentStyle={{
