@@ -103,11 +103,16 @@ export function DividendIncomeChart({
   const [showNet, setShowNet] = useState(false);
   const [netDropdownOpen, setNetDropdownOpen] = useState(false);
   const netDropdownRef = useRef<HTMLDivElement>(null);
+  const [accountDropOpen, setAccountDropOpen] = useState(false);
+  const accountDropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (netDropdownRef.current && !netDropdownRef.current.contains(e.target as Node)) {
         setNetDropdownOpen(false);
+      }
+      if (accountDropRef.current && !accountDropRef.current.contains(e.target as Node)) {
+        setAccountDropOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -287,56 +292,68 @@ export function DividendIncomeChart({
       {/* Header: title */}
       <div className="text-accent text-xs tracking-wide mb-2">&#9654; DIVIDEND INCOME</div>
 
-      {/* Header: year nav + GROSS/NET toggle */}
+      {/* Header: year nav + account dropdown + GROSS/NET toggle */}
       <div className="flex items-center justify-between mb-3">
         <YearDropdown
           value={year}
           options={Array.from({ length: 16 }, (_, i) => CURRENT_YEAR + 10 - i)}
           onChange={setYear}
         />
-        <div className="relative" ref={netDropdownRef}>
-          <button
-            className="btn-retro btn-retro-primary text-[10px] px-2 py-1.5 flex items-center gap-1.5"
-            onClick={() => setNetDropdownOpen((v) => !v)}
-          >
-            <span className="flex-1 text-left">{showNet ? "NET" : "GROSS"}</span>
-            <span className="text-muted-foreground">▾</span>
-          </button>
-          {netDropdownOpen && (
-            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
-              {([["GROSS", false], ["NET", true]] as const).map(([label, val]) => (
-                <button
-                  key={label}
-                  className={`w-full text-left px-3 py-2 text-[10px] hover:bg-border/30 ${showNet === val ? "text-accent" : ""}`}
-                  onClick={() => { setShowNet(val); setNetDropdownOpen(false); }}
-                >
-                  {label}
-                </button>
-              ))}
+        <div className="flex items-center gap-1.5">
+          {accountTypes.length > 0 && (
+            <div className="relative" ref={accountDropRef}>
+              <button
+                className="btn-retro btn-retro-primary text-[10px] flex items-center gap-1.5 min-w-[4rem]"
+                onClick={() => setAccountDropOpen(v => !v)}
+              >
+                <span className="flex-1 text-left">{selectedAccount ?? "ALL"}</span>
+                <span className="text-muted-foreground">▾</span>
+              </button>
+              {accountDropOpen && (
+                <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+                  <button
+                    className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${selectedAccount === null ? "text-accent" : ""}`}
+                    onClick={() => { setSelectedAccount(null); setAccountDropOpen(false); }}
+                  >
+                    ALL
+                  </button>
+                  {accountTypes.map(type => (
+                    <button
+                      key={type}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${selectedAccount === type ? "text-accent" : ""}`}
+                      onClick={() => { setSelectedAccount(type); setAccountDropOpen(false); }}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+          <div className="relative" ref={netDropdownRef}>
+            <button
+              className="btn-retro btn-retro-primary text-[10px] px-2 py-1.5 flex items-center gap-1.5"
+              onClick={() => setNetDropdownOpen((v) => !v)}
+            >
+              <span className="flex-1 text-left">{showNet ? "NET" : "GROSS"}</span>
+              <span className="text-muted-foreground">▾</span>
+            </button>
+            {netDropdownOpen && (
+              <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+                {([["GROSS", false], ["NET", true]] as const).map(([label, val]) => (
+                  <button
+                    key={label}
+                    className={`w-full text-left px-3 py-2 text-[10px] hover:bg-border/30 ${showNet === val ? "text-accent" : ""}`}
+                    onClick={() => { setShowNet(val); setNetDropdownOpen(false); }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {accountTypes.length > 1 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          <button
-            className={`btn-retro text-[10px] px-2 py-0.5 ${selectedAccount === null ? "btn-retro-primary" : ""}`}
-            onClick={() => setSelectedAccount(null)}
-          >
-            ALL
-          </button>
-          {accountTypes.map(type => (
-            <button
-              key={type}
-              className={`btn-retro text-[10px] px-2 py-0.5 ${selectedAccount === type ? "btn-retro-primary" : ""}`}
-              onClick={() => setSelectedAccount(type)}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Bar Chart */}
       {loading ? (
@@ -351,7 +368,7 @@ export function DividendIncomeChart({
           <ResponsiveContainer width="100%" height={180}>
             <BarChart
               data={chartData}
-              margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
+              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
               onClick={(payload) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const monthStr = (payload?.activePayload as any)?.[0]?.payload?.monthStr as string | undefined;
@@ -364,13 +381,7 @@ export function DividendIncomeChart({
                 axisLine={{ stroke: "hsl(var(--border))" }}
                 tickLine={false}
               />
-              <YAxis
-                width={36}
-                tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))}
-              />
+              <YAxis hide />
               <Tooltip
                 contentStyle={RETRO_TOOLTIP_STYLE}
                 formatter={(v: number) => [`${currencySymbol}${fmt(v)}`, showNet ? "NET" : "GROSS"]}

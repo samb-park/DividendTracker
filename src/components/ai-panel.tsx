@@ -87,7 +87,7 @@ export function AiPanel() {
     <div className="border border-border bg-card">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <div className="text-accent text-xs tracking-wide">AI ASSISTANT</div>
+        <div className="text-accent text-xs tracking-wide">&#9654; AI ASSISTANT</div>
         <div className="text-[10px] text-muted-foreground tabular-nums">
           {remaining !== null ? `${remaining}/${maxCalls} CALLS TODAY` : ""}
         </div>
