@@ -1,9 +1,18 @@
 "use client";
 import { useState } from "react";
 
+const ACCOUNT_TYPES = [
+  { value: "NON_REG", label: "Non-Registered" },
+  { value: "TFSA",    label: "TFSA" },
+  { value: "RRSP",    label: "RRSP" },
+  { value: "FHSA",    label: "FHSA" },
+  { value: "CASH",    label: "Cash" },
+] as const;
+
 export function AddPortfolioDialog({ onAdd }: { onAdd: (name: string) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [accountType, setAccountType] = useState<string>("NON_REG");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,7 +24,7 @@ export function AddPortfolioDialog({ onAdd }: { onAdd: (name: string) => void })
       const res = await fetch("/api/portfolios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, accountType }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -50,9 +59,18 @@ export function AddPortfolioDialog({ onAdd }: { onAdd: (name: string) => void })
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="Portfolio name..."
-          className="mb-4"
+          className="mb-3"
           maxLength={100}
         />
+        <select
+          value={accountType}
+          onChange={(e) => setAccountType(e.target.value)}
+          className="mb-4 w-full bg-card border border-border text-foreground text-xs px-2 py-1.5"
+        >
+          {ACCOUNT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
         {error && <div className="text-negative text-xs mb-3">{error}</div>}
         <div className="flex gap-2">
           <button className="btn-retro btn-retro-primary flex-1" onClick={submit} disabled={loading}>

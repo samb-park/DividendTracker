@@ -27,7 +27,8 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { cashCAD, cashUSD, name } = body;
+  const { cashCAD, cashUSD, name, accountType } = body;
+  const validAccountTypes = ["TFSA", "RRSP", "FHSA", "NON_REG", "CASH"];
 
   try {
     const updated = await prisma.portfolio.update({
@@ -36,6 +37,7 @@ export async function PATCH(
         ...(name !== undefined && { name }),
         ...(cashCAD !== undefined && { cashCAD }),
         ...(cashUSD !== undefined && { cashUSD }),
+        ...(accountType && validAccountTypes.includes(accountType) && { accountType }),
       },
     });
     return NextResponse.json(updated);

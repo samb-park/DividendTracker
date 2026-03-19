@@ -27,16 +27,27 @@ export async function GET(req: NextRequest) {
     include: { holding: { include: { portfolio: true } } },
   });
 
+  const DEFAULT_FX = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.36");
+
   const rows = [
-    ["Date", "Portfolio", "Ticker", "Currency", "Amount", "Notes"],
-    ...txns.map((t) => [
-      t.date.toISOString().slice(0, 10),
-      t.holding.portfolio.name,
-      t.holding.ticker,
-      t.holding.currency,
-      (parseFloat(t.price.toString()) * parseFloat(t.quantity.toString())).toFixed(2),
-      t.notes ?? "",
-    ]),
+    ["Date", "Portfolio", "Account Type", "Ticker", "Currency", "Amount", "FX Rate (CAD/USD)", "Amount (CAD)", "Notes"],
+    ...txns.map((t) => {
+      const amount = parseFloat(t.price.toString()) * parseFloat(t.quantity.toString());
+      const isUSD = t.holding.currency === "USD";
+      const fxRate = t.fxRateCAD ? parseFloat(t.fxRateCAD.toString()) : DEFAULT_FX;
+      const amountCAD = isUSD ? (amount * fxRate).toFixed(2) : amount.toFixed(2);
+      return [
+        t.date.toISOString().slice(0, 10),
+        t.holding.portfolio.name,
+        t.holding.portfolio.accountType,
+        t.holding.ticker,
+        t.holding.currency,
+        amount.toFixed(2),
+        isUSD ? fxRate.toFixed(6) : "",
+        amountCAD,
+        t.notes ?? "",
+      ];
+    }),
   ];
 
   // Sanitize cells: escape quotes and strip leading formula chars (=, +, -, @) to prevent CSV injection

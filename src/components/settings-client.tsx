@@ -23,6 +23,7 @@ interface SyncResult {
 interface PortfolioItem {
   id: string;
   name: string;
+  accountType: string;
   cashCAD: string | null;
   cashUSD: string | null;
 }
@@ -106,11 +107,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         let tfsa = 0, rrsp = 0, fhsa = 0;
         for (const item of (d.items ?? [])) {
           if (item.action !== "DEPOSIT") continue;
-          const name = (item.portfolioName ?? "").toUpperCase();
+          const acctType = (item.portfolioAccountType ?? "").toUpperCase();
           const amount = item.currency === "USD" ? item.amount * 1.35 : item.amount;
-          if (name.includes("TFSA")) tfsa += amount;
-          else if (name.includes("RRSP")) rrsp += amount;
-          else if (name.includes("FHSA")) fhsa += amount;
+          if (acctType === "TFSA") tfsa += amount;
+          else if (acctType === "RRSP") rrsp += amount;
+          else if (acctType === "FHSA") fhsa += amount;
         }
         setContribDeposits({ tfsa, rrsp, fhsa });
       })
@@ -178,6 +179,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
     setPortfolios(data.map((p: any) => ({
       id: p.id,
       name: p.name,
+      accountType: p.accountType ?? "NON_REG",
       cashCAD: p.cashCAD ?? null,
       cashUSD: p.cashUSD ?? null,
     })));
@@ -227,6 +229,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             portfolios.map((p) => (
               <div key={p.id} className="flex items-center justify-between text-sm gap-2">
                 <span className="truncate">{p.name}</span>
+                <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5 flex-shrink-0">{p.accountType}</span>
                 {confirmDeletePortfolioId === p.id ? (
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => deletePortfolio(p.id)} className="btn-retro text-xs text-negative border-negative/30 hover:border-negative px-2 py-0.5">CONFIRM</button>
@@ -666,7 +669,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             const usdVal = edit?.usd ?? (p.cashUSD ? parseFloat(p.cashUSD).toFixed(2) : "0.00");
             return (
               <div key={p.id} className="space-y-2">
-                <div className="text-xs font-medium text-accent">{p.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-accent">{p.name}</span>
+                  <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5">{p.accountType}</span>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAD ($)</div>

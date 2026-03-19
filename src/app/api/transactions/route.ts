@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { getFxRate } from "@/lib/price";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
   // Verify holding belongs to current user
   const holding = await prisma.holding.findUnique({
     where: { id: holdingId as string },
-    select: { portfolio: { select: { userId: true } } },
+    select: { currency: true, portfolio: { select: { userId: true } } },
   });
   if (!holding || holding.portfolio.userId !== session.user.id) {
     return NextResponse.json({ error: "Holding not found" }, { status: 404 });
@@ -65,6 +66,13 @@ export async function POST(req: NextRequest) {
   if (txDate > new Date()) {
     return NextResponse.json({ error: "Transaction date cannot be in the future" }, { status: 400 });
   }
+  // For USD holdings, capture the CAD/USD rate at time of entry for CRA reporting
+  let fxRateCAD: number | null = null;
+  if (holding.currency === "USD") {
+    const fx = await getFxRate().catch(() => null);
+    fxRateCAD = fx?.rate ?? null;
+  }
+
   const tx = await prisma.transaction.create({
     data: {
       holdingId: holdingId as string,
@@ -73,6 +81,7 @@ export async function POST(req: NextRequest) {
       quantity: qty,
       price: prc,
       commission: com,
+      fxRateCAD,
       notes: notes ? String(notes).slice(0, 500) : null,
     },
   });

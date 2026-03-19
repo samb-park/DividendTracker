@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
     date: t.date.toISOString().slice(0, 10),
     portfolioId: t.portfolioId,
     portfolioName: t.portfolio.name,
+    portfolioAccountType: t.portfolio.accountType,
     action: t.action,
     amount: parseFloat(t.amount.toString()),
     currency: t.currency as "CAD" | "USD",

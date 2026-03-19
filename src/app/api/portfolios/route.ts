@@ -22,10 +22,15 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name } = await req.json();
+  const { name, accountType } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
+  const validAccountTypes = ["TFSA", "RRSP", "FHSA", "NON_REG", "CASH"];
   const portfolio = await prisma.portfolio.create({
-    data: { name: name.trim(), userId: session.user.id },
+    data: {
+      name: name.trim(),
+      userId: session.user.id,
+      ...(accountType && validAccountTypes.includes(accountType) && { accountType }),
+    },
   });
   return NextResponse.json(portfolio);
 }

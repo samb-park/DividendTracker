@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const portfolios = await prisma.portfolio.findMany({
     orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, cashCAD: true, cashUSD: true },
+    select: { id: true, name: true, accountType: true, cashCAD: true, cashUSD: true },
   });
 
   const serialized = JSON.parse(JSON.stringify(portfolios));
