@@ -235,13 +235,7 @@ export function PerformanceChart() {
               {showBenchmark ? (
                 <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
+                  <XAxis dataKey="date" hide />
                   <YAxis hide />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
@@ -286,13 +280,7 @@ export function PerformanceChart() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
+                  <XAxis dataKey="date" hide />
                   <YAxis hide />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
