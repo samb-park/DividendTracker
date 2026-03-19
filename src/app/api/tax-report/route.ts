@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
         gte: new Date(`${year}-01-01`),
         lt: new Date(`${yearNum + 1}-01-01`),
       },
+      holding: { portfolio: { userId: session.user.id } },
     },
     orderBy: { date: "asc" },
     include: { holding: { include: { portfolio: true } } },

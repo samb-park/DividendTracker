@@ -6,10 +6,19 @@ import { auth } from "@/auth";
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { portfolioId, ticker } = await req.json();
   if (!portfolioId || !ticker) {
     return NextResponse.json({ error: "portfolioId and ticker required" }, { status: 400 });
   }
+
+  // Verify portfolio belongs to current user
+  const portfolio = await prisma.portfolio.findUnique({
+    where: { id: portfolioId, userId: session.user.id },
+    select: { id: true },
+  });
+  if (!portfolio) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
+
   const upperTicker = ticker.trim().toUpperCase();
   const priceData = await getPrice(upperTicker);
   if (!priceData) {

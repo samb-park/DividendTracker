@@ -9,7 +9,10 @@ export async function GET(req: NextRequest) {
   const holdingId = searchParams.get("holdingId");
 
   const transactions = await prisma.transaction.findMany({
-    where: holdingId ? { holdingId } : undefined,
+    where: {
+      ...(holdingId ? { holdingId } : {}),
+      holding: { portfolio: { userId: session.user.id } },
+    },
     orderBy: { date: "desc" },
     include: { holding: { include: { portfolio: true } } },
   });
@@ -33,6 +36,16 @@ export async function POST(req: NextRequest) {
   if (!["BUY", "SELL", "DIVIDEND"].includes(action as string)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
+
+  // Verify holding belongs to current user
+  const holding = await prisma.holding.findUnique({
+    where: { id: holdingId as string },
+    select: { portfolio: { select: { userId: true } } },
+  });
+  if (!holding || holding.portfolio.userId !== session.user.id) {
+    return NextResponse.json({ error: "Holding not found" }, { status: 404 });
+  }
+
   const qty = Number(quantity);
   const prc = Number(price);
   const com = Number(commission ?? 0);

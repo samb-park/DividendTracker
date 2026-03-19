@@ -91,7 +91,10 @@ export async function GET(req: Request) {
       where: {
         action: "DIVIDEND",
         date: { gte: startOfYear, lt: endOfYear },
-        ...(portfolioId !== "all" && { holding: { portfolioId } }),
+        holding: {
+          portfolio: { userId: session.user.id },
+          ...(portfolioId !== "all" ? { portfolioId } : {}),
+        },
       },
       include: { holding: { include: { portfolio: true } } },
     });
@@ -117,7 +120,10 @@ export async function GET(req: Request) {
   } else {
     // Future mode: project dividends using Yahoo Finance data
     const holdingsQuery = await prisma.holding.findMany({
-      where: portfolioId !== "all" ? { portfolioId } : {},
+      where: {
+        portfolio: { userId: session.user.id },
+        ...(portfolioId !== "all" ? { portfolioId } : {}),
+      },
       include: { portfolio: true },
     });
 

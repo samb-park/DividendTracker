@@ -11,6 +11,13 @@ export async function DELETE(
 
   const { id } = await params;
   try {
+    const tx = await prisma.transaction.findUnique({
+      where: { id },
+      select: { holding: { select: { portfolio: { select: { userId: true } } } } },
+    });
+    if (!tx || tx.holding.portfolio.userId !== session.user.id) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     await prisma.transaction.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch {

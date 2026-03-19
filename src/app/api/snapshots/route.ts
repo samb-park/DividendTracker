@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
   }
 
   const snapshots = await prisma.portfolioSnapshot.findMany({
-    where: since ? { date: { gte: since } } : undefined,
+    where: {
+      userId: session.user.id,
+      ...(since ? { date: { gte: since } } : {}),
+    },
     orderBy: { date: "asc" },
     select: { date: true, totalCAD: true, costBasisCAD: true, cashCAD: true },
   });

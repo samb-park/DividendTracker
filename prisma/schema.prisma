@@ -7,8 +7,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id         String      @id           // Google OAuth sub
+  email      String      @unique
+  name       String?
+  image      String?
+  approved   Boolean     @default(false)
+  role       UserRole    @default(USER)
+  createdAt  DateTime    @default(now())
+  portfolios Portfolio[]
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
 model Portfolio {
   id               String            @id @default(cuid())
+  userId           String?
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   name             String
   cashCAD          Decimal?          @db.Decimal(18, 2)
   cashUSD          Decimal?          @db.Decimal(18, 2)
@@ -88,11 +106,12 @@ model Setting {
 // Daily portfolio value snapshots for CAGR / MDD charting
 model PortfolioSnapshot {
   id           String   @id @default(cuid())
+  userId       String?
   date         DateTime @db.Date
   totalCAD     Decimal  @db.Decimal(18, 2)
   costBasisCAD Decimal  @db.Decimal(18, 2)
   cashCAD      Decimal  @db.Decimal(18, 2)
   createdAt    DateTime @default(now())
 
-  @@unique([date])
+  @@unique([userId, date])
 }

@@ -38,52 +38,67 @@ export async function GET(req: Request) {
 
   priceCache.clear();
 
-  const [portfolios, fxRate] = await Promise.all([
-    prisma.portfolio.findMany({
-      include: { holdings: { include: { transactions: true } } },
+  const [users, fxRate] = await Promise.all([
+    prisma.user.findMany({
+      where: { approved: true },
+      select: { id: true },
     }),
     getFxRate(),
   ]);
 
-  let totalCAD = 0;
-  let costBasisCAD = 0;
-  let cashCAD = 0;
-
-  for (const p of portfolios) {
-    cashCAD += parseFloat(p.cashCAD?.toString() ?? "0") || 0;
-    cashCAD += (parseFloat(p.cashUSD?.toString() ?? "0") || 0) * fxRate;
-
-    for (const h of p.holdings) {
-      const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
-      if (qty <= 0) continue;
-
-      const price = await getPrice(h.ticker);
-      if (!price) continue;
-
-      const mktValue = qty * price;
-      const mktValueCAD = h.currency === "USD" ? mktValue * fxRate : mktValue;
-      totalCAD += mktValueCAD;
-
-      const avgCost = parseFloat(h.avgCost?.toString() ?? "0") || 0;
-      const costCAD = qty * avgCost;
-      costBasisCAD += h.currency === "USD" ? costCAD * fxRate : costCAD;
-    }
-  }
-
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  await prisma.portfolioSnapshot.upsert({
-    where: { date: today },
-    update: { totalCAD: totalCAD + cashCAD, costBasisCAD, cashCAD },
-    create: { date: today, totalCAD: totalCAD + cashCAD, costBasisCAD, cashCAD },
-  });
+  const results = await Promise.all(
+    users.map(async (user) => {
+      const portfolios = await prisma.portfolio.findMany({
+        where: { userId: user.id },
+        include: { holdings: true },
+      });
+
+      let totalCAD = 0;
+      let costBasisCAD = 0;
+      let cashCAD = 0;
+
+      for (const p of portfolios) {
+        cashCAD += parseFloat(p.cashCAD?.toString() ?? "0") || 0;
+        cashCAD += (parseFloat(p.cashUSD?.toString() ?? "0") || 0) * fxRate;
+
+        for (const h of p.holdings) {
+          const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
+          if (qty <= 0) continue;
+
+          const price = await getPrice(h.ticker);
+          if (!price) continue;
+
+          const mktValue = qty * price;
+          const mktValueCAD = h.currency === "USD" ? mktValue * fxRate : mktValue;
+          totalCAD += mktValueCAD;
+
+          const avgCost = parseFloat(h.avgCost?.toString() ?? "0") || 0;
+          const costCAD = qty * avgCost;
+          costBasisCAD += h.currency === "USD" ? costCAD * fxRate : costCAD;
+        }
+      }
+
+      await prisma.portfolioSnapshot.upsert({
+        where: { userId_date: { userId: user.id, date: today } },
+        update: { totalCAD: totalCAD + cashCAD, costBasisCAD, cashCAD },
+        create: { userId: user.id, date: today, totalCAD: totalCAD + cashCAD, costBasisCAD, cashCAD },
+      });
+
+      return {
+        userId: user.id,
+        totalCAD: (totalCAD + cashCAD).toFixed(2),
+        costBasisCAD: costBasisCAD.toFixed(2),
+        cashCAD: cashCAD.toFixed(2),
+      };
+    })
+  );
 
   return NextResponse.json({
     ok: true,
     date: today.toISOString().slice(0, 10),
-    totalCAD: (totalCAD + cashCAD).toFixed(2),
-    costBasisCAD: costBasisCAD.toFixed(2),
-    cashCAD: cashCAD.toFixed(2),
+    users: results,
   });
 }

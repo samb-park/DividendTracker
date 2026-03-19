@@ -8,10 +8,11 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
+  const userId = session.user.id;
 
-  // ?all=true returns minimal data for all years (used by equity chart reconstruction)
   if (searchParams.get("all") === "true") {
     const txns = await prisma.cashTransaction.findMany({
+      where: { portfolio: { userId } },
       select: { date: true, action: true, amount: true, currency: true },
       orderBy: { date: "asc" },
     });
@@ -25,17 +26,19 @@ export async function GET(req: NextRequest) {
   }
 
   const year = parseInt(searchParams.get("year") ?? new Date().getFullYear().toString(), 10);
-
   const start = new Date(`${year}-01-01T00:00:00.000Z`);
   const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
 
   const [txns, allTxns] = await Promise.all([
     prisma.cashTransaction.findMany({
-      where: { date: { gte: start, lt: end } },
+      where: { portfolio: { userId }, date: { gte: start, lt: end } },
       orderBy: { date: "desc" },
       include: { portfolio: true },
     }),
-    prisma.cashTransaction.findMany({ select: { date: true } }),
+    prisma.cashTransaction.findMany({
+      where: { portfolio: { userId } },
+      select: { date: true },
+    }),
   ]);
 
   const yearSet = new Set(allTxns.map((t) => t.date.getFullYear()));
@@ -84,6 +87,14 @@ export async function POST(req: NextRequest) {
   if (isNaN(txDate.getTime())) {
     return NextResponse.json({ error: "Invalid date" }, { status: 400 });
   }
+
+  // Verify portfolio belongs to current user
+  const portfolio = await prisma.portfolio.findUnique({
+    where: { id: portfolioId as string, userId: session.user.id },
+    select: { id: true },
+  });
+  if (!portfolio) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
+
   const tx = await prisma.cashTransaction.create({
     data: {
       portfolioId: portfolioId as string,

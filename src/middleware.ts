@@ -10,6 +10,7 @@ export default auth((req) => {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname === "/login" ||
+    pathname === "/pending" ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
     pathname.startsWith("/apple-icon");
@@ -21,11 +22,30 @@ export default auth((req) => {
   if (pathname === "/api/health") return NextResponse.next();
 
   if (!isLoggedIn) {
-    // API routes: return 401 JSON (don't redirect to HTML login page)
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", req.nextUrl));
+  }
+
+  // Logged in but not approved — redirect to /pending (except API calls get 403)
+  const isApproved = req.auth?.user?.approved;
+  if (!isApproved) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Account pending approval" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/pending", req.nextUrl));
+  }
+
+  // Admin-only routes
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+    const role = req.auth?.user?.role;
+    if (role !== "ADMIN") {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/", req.nextUrl));
+    }
   }
 
   return NextResponse.next();

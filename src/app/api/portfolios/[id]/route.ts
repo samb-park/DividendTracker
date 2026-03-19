@@ -11,7 +11,7 @@ export async function DELETE(
 
   const { id } = await params;
   try {
-    await prisma.portfolio.delete({ where: { id } });
+    await prisma.portfolio.delete({ where: { id, userId: session.user.id } });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -27,12 +27,13 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { cashCAD, cashUSD } = body;
+  const { cashCAD, cashUSD, name } = body;
 
   try {
     const updated = await prisma.portfolio.update({
-      where: { id },
+      where: { id, userId: session.user.id },
       data: {
+        ...(name !== undefined && { name }),
         ...(cashCAD !== undefined && { cashCAD }),
         ...(cashUSD !== undefined && { cashUSD }),
       },

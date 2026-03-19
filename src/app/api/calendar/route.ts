@@ -47,6 +47,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const holdings = await prisma.holding.findMany({
+    where: { portfolio: { userId: session.user.id } },
     include: { portfolio: true },
   });
 
