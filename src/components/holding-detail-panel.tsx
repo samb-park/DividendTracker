@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { AddTransactionDialog } from "./add-transaction-dialog";
-import { X, Clock } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -93,6 +93,7 @@ export function HoldingDetailPanel({
   allocAmount = 0,
   contribCAD = 0,
   fxRateForAlloc = 1.35,
+  allPortfolios,
 }: {
   row: HoldingRow;
   readOnly: boolean;
@@ -103,6 +104,7 @@ export function HoldingDetailPanel({
   allocAmount?: number;
   contribCAD?: number;
   fxRateForAlloc?: number;
+  allPortfolios?: { id: string; name: string }[];
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
@@ -111,8 +113,32 @@ export function HoldingDetailPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
+  const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null);
+  const [panelTxns, setPanelTxns] = useState<Transaction[]>([]);
+  const [txnsLoading, setTxnsLoading] = useState(true);
+
+  const fetchTxns = useCallback(async () => {
+    setTxnsLoading(true);
+    try {
+      const res = await fetch(`/api/transactions?holdingId=${row.holding.id}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setPanelTxns(data.map((t: Record<string, unknown>) => ({
+          id: String(t.id),
+          action: t.action as "BUY" | "SELL" | "DIVIDEND",
+          quantity: String(t.quantity),
+          price: String(t.price),
+          commission: String(t.commission),
+          date: typeof t.date === "string" ? t.date.slice(0, 10) : undefined,
+          notes: (t.notes as string | null | undefined) ?? null,
+        })));
+      }
+    } catch { /* silent */ }
+    finally { setTxnsLoading(false); }
+  }, [row.holding.id]);
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { fetchTxns(); }, [fetchTxns]);
 
   // Lock body scroll while panel is open
   useEffect(() => {
@@ -147,13 +173,13 @@ export function HoldingDetailPanel({
   const toDisp = (amount: number) => convertCurrency(amount, row.holding.currency, displayCur, fxRate);
 
   const buysSells = useMemo(() =>
-    row.holding.transactions.filter((t) => t.action !== "DIVIDEND"),
-    [row.holding.transactions]
+    panelTxns.filter((t) => t.action !== "DIVIDEND"),
+    [panelTxns]
   );
 
   const dividendTxns = useMemo(() =>
-    row.holding.transactions.filter((t) => t.action === "DIVIDEND"),
-    [row.holding.transactions]
+    panelTxns.filter((t) => t.action === "DIVIDEND"),
+    [panelTxns]
   );
 
   const filterByDate = useCallback((txns: Transaction[]) =>
@@ -308,6 +334,16 @@ export function HoldingDetailPanel({
     onClose();
   };
 
+  const deleteTxn = async (id: string) => {
+    setDeletingTxnId(id);
+    try {
+      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
+      if (res.ok) { onRefresh(); fetchTxns(); }
+    } finally {
+      setDeletingTxnId(null);
+    }
+  };
+
   // 52W range bar position
   const range52WPct = p && p.week52High > p.week52Low && !isNaN(p.week52High) && !isNaN(p.week52Low)
     ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
@@ -336,13 +372,13 @@ export function HoldingDetailPanel({
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            className={`btn-retro p-1.5 ${showHistory ? "btn-retro-primary" : ""}`}
-            onClick={() => setShowHistory((v) => !v)}
-            title="Toggle history"
-          >
-            <Clock size={14} />
-          </button>
+          <AddTransactionDialog
+            {...(allPortfolios
+              ? { portfolios: allPortfolios }
+              : { holdingId: row.holding.id })}
+            ticker={row.holding.ticker}
+            onAdd={() => { onRefresh(); fetchTxns(); }}
+          />
           <div className="relative" ref={curDropdownRef}>
             <button
               className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
@@ -669,15 +705,8 @@ export function HoldingDetailPanel({
           <div className="border border-border bg-card p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               <div className="text-[10px] text-muted-foreground tracking-wide">
-                TRANSACTIONS ({filteredTxns.length}/{buysSells.length})
+                {txnsLoading ? "LOADING..." : `TRANSACTIONS (${filteredTxns.length}/${buysSells.length})`}
               </div>
-              {!readOnly && (
-                <AddTransactionDialog
-                  holdingId={row.holding.id}
-                  ticker={row.holding.ticker}
-                  onAdd={onRefresh}
-                />
-              )}
             </div>
             {buysSells.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px]">
@@ -711,13 +740,22 @@ export function HoldingDetailPanel({
                       <span className="text-muted-foreground">@</span>
                       <span className="tabular-nums">{sym}{fmt(toDisp(parseFloat(txn.price)))}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="tabular-nums text-muted-foreground">
-                        {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <div className="tabular-nums text-muted-foreground">
+                          {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
+                        </div>
+                        {txn.date && (
+                          <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
+                        )}
                       </div>
-                      {txn.date && (
-                        <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
-                      )}
+                      <button
+                        className="btn-retro p-0.5 text-negative border-negative/30 hover:border-negative ml-2 flex-shrink-0"
+                        onClick={() => deleteTxn(txn.id)}
+                        disabled={deletingTxnId === txn.id}
+                      >
+                        <Trash2 size={10} />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -794,24 +832,13 @@ export function HoldingDetailPanel({
 
             {/* Dividend transactions list — toggled by clock icon */}
             <div className="border border-border bg-card p-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="text-[10px] text-muted-foreground tracking-wide">
-                    RECEIVED ({dividendTxns.length})
-                  </div>
-                  {totalDivsAllTime > 0 && (
-                    <span className="text-[10px] text-primary tabular-nums">{sym}{fmt(toDisp(totalDivsAllTime))}</span>
-                  )}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="text-[10px] text-muted-foreground tracking-wide">
+                  RECEIVED ({dividendTxns.length})
                 </div>
-                <div className="flex items-center gap-2">
-                  {!readOnly && (
-                    <AddTransactionDialog
-                      holdingId={row.holding.id}
-                      ticker={row.holding.ticker}
-                      onAdd={onRefresh}
-                    />
-                  )}
-                </div>
+                {totalDivsAllTime > 0 && (
+                  <span className="text-[10px] text-primary tabular-nums">{sym}{fmt(toDisp(totalDivsAllTime))}</span>
+                )}
               </div>
               {dividendTxns.length > 0 && (
                 <div className="flex items-center gap-2 mb-3 text-[10px]">

@@ -1,6 +1,17 @@
 import YahooFinance from "yahoo-finance2";
 
-const yahooFinance = new YahooFinance();
+export const yahooFinance = new YahooFinance();
+
+/** Fields present in Yahoo Finance quote responses but not in the library's TypeScript types */
+interface QuoteExtra {
+  dividendRate?: number | null;
+  dividendYield?: number | null;
+  trailingAnnualDividendRate?: number | null;
+  trailingAnnualDividendYield?: number | null;
+  exDividendDate?: Date | number | string | null;
+  dividendDate?: Date | number | string | null;
+  payoutRatio?: number | null;
+}
 
 interface PriceData {
   ticker: string;
@@ -42,6 +53,7 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
   try {
     const quote = await yahooFinance.quote(ticker);
     if (!quote) return null;
+    const q = quote as typeof quote & QuoteExtra;
 
     const data: PriceData = {
       ticker,
@@ -64,26 +76,26 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
               quote.fiftyTwoWeekLow) *
             100
           : 0,
-      dividendRate: (quote as any).dividendRate
-        || (quote as any).trailingAnnualDividendRate
+      dividendRate: q.dividendRate
+        || q.trailingAnnualDividendRate
         // Fallback: compute from yield × price when explicit rate is unavailable
-        || ((quote as any).dividendYield && quote.regularMarketPrice
-          ? Math.round(quote.regularMarketPrice * ((quote as any).dividendYield / 100) * 10000) / 10000
-          : ((quote as any).trailingAnnualDividendYield && quote.regularMarketPrice
-            ? Math.round(quote.regularMarketPrice * (quote as any).trailingAnnualDividendYield * 10000) / 10000
+        || (q.dividendYield && quote.regularMarketPrice
+          ? Math.round(quote.regularMarketPrice * (q.dividendYield / 100) * 10000) / 10000
+          : (q.trailingAnnualDividendYield && quote.regularMarketPrice
+            ? Math.round(quote.regularMarketPrice * q.trailingAnnualDividendYield * 10000) / 10000
             : null)),
-      dividendYield: (quote as any).dividendYield
-        ? (quote as any).dividendYield  // Yahoo quote returns dividendYield already as % (e.g. 3.58)
-        : ((quote as any).trailingAnnualDividendYield
-          ? (quote as any).trailingAnnualDividendYield * 100  // decimal → %
+      dividendYield: q.dividendYield
+        ? q.dividendYield  // Yahoo quote returns dividendYield already as % (e.g. 3.58)
+        : (q.trailingAnnualDividendYield
+          ? q.trailingAnnualDividendYield * 100  // decimal → %
           : null),
-      trailingAnnualDividendRate: (quote as any).trailingAnnualDividendRate || null,
-      trailingAnnualDividendYield: (quote as any).trailingAnnualDividendYield
-        ? (quote as any).trailingAnnualDividendYield * 100
+      trailingAnnualDividendRate: q.trailingAnnualDividendRate || null,
+      trailingAnnualDividendYield: q.trailingAnnualDividendYield
+        ? q.trailingAnnualDividendYield * 100
         : null,
-      exDividendDate: (quote as any).exDividendDate ? new Date((quote as any).exDividendDate).toISOString().split("T")[0] : null,
-      dividendDate: (quote as any).dividendDate ? new Date((quote as any).dividendDate).toISOString().split("T")[0] : null,
-      payoutRatio: (quote as any).payoutRatio ? Math.round((quote as any).payoutRatio * 100) : null,
+      exDividendDate: q.exDividendDate ? new Date(q.exDividendDate as string).toISOString().split("T")[0] : null,
+      dividendDate: q.dividendDate ? new Date(q.dividendDate as string).toISOString().split("T")[0] : null,
+      payoutRatio: q.payoutRatio ? Math.round(q.payoutRatio * 100) : null,
       fetchedAt: Date.now(),
     };
 
@@ -176,10 +188,10 @@ export async function getHistory(
   });
 
   const data = (result.quotes ?? [])
-    .filter((q: any) => q.close != null)
-    .map((q: any) => ({
+    .filter((q) => q.close != null)
+    .map((q) => ({
       date: new Date(q.date).toISOString().split("T")[0],
-      close: Math.round(q.close * 100) / 100,
+      close: Math.round(q.close! * 100) / 100,
     }));
 
   historyCache.set(cacheKey, { data, fetchedAt: Date.now() });

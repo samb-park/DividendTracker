@@ -127,7 +127,7 @@ export function PerformanceChart() {
   const lastSnapshot = snapshots[snapshots.length - 1];
 
   return (
-    <div className="border border-border bg-card p-4 mb-6">
+    <div className="border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="text-[10px] text-accent tracking-wide">PERFORMANCE</div>
@@ -211,10 +211,10 @@ export function PerformanceChart() {
               )}
             </div>
           )}
-          <div className="h-36">
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               {showBenchmark ? (
-                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="date"
@@ -224,6 +224,7 @@ export function PerformanceChart() {
                     interval="preserveStartEnd"
                   />
                   <YAxis
+                    width={38}
                     tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
                     axisLine={false}
                     tickLine={false}
@@ -264,7 +265,7 @@ export function PerformanceChart() {
                   <ReferenceLine y={100} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} strokeOpacity={0.4} />
                 </ComposedChart>
               ) : (
-                <ComposedChart data={chartData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
+                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                   <defs>
                     <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -280,10 +281,11 @@ export function PerformanceChart() {
                     interval="preserveStartEnd"
                   />
                   <YAxis
+                    width={38}
                     tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(v) => `$${fmt(v)}`}
+                    tickFormatter={(v) => `C$${fmt(v)}`}
                   />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}

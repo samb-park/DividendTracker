@@ -351,7 +351,7 @@ export function DividendIncomeChart({
           <ResponsiveContainer width="100%" height={180}>
             <BarChart
               data={chartData}
-              margin={{ top: 4, right: 4, left: -10, bottom: 0 }}
+              margin={{ top: 4, right: 4, left: 4, bottom: 0 }}
               onClick={(payload) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const monthStr = (payload?.activePayload as any)?.[0]?.payload?.monthStr as string | undefined;
@@ -365,7 +365,8 @@ export function DividendIncomeChart({
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
+                width={38}
+                tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
                 axisLine={{ stroke: "hsl(var(--border))" }}
                 tickLine={false}
                 tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))}

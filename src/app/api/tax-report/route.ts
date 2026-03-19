@@ -30,9 +30,11 @@ export async function GET(req: NextRequest) {
   const DEFAULT_FX = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.36");
 
   const rows = [
-    ["Date", "Portfolio", "Account Type", "Ticker", "Currency", "Amount", "FX Rate (CAD/USD)", "Amount (CAD)", "Notes"],
+    ["Date", "Portfolio", "Account Type", "Ticker", "Currency", "Shares", "Per Share", "Amount", "FX Rate (CAD/USD)", "Amount (CAD)", "Notes"],
     ...txns.map((t) => {
-      const amount = parseFloat(t.price.toString()) * parseFloat(t.quantity.toString());
+      const qty = parseFloat(t.quantity.toString());
+      const price = parseFloat(t.price.toString());
+      const amount = qty * price;
       const isUSD = t.holding.currency === "USD";
       const fxRate = t.fxRateCAD ? parseFloat(t.fxRateCAD.toString()) : DEFAULT_FX;
       const amountCAD = isUSD ? (amount * fxRate).toFixed(2) : amount.toFixed(2);
@@ -42,6 +44,8 @@ export async function GET(req: NextRequest) {
         t.holding.portfolio.accountType,
         t.holding.ticker,
         t.holding.currency,
+        qty === 1 ? "" : qty.toFixed(4),   // blank when qty=1 (total amount entry style)
+        qty === 1 ? "" : price.toFixed(6),  // blank when qty=1
         amount.toFixed(2),
         isUSD ? fxRate.toFixed(6) : "",
         amountCAD,

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import YahooFinance from "yahoo-finance2";
+import { yahooFinance } from "@/lib/price";
+import { detectFrequency } from "@/lib/dividend-utils";
 import { auth } from "@/auth";
-const yahooFinance = new YahooFinance();
 
 export const dynamic = "force-dynamic";
 
@@ -24,23 +24,6 @@ export interface DividendCalendarEvent {
 const cache = new Map<string, { data: Omit<DividendCalendarEvent, "portfolios" | "sharesHeld">; fetchedAt: number }>();
 const TTL = 60 * 60 * 1000;
 
-/** Detect dividend frequency from historical payment spacing */
-function detectFrequencyFromHistory(
-  dividends: Array<{ date: string | Date; amount: number }>
-): number {
-  if (dividends.length < 2) return 4;
-  const dates = dividends.map((d) => new Date(d.date).getTime());
-  const spacings: number[] = [];
-  for (let i = 1; i < dates.length; i++) {
-    const monthDiff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24 * 30.5);
-    spacings.push(monthDiff);
-  }
-  const avg = spacings.reduce((a, b) => a + b, 0) / spacings.length;
-  if (avg <= 1.5) return 12;
-  if (avg <= 4) return 4;
-  if (avg <= 8) return 2;
-  return 1;
-}
 
 export async function GET() {
   const session = await auth();
@@ -89,7 +72,7 @@ export async function GET() {
 
       if (dividends.length === 0) return null;
 
-      const frequency = detectFrequencyFromHistory(dividends);
+      const frequency = detectFrequency(dividends);
       const lastDiv = dividends[dividends.length - 1];
       const amountPerShare = lastDiv.amount;
       const exDividendDate = lastDiv.date;
@@ -105,7 +88,7 @@ export async function GET() {
         : null;
 
       const name =
-        (chart.meta as any)?.longName ||
+        (chart.meta as { longName?: string })?.longName ||
         chart.meta?.shortName ||
         ticker;
 

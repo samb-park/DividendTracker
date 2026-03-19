@@ -78,6 +78,14 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     ? decrypt(tokenSetting.value)
     : tokenSetting.value;
 
+  // Re-encrypt legacy plaintext tokens immediately
+  if (!isEncrypted(tokenSetting.value)) {
+    await prisma.setting.update({
+      where: { key: tokenKey },
+      data: { value: encrypt(rawToken) },
+    });
+  }
+
   const result: SyncResult = {
     accountsSynced: 0,
     holdingsSynced: 0,
@@ -117,8 +125,16 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
   const accounts = await getAccounts(activeServer, access_token);
 
   const endTime = new Date();
-  const startTime = new Date();
-  startTime.setFullYear(startTime.getFullYear() - 1);
+  // Default: fetch 1 year back; if last sync exists, start from 1 day before it to avoid gaps
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  let startTime = oneYearAgo;
+  const lastSyncSetting = await prisma.setting.findUnique({ where: { key: lastSyncKey } });
+  if (lastSyncSetting?.value) {
+    const lastSync = new Date(lastSyncSetting.value);
+    lastSync.setDate(lastSync.getDate() - 1); // 1-day overlap to avoid boundary gaps
+    if (lastSync > oneYearAgo) startTime = lastSync;
+  }
 
   for (const account of accounts) {
     if (account.status !== "Active") continue;
@@ -126,8 +142,8 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     const name = portfolioName(account.type, account.number);
     const portfolio = await prisma.portfolio.upsert({
       where: { id: `qt-${account.number}` },
-      update: { name, accountType: mapAccountType(account.type) },
-      create: { id: `qt-${account.number}`, name, accountType: mapAccountType(account.type) },
+      update: { name, accountType: mapAccountType(account.type), ...(userId ? { userId } : {}) },
+      create: { id: `qt-${account.number}`, name, accountType: mapAccountType(account.type), ...(userId ? { userId } : {}) },
     });
 
     result.accountsSynced++;
@@ -211,23 +227,19 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
           const txQuantity = isDividend ? 1 : Math.abs(act.quantity);
           const txPrice = isDividend ? Math.abs(act.netAmount) : Math.abs(act.price);
 
-          const existing = await prisma.transaction.findFirst({
-            where: { holdingId: holding.id, action, date: txDate, quantity: txQuantity, price: txPrice },
+          const txResult = await prisma.transaction.createMany({
+            data: [{
+              holdingId: holding.id,
+              action,
+              date: txDate,
+              quantity: txQuantity,
+              price: txPrice,
+              commission: isDividend ? 0 : Math.abs(act.commission ?? 0),
+              notes: act.description || null,
+            }],
+            skipDuplicates: true,
           });
-          if (!existing) {
-            await prisma.transaction.create({
-              data: {
-                holdingId: holding.id,
-                action,
-                date: txDate,
-                quantity: txQuantity,
-                price: txPrice,
-                commission: isDividend ? 0 : Math.abs(act.commission ?? 0),
-                notes: act.description || null,
-              },
-            });
-            result.transactionsAdded++;
-          }
+          result.transactionsAdded += txResult.count;
           continue;
         }
 
@@ -240,22 +252,18 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
         const cashDate = new Date(act.tradeDate);
         const currency = act.currency === "CAD" ? "CAD" : "USD";
 
-        const existingCash = await prisma.cashTransaction.findFirst({
-          where: { portfolioId: portfolio.id, action: cashAction, date: cashDate, amount, currency },
+        const cashResult = await prisma.cashTransaction.createMany({
+          data: [{
+            portfolioId: portfolio.id,
+            action: cashAction,
+            date: cashDate,
+            amount,
+            currency,
+            notes: act.description || null,
+          }],
+          skipDuplicates: true,
         });
-        if (!existingCash) {
-          await prisma.cashTransaction.create({
-            data: {
-              portfolioId: portfolio.id,
-              action: cashAction,
-              date: cashDate,
-              amount,
-              currency,
-              notes: act.description || null,
-            },
-          });
-          result.cashTransactionsAdded++;
-        }
+        result.cashTransactionsAdded += cashResult.count;
       }
     } catch (e: unknown) {
       result.errors.push(`activities ${account.number}: ${e instanceof Error ? e.message : e}`);

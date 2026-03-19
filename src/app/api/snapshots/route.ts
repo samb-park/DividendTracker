@@ -8,7 +8,13 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
-  const range = searchParams.get("range") ?? "1y"; // 3m | 6m | 1y | all
+  const rawRange = searchParams.get("range") ?? "1y";
+  const VALID_RANGES = ["3m", "6m", "1y", "all"] as const;
+  type Range = typeof VALID_RANGES[number];
+  if (!VALID_RANGES.includes(rawRange as Range)) {
+    return NextResponse.json({ error: "Invalid range" }, { status: 400 });
+  }
+  const range = rawRange as Range;
 
   const now = new Date();
   let since: Date | undefined;

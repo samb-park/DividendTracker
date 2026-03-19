@@ -16,11 +16,7 @@ export default async function Home() {
   const portfolios = await prisma.portfolio.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
-    include: {
-      holdings: {
-        include: { transactions: true },
-      },
-    },
+    include: { holdings: { include: { transactions: true } } },
   });
 
   const fxRate = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");

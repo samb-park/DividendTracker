@@ -28,7 +28,39 @@ interface PortfolioItem {
   cashUSD: string | null;
 }
 
-export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: PortfolioItem[] }) {
+function Section({
+  title, children, defaultOpen = false, badge,
+}: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean; badge?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-border">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-border/10 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-accent text-xs tracking-wide">{title}</span>
+          {badge && <span className="text-[10px] text-positive border border-positive/30 px-1.5 py-0.5">{badge}</span>}
+        </div>
+        <span className="text-muted-foreground text-[10px]">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && <div className="p-4 border-t border-border space-y-4">{children}</div>}
+    </div>
+  );
+}
+
+const GOAL_OPTIONS = [
+  { value: "retirement", label: "RETIREMENT" },
+  { value: "house", label: "HOME PURCHASE" },
+  { value: "education", label: "EDUCATION" },
+  { value: "short_term", label: "SHORT-TERM" },
+  { value: "passive_income", label: "PASSIVE INCOME" },
+  { value: "wealth_building", label: "WEALTH BUILDING" },
+] as const;
+
+export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false }: { portfolios: PortfolioItem[]; isAdmin?: boolean }) {
   const router = useRouter();
   const [portfolios, setPortfolios] = useState(initialPortfolios);
   const [cashEdits, setCashEdits] = useState<Record<string, { cad: string; usd: string }>>({});
@@ -67,6 +99,13 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [savedGoal, setSavedGoal] = useState(false);
   const [savedTargets, setSavedTargets] = useState(false);
 
+  // Investor profile
+  const [profileAge, setProfileAge] = useState("");
+  const [profileGoals, setProfileGoals] = useState<string[]>([]);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
+  const [fxRate, setFxRate] = useState(1.35);
+
   const targetTotal = useMemo(
     () => tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
     [tickers, targets]
@@ -79,6 +118,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   };
 
   useEffect(() => { loadStatus(); }, []);
+
+  useEffect(() => {
+    fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings/investment").then(r => r.json()).then(data => {
@@ -94,6 +137,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
       }
       if (data.contribRoom) {
         setContribRoom(data.contribRoom);
+      }
+      if (data.investorProfile) {
+        setProfileAge(String(data.investorProfile.birthYear ?? ""));
+        setProfileGoals(data.investorProfile.goals ?? []);
       }
       const t: Record<string, { pct: string }> = {};
       for (const [tk, v] of Object.entries(data.targets ?? {})) {
@@ -112,7 +159,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         for (const item of (d.items ?? [])) {
           if (item.action !== "DEPOSIT") continue;
           const acctType = (item.portfolioAccountType ?? "").toUpperCase();
-          const amount = item.currency === "USD" ? item.amount * 1.35 : item.amount;
+          const amount = item.currency === "USD" ? item.amount * fxRate : item.amount;
           if (acctType === "TFSA") tfsa += amount;
           else if (acctType === "RRSP") rrsp += amount;
           else if (acctType === "FHSA") fhsa += amount;
@@ -223,13 +270,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-2">
       {/* Portfolio Management */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">
-          PORTFOLIO MANAGEMENT
-        </div>
-        <div className="border border-border bg-card p-4 space-y-3">
+      <Section title="PORTFOLIO MANAGEMENT" defaultOpen={true}>
+        <div className="space-y-3">
           {portfolios.length === 0 ? (
             <div className="text-muted-foreground text-xs text-center py-4">NO PORTFOLIOS</div>
           ) : (
@@ -254,16 +298,13 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             <AddPortfolioDialog onAdd={async () => { await refreshPortfolios(); router.refresh(); }} />
           </div>
         </div>
-      </div>
+      </Section>
 
       {/* Questrade Section */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">
-          QUESTRADE API — BROKER SYNC
-        </div>
-
+      <Section title="QUESTRADE API — BROKER SYNC" defaultOpen={true} badge={status?.hasToken ? "ACTIVE" : undefined}>
+        <div className="space-y-4">
         {/* How to get a token */}
-        <div className="border border-border bg-card p-4 mb-4 text-xs text-muted-foreground space-y-1">
+        <div className="border border-border bg-card p-4 text-xs text-muted-foreground space-y-1">
           <div className="text-foreground mb-2 tracking-wide">HOW TO GET A TOKEN:</div>
           <div>1. Login → My Account → App Hub</div>
           <div>2. Generate a new token under "Personal API Access"</div>
@@ -313,7 +354,9 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             {status?.hasToken ? "REPLACE TOKEN" : "REFRESH TOKEN"}
           </label>
           <input
-            type="password"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             placeholder="Paste Questrade refresh token..."
@@ -395,17 +438,64 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
         )}
 
         {!status && (
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mt-4">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
             <Loader size={12} className="animate-spin" />
             Loading...
           </div>
         )}
-      </div>
+        </div>
+      </Section>
+
+      {/* Investor Profile */}
+      <Section title="INVESTOR PROFILE — AI PERSONALIZATION" defaultOpen={profileGoals.length === 0} badge={profileGoals.length > 0 ? "SET" : undefined}>
+        <div className="text-[10px] text-muted-foreground">Set your birth year and investment goals for personalized AI briefings.</div>
+        <div>
+          <div className="text-[10px] tracking-wide text-muted-foreground mb-2">BIRTH YEAR</div>
+          <input
+            type="number" min="1940" max={new Date().getFullYear() - 18} placeholder="e.g. 1986"
+            value={profileAge}
+            onChange={e => setProfileAge(e.target.value)}
+            className="w-32 !py-1 text-xs"
+          />
+        </div>
+        <div>
+          <div className="text-[10px] tracking-wide text-muted-foreground mb-2">INVESTMENT GOALS (select all that apply)</div>
+          <div className="flex flex-wrap gap-2">
+            {GOAL_OPTIONS.map(g => (
+              <button
+                key={g.value}
+                onClick={() => setProfileGoals(prev =>
+                  prev.includes(g.value) ? prev.filter(x => x !== g.value) : [...prev, g.value]
+                )}
+                className={`btn-retro text-xs px-2 py-1 ${profileGoals.includes(g.value) ? "btn-retro-primary" : ""}`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          disabled={savingProfile || !profileAge || profileGoals.length === 0}
+          onClick={async () => {
+            setSavingProfile(true);
+            await fetch("/api/settings/investment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "investor_profile", birthYear: parseInt(profileAge), goals: profileGoals }),
+            });
+            setSavingProfile(false);
+            setSavedProfile(true);
+            setTimeout(() => setSavedProfile(false), 2000);
+          }}
+          className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40"
+        >
+          {savingProfile ? "SAVING..." : savedProfile ? "SAVED ✓" : "[ SAVE PROFILE ]"}
+        </button>
+      </Section>
 
       {/* Contribution Plan */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">CONTRIBUTION PLAN</div>
-        <div className="border border-border bg-card p-4 space-y-4">
+      <Section title="CONTRIBUTION PLAN" defaultOpen={false}>
+        <div className="space-y-4">
           <div>
             <div className="text-[10px] tracking-wide text-muted-foreground mb-2">FREQUENCY</div>
             <div className="flex gap-2">
@@ -445,12 +535,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             {savingPlan ? "SAVING..." : savedPlan ? "SAVED ✓" : "[ SAVE PLAN ]"}
           </button>
         </div>
-      </div>
+      </Section>
 
       {/* Income Goal */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">INCOME GOAL</div>
-        <div className="border border-border bg-card p-4 space-y-4">
+      <Section title="INCOME GOAL" defaultOpen={false}>
+        <div className="space-y-4">
           <div className="text-[10px] text-muted-foreground">Annual dividend income target</div>
           <div className="flex items-center gap-2">
             <input type="number" min="0" step="any"
@@ -479,13 +568,12 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             {savingGoal ? "SAVING..." : savedGoal ? "SAVED ✓" : "[ SAVE GOAL ]"}
           </button>
         </div>
-      </div>
+      </Section>
 
       {/* Ticker Targets */}
       {tickers.length > 0 && (
-        <div>
-          <div className="text-accent text-xs tracking-wide mb-4">TICKER TARGETS</div>
-          <div className="border border-border bg-card p-4 space-y-3">
+        <Section title="TICKER TARGETS" defaultOpen={false}>
+          <div className="space-y-3">
             {(() => {
               const total = tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
               const ok = Math.abs(total - 100) < 0.01;
@@ -538,13 +626,12 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
               {savingTargets ? "SAVING..." : savedTargets ? "SAVED ✓" : "[ SAVE ALL ]"}
             </button>
           </div>
-        </div>
+        </Section>
       )}
 
       {/* Contribution Room */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">CONTRIBUTION ROOM — {CURRENT_YEAR}</div>
-        <div className="border border-border bg-card p-4 space-y-5">
+      <Section title={`CONTRIBUTION ROOM — ${CURRENT_YEAR}`} defaultOpen={false}>
+        <div className="space-y-5">
           <div className="text-[10px] text-muted-foreground">Track TFSA / RRSP / FHSA room. Enter your carryover to see remaining space.</div>
 
           {/* TFSA */}
@@ -671,12 +758,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             {savingRoom ? "SAVING..." : savedRoom ? "SAVED ✓" : "[ SAVE ROOM ]"}
           </button>
         </div>
-      </div>
+      </Section>
 
       {/* Cash Balances */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">CASH BALANCES</div>
-        <div className="border border-border bg-card p-4 space-y-4">
+      <Section title="CASH BALANCES" defaultOpen={false}>
+        <div className="space-y-4">
           <div className="text-[10px] text-muted-foreground">Current cash per account (CAD + USD)</div>
           {portfolios.map((p) => {
             const edit = cashEdits[p.id];
@@ -734,26 +820,32 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             <div className="text-muted-foreground text-xs text-center py-4">NO PORTFOLIOS</div>
           )}
         </div>
-      </div>
+      </Section>
+
+      {/* Admin */}
+      {isAdmin && (
+        <Section title="ADMIN" defaultOpen={false} badge="ADMIN">
+          <div className="space-y-3">
+            <div className="text-[10px] text-muted-foreground">Admin-only tools. Not visible to regular users.</div>
+            <a
+              href="/admin"
+              className="btn-retro btn-retro-primary w-full py-2 text-xs text-center block"
+            >
+              [ USER MANAGEMENT ]
+            </a>
+          </div>
+        </Section>
+      )}
 
       {/* App Info */}
-      <div>
-        <div className="text-accent text-xs tracking-wide mb-4">APP INFO</div>
-        <div className="border border-border bg-card p-4 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between">
-            <span>VERSION</span>
-            <span>2.0.0</span>
-          </div>
-          <div className="flex justify-between">
-            <span>MARKET DATA</span>
-            <span>YAHOO FINANCE</span>
-          </div>
-          <div className="flex justify-between">
-            <span>BROKER SYNC</span>
-            <span>QUESTRADE API</span>
-          </div>
+      <Section title="APP INFO" defaultOpen={false}>
+        <div className="text-xs text-muted-foreground space-y-1">
+          <div className="flex justify-between"><span>VERSION</span><span>2.0.0</span></div>
+          <div className="flex justify-between"><span>MARKET DATA</span><span>YAHOO FINANCE</span></div>
+          <div className="flex justify-between"><span>BROKER SYNC</span><span>QUESTRADE API</span></div>
+          <div className="flex justify-between"><span>AI</span><span>CODEX CLI (OAUTH)</span></div>
         </div>
-      </div>
+      </Section>
     </div>
   );
 }

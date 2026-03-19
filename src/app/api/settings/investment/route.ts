@@ -25,8 +25,13 @@ const contribRoomSchema = z.object({
   rrspLimit: z.number().finite().min(0).max(500_000),
   fhsaCarryover: z.number().finite().min(0).max(100_000),
 });
+const investorProfileSchema = z.object({
+  type: z.literal("investor_profile"),
+  birthYear: z.number().int().min(1940).max(new Date().getFullYear() - 18),
+  goals: z.array(z.enum(["retirement", "house", "education", "short_term", "passive_income", "wealth_building"])).min(1).max(6),
+});
 const settingsSchema = z.discriminatedUnion("type", [
-  contributionSchema, targetSchema, incomeGoalSchema, contribRoomSchema,
+  contributionSchema, targetSchema, incomeGoalSchema, contribRoomSchema, investorProfileSchema,
 ]);
 
 export const dynamic = "force-dynamic";
@@ -63,6 +68,9 @@ export async function GET() {
   const contribRoomSetting = get("investment:contrib_room");
   const contribRoom = contribRoomSetting ? JSON.parse(contribRoomSetting.value) : null;
 
+  const investorProfileSetting = get("investment:investor_profile");
+  const investorProfile = investorProfileSetting ? JSON.parse(investorProfileSetting.value) : null;
+
   const targets: Record<string, { pct: number }> = {};
   for (const s of settings) {
     const targetPrefix = userKey(uid, "investment:target:");
@@ -76,6 +84,7 @@ export async function GET() {
     contribution,
     incomeGoal,
     contribRoom,
+    investorProfile,
     targets,
     tickers: holdings.map(h => h.ticker),
   });
@@ -123,6 +132,14 @@ export async function POST(req: Request) {
       where: { key },
       update: { value: JSON.stringify({ tfsaCarryover, rrspLimit, fhsaCarryover }) },
       create: { key, value: JSON.stringify({ tfsaCarryover, rrspLimit, fhsaCarryover }) },
+    });
+  } else if (body.type === "investor_profile") {
+    const { birthYear, goals } = body;
+    const key = userKey(uid, "investment:investor_profile");
+    await prisma.setting.upsert({
+      where: { key },
+      update: { value: JSON.stringify({ birthYear, goals }) },
+      create: { key, value: JSON.stringify({ birthYear, goals }) },
     });
   }
   return NextResponse.json({ ok: true });

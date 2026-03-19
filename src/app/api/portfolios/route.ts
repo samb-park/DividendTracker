@@ -9,11 +9,7 @@ export async function GET() {
   const portfolios = await prisma.portfolio.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: "asc" },
-    include: {
-      holdings: {
-        include: { transactions: true },
-      },
-    },
+    include: { holdings: { include: { transactions: true } } },
   });
   return NextResponse.json(portfolios);
 }

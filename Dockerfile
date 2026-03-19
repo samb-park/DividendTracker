@@ -25,7 +25,7 @@ RUN npm run build
 # Production stage
 FROM node:22-slim AS runner
 
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -46,6 +46,9 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+
+# Install codex CLI (glibc variant for Debian-based image)
+RUN npm install -g @openai/codex@latest
 
 # Create data directory and npm cache directory
 RUN mkdir -p /app/data /app/data/.npm && chown -R nextjs:nodejs /app/data

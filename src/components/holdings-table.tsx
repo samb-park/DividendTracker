@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { AddHoldingDialog } from "./add-holding-dialog";
 import { HoldingDetailPanel } from "./holding-detail-panel";
+import { mergeHoldings } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -53,8 +54,9 @@ export interface HoldingRow {
 }
 
 function calcHolding(holding: Holding): Omit<HoldingRow, "price" | "marketValue" | "unrealizedPnL" | "unrealizedPnLPct"> {
-  const buys = holding.transactions.filter((t) => t.action === "BUY");
-  const sells = holding.transactions.filter((t) => t.action === "SELL");
+  const txns = holding.transactions ?? [];
+  const buys = txns.filter((t) => t.action === "BUY");
+  const sells = txns.filter((t) => t.action === "SELL");
   const totalBought = buys.reduce((s, t) => s + parseFloat(t.quantity), 0);
   const totalSold = sells.reduce((s, t) => s + parseFloat(t.quantity), 0);
   const totalCost = buys.reduce(
@@ -86,6 +88,7 @@ export function HoldingsTable({
   onDetailOpen,
   readOnly = false,
   displayCurrency,
+  allPortfolios,
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
@@ -93,6 +96,7 @@ export function HoldingsTable({
   onDetailOpen?: (open: boolean) => void;
   readOnly?: boolean;
   displayCurrency?: "USD" | "CAD";
+  allPortfolios?: { id: string; name: string }[];
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
@@ -190,12 +194,17 @@ export function HoldingsTable({
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/portfolios`);
-    const all = await res.json();
-    const portfolio = (all as { id: string; holdings: Holding[] }[]).find(p => p.id === portfolioId);
-    if (portfolio) {
-      setHoldings(portfolio.holdings);
-      await fetchPrices(portfolio.holdings);
+    const all = await res.json() as { id: string; holdings: Holding[] }[];
+    let updated: Holding[];
+    if (portfolioId === "all") {
+      updated = mergeHoldings(all);
+    } else {
+      const portfolio = all.find(p => p.id === portfolioId);
+      if (!portfolio) return;
+      updated = portfolio.holdings;
     }
+    setHoldings(updated);
+    await fetchPrices(updated);
   }, [portfolioId, fetchPrices]);
 
   useEffect(() => {
@@ -213,7 +222,7 @@ export function HoldingsTable({
         const unrealizedPnLPct = base.costBasis > 0 ? (unrealizedPnL / base.costBasis) * 100 : 0;
         return { ...base, price, marketValue, unrealizedPnL, unrealizedPnLPct };
       })
-      .filter((r) => r.shares > 0 || (r.holding.quantity === null && r.holding.transactions.length === 0)),
+      .filter((r) => r.shares > 0 || (r.holding.quantity === null && (r.holding.transactions ?? []).length === 0)),
     [holdings, prices]
   );
 
@@ -328,11 +337,14 @@ export function HoldingsTable({
   return (
     <div>
       <div>
-        {!readOnly && (
-          <div className="flex items-center justify-end mb-3">
-            <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />
-          </div>
-        )}
+        <div className="flex items-center justify-between mb-3">
+          {rows.length > 0 ? (
+            <span className="text-[10px] text-muted-foreground">
+              {rows.length} POSITION{rows.length !== 1 ? "S" : ""}
+            </span>
+          ) : <span />}
+          {!readOnly && <AddHoldingDialog portfolioId={portfolioId} onAdd={refresh} />}
+        </div>
         {rows.length === 0 ? (
           <div className="text-muted-foreground text-xs py-8 text-center border border-dashed border-border">
             NO POSITIONS — ADD A STOCK TO BEGIN
@@ -355,7 +367,7 @@ export function HoldingsTable({
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
                       <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
-                      {row.holding.name && (
+                      {row.holding.name && row.holding.name !== row.holding.ticker && (
                         <div className="text-muted-foreground text-[10px] mt-0.5 truncate" title={row.holding.name}>{row.holding.name}</div>
                       )}
                     </div>
@@ -379,6 +391,9 @@ export function HoldingsTable({
                   <div className="flex items-center justify-between text-[11px] gap-2">
                     <span className="text-muted-foreground tabular-nums">
                       {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
+                      <span className="text-muted-foreground/50 ml-1">
+                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}sh
+                      </span>
                     </span>
                     <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
                       {row.marketValue > 0
@@ -587,6 +602,7 @@ export function HoldingsTable({
           allocAmount={allocMap[selectedRow.holding.ticker] ?? 0}
           contribCAD={contribCAD}
           fxRateForAlloc={fxRate}
+          allPortfolios={allPortfolios}
         />
       )}
     </div>

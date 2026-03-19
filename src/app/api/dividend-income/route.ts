@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import YahooFinance from "yahoo-finance2";
+import { yahooFinance } from "@/lib/price";
+import { detectFrequency } from "@/lib/dividend-utils";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
-const yahooFinance = new YahooFinance();
-
-// 1-hour in-memory cache (shared with calendar route conceptually)
+// 1-hour in-memory cache
 const cache = new Map<string, { data: DivData; fetchedAt: number }>();
 const TTL = 60 * 60 * 1000;
 
@@ -27,20 +26,6 @@ interface DividendItem {
   isCanadianEligible?: boolean; // CAD dividend in non-registered account (may qualify for DTC)
 }
 
-function detectFrequency(dividends: Array<{ date: string | Date; amount: number }>): number {
-  if (dividends.length < 2) return 4;
-  const dates = dividends.map((d) => new Date(d.date).getTime());
-  const spacings: number[] = [];
-  for (let i = 1; i < dates.length; i++) {
-    const monthDiff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24 * 30.5);
-    spacings.push(monthDiff);
-  }
-  const avg = spacings.reduce((a, b) => a + b, 0) / spacings.length;
-  if (avg <= 1.5) return 12;
-  if (avg <= 4) return 4;
-  if (avg <= 8) return 2;
-  return 1;
-}
 
 // Heuristic: US-listed tickers have no exchange suffix (e.g. AAPL, VTI)
 // Canadian tickers use .TO, .V, etc. Foreign ADRs in USD may have different rates.

@@ -30,21 +30,52 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
-  const { holdingId, action, date, quantity, price, commission, notes } = body;
-  if (!holdingId || !action || !date || !quantity || !price) {
+  const { action, date, quantity, price, commission, notes } = body;
+  if (!action || !date || !quantity || !price) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
   if (!["BUY", "SELL", "DIVIDEND"].includes(action as string)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  // Verify holding belongs to current user
-  const holding = await prisma.holding.findUnique({
-    where: { id: holdingId as string },
-    select: { currency: true, portfolio: { select: { userId: true } } },
-  });
-  if (!holding || holding.portfolio.userId !== session.user.id) {
-    return NextResponse.json({ error: "Holding not found" }, { status: 404 });
+  let resolvedHoldingId: string;
+  let holdingCurrency: "USD" | "CAD";
+
+  if (body.holdingId) {
+    // Existing flow: holdingId provided directly
+    const holding = await prisma.holding.findUnique({
+      where: { id: body.holdingId as string },
+      select: { id: true, currency: true, portfolio: { select: { userId: true } } },
+    });
+    if (!holding || holding.portfolio.userId !== session.user.id) {
+      return NextResponse.json({ error: "Holding not found" }, { status: 404 });
+    }
+    resolvedHoldingId = holding.id;
+    holdingCurrency = holding.currency as "USD" | "CAD";
+  } else if (body.portfolioId && body.ticker) {
+    // New flow: portfolioId + ticker — verify portfolio ownership, upsert holding
+    const ticker = String(body.ticker).toUpperCase().trim();
+    if (!ticker) {
+      return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+    }
+    const portfolio = await prisma.portfolio.findUnique({
+      where: { id: body.portfolioId as string },
+      select: { userId: true },
+    });
+    if (!portfolio || portfolio.userId !== session.user.id) {
+      return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
+    }
+    const currency: "USD" | "CAD" = ticker.endsWith(".TO") ? "CAD" : "USD";
+    const upserted = await prisma.holding.upsert({
+      where: { portfolioId_ticker: { portfolioId: body.portfolioId as string, ticker } },
+      update: {},
+      create: { portfolioId: body.portfolioId as string, ticker, currency },
+      select: { id: true, currency: true },
+    });
+    resolvedHoldingId = upserted.id;
+    holdingCurrency = upserted.currency as "USD" | "CAD";
+  } else {
+    return NextResponse.json({ error: "Must provide holdingId or portfolioId + ticker" }, { status: 400 });
   }
 
   const qty = Number(quantity);
@@ -68,14 +99,14 @@ export async function POST(req: NextRequest) {
   }
   // For USD holdings, capture the CAD/USD rate at time of entry for CRA reporting
   let fxRateCAD: number | null = null;
-  if (holding.currency === "USD") {
+  if (holdingCurrency === "USD") {
     const fx = await getFxRate().catch(() => null);
     fxRateCAD = fx?.rate ?? null;
   }
 
   const tx = await prisma.transaction.create({
     data: {
-      holdingId: holdingId as string,
+      holdingId: resolvedHoldingId,
       action: action as "BUY" | "SELL" | "DIVIDEND",
       date: txDate,
       quantity: qty,

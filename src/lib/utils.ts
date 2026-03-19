@@ -20,10 +20,10 @@ export function mergeHoldings(portfolios: { holdings: Holding[] }[]): Holding[] 
           ...existing,
           quantity: totalQty.toString(),
           avgCost: weightedAvgCost.toString(),
-          transactions: [...existing.transactions, ...h.transactions],
+          transactions: [...(existing.transactions ?? []), ...(h.transactions ?? [])],
         });
       } else {
-        map.set(h.ticker, { ...h, transactions: [...h.transactions] });
+        map.set(h.ticker, { ...h, transactions: [...(h.transactions ?? [])] });
       }
     }
   }

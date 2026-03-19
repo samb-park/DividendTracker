@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import YahooFinance from "yahoo-finance2";
+import { yahooFinance as yf } from "@/lib/price";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
-
-const yf = new YahooFinance();
 
 // 1-hour cache
 const cache = new Map<string, { data: YearlyDiv[]; fetchedAt: number }>();
@@ -65,7 +63,8 @@ async function getDividendHistory(ticker: string): Promise<YearlyDiv[]> {
 function computeStreak(history: YearlyDiv[]): number {
   let streak = 0;
   for (let i = history.length - 1; i > 0; i--) {
-    if (history[i].annualDPS > history[i - 1].annualDPS) streak++;
+    // >= counts flat years as maintained (not a cut); only a cut breaks the streak
+    if (history[i].annualDPS >= history[i - 1].annualDPS) streak++;
     else break;
   }
   return streak;
@@ -81,30 +80,40 @@ export async function GET() {
   });
 
   // Aggregate shares per ticker (multiple accounts may hold the same ticker)
+  // Currency: use the first seen value per ticker (prefer CAD for .TO tickers, USD otherwise)
   const sharesMap = new Map<string, { shares: number; currency: string }>();
   for (const h of holdings) {
     const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
     const existing = sharesMap.get(h.ticker);
-    sharesMap.set(h.ticker, { shares: (existing?.shares ?? 0) + qty, currency: h.currency });
+    sharesMap.set(h.ticker, {
+      shares: (existing?.shares ?? 0) + qty,
+      currency: existing?.currency ?? h.currency,
+    });
   }
 
   const tickers = [...sharesMap.keys()];
 
-  const results = await Promise.all(
-    tickers.map(async (ticker) => {
-      const history = await getDividendHistory(ticker);
-      // Calculate YoY growth rates
-      const withGrowth = history.map((row, i) => {
-        const prev = history[i - 1];
-        const growthPct = prev && prev.annualDPS > 0
-          ? ((row.annualDPS - prev.annualDPS) / prev.annualDPS) * 100
-          : null;
-        return { ...row, growthPct };
-      });
-      const info = sharesMap.get(ticker)!;
-      return { ticker, history: withGrowth, streak: computeStreak(history), shares: info.shares, currency: info.currency };
-    })
-  );
+  // Process in batches of 8 to avoid fanning out too many concurrent Yahoo Finance calls
+  const BATCH = 8;
+  const results: Array<{ ticker: string; history: Array<{ year: number; annualDPS: number; growthPct: number | null }>; streak: number; shares: number; currency: string }> = [];
+  for (let i = 0; i < tickers.length; i += BATCH) {
+    const batch = tickers.slice(i, i + BATCH);
+    const batchResults = await Promise.all(
+      batch.map(async (ticker) => {
+        const history = await getDividendHistory(ticker);
+        const withGrowth = history.map((row, idx) => {
+          const prev = history[idx - 1];
+          const growthPct = prev && prev.annualDPS > 0
+            ? ((row.annualDPS - prev.annualDPS) / prev.annualDPS) * 100
+            : null;
+          return { ...row, growthPct };
+        });
+        const info = sharesMap.get(ticker)!;
+        return { ticker, history: withGrowth, streak: computeStreak(history), shares: info.shares, currency: info.currency };
+      })
+    );
+    results.push(...batchResults);
+  }
 
   // Filter to tickers that actually have dividend history
   const filtered = results.filter((r) => r.history.length > 0);

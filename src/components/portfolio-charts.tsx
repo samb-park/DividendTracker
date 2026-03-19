@@ -253,7 +253,7 @@ export function PortfolioCharts({
   if (holdings.length === 0) return null;
 
   return (
-    <div className="mb-6 space-y-4">
+    <div className="space-y-4">
       {/* Total Equity Chart */}
       {holdingsWithTransactions && holdingsWithTransactions.length > 0 && (
         <div className="border border-border p-4 bg-card">
@@ -292,7 +292,7 @@ export function PortfolioCharts({
           ) : equityData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={lineChartHeight}>
-                <LineChart data={equityData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                <LineChart data={equityData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="date"
@@ -304,9 +304,10 @@ export function PortfolioCharts({
                     height={16}
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
+                    width={42}
+                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
                     axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickFormatter={(v) => `${currencySymbol}${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                    tickFormatter={(v) => `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
                   />
                   <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
                   <Line

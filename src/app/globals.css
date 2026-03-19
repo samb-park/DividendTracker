@@ -50,6 +50,7 @@ body {
   font-size: 13px;
   line-height: 1.6;
   overscroll-behavior: none;
+  overflow-x: hidden;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -177,6 +178,7 @@ input:focus, select:focus {
 .app-shell-main {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 

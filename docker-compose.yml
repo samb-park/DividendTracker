@@ -15,6 +15,7 @@ services:
       HOME: /app/data
     volumes:
       - app-data:/app/data
+      - /home/spark/.codex:/app/data/.codex:ro
     networks:
       - default
       - homelab

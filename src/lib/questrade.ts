@@ -62,6 +62,8 @@ export interface QtBalance {
   totalEquity: number;
 }
 
+const QT_TIMEOUT_MS = 20000;
+
 export async function getBalances(
   apiServer: string,
   accessToken: string,
@@ -69,6 +71,7 @@ export async function getBalances(
 ): Promise<QtBalance[]> {
   const res = await fetch(`${apiServer}v1/accounts/${accountNumber}/balances`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(QT_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`getBalances failed: ${res.status}`);
   const data = await res.json();
@@ -77,10 +80,24 @@ export async function getBalances(
 
 export async function exchangeRefreshToken(refreshToken: string): Promise<QtTokenResponse> {
   const url = `https://login.questrade.com/oauth2/token?grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`;
-  const res = await fetch(url, { method: "POST" });
+  const res = await fetch(url, { method: "POST", signal: AbortSignal.timeout(QT_TIMEOUT_MS) });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Questrade auth failed: ${res.status} ${text}`);
+    let message = `Questrade auth failed (${res.status})`;
+    try {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        if (json.error_description) message = json.error_description;
+        else if (json.message) message = json.message;
+        else if (json.error) message = `${json.error}${json.error_description ? ": " + json.error_description : ""}`;
+        else if (text) message += ` — ${text.slice(0, 200)}`;
+      } catch {
+        if (text) message += ` — ${text.slice(0, 200)}`;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
   }
   return res.json();
 }
@@ -88,6 +105,7 @@ export async function exchangeRefreshToken(refreshToken: string): Promise<QtToke
 export async function getAccounts(apiServer: string, accessToken: string): Promise<QtAccount[]> {
   const res = await fetch(`${apiServer}v1/accounts`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(QT_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`getAccounts failed: ${res.status}`);
   const data = await res.json();
@@ -101,6 +119,7 @@ export async function getPositions(
 ): Promise<QtPosition[]> {
   const res = await fetch(`${apiServer}v1/accounts/${accountNumber}/positions`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(QT_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`getPositions failed: ${res.status}`);
   const data = await res.json();
@@ -118,7 +137,7 @@ export async function getActivities(
   const end = endTime.toISOString();
   const res = await fetch(
     `${apiServer}v1/accounts/${accountNumber}/activities?startTime=${start}&endTime=${end}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(QT_TIMEOUT_MS) }
   );
   if (!res.ok) throw new Error(`getActivities failed: ${res.status}`);
   const data = await res.json();

@@ -8,7 +8,7 @@ import type { Portfolio, HoldingSummary } from "@/lib/types";
 export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number; }) {
   const [portfolios] = useState(initialPortfolios);
   const [activeTab, setActiveTab] = useState<"all" | string>("all");
-  const [_holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
+  const [, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
   const [fxRate, setFxRate] = useState(initialFxRate);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -114,6 +114,7 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
           onDetailOpen={setDetailOpen}
           readOnly={isAllMode}
           displayCurrency={displayCurrency}
+          allPortfolios={isAllMode ? portfolios.map((p) => ({ id: p.id, name: p.name })) : undefined}
         />
       ) : (
         <div className="text-muted-foreground text-xs py-12 text-center border border-dashed border-border">

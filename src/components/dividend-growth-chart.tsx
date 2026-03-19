@@ -157,12 +157,12 @@ export function DividendGrowthChart() {
           {(() => {
             const streak = isPortfolio ? null : data.find(d => d.ticker === selected)?.streak ?? null;
             return (
-              <div className="grid grid-cols-4 gap-px bg-border border border-border mb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border mb-5">
                 <div className="bg-card p-2">
-                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
-                    {isPortfolio ? "ANNUAL DIV (CAD)" : "LATEST DPS"}
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1 truncate">
+                    {isPortfolio ? "ANNUAL DIV" : "LATEST DPS"}
                   </div>
-                  <div className="text-sm font-medium tabular-nums text-primary">
+                  <div className="text-sm font-medium tabular-nums text-primary truncate">
                     {isPortfolio ? "C$" : "$"}{fmt(currentHistory[currentHistory.length - 1]?.annualDPS ?? 0)}
                   </div>
                 </div>
@@ -179,7 +179,7 @@ export function DividendGrowthChart() {
                   </div>
                 </div>
                 <div className="bg-card p-2">
-                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">YRS OF DATA</div>
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">YRS DATA</div>
                   <div className="text-sm font-medium tabular-nums">{currentHistory.length}</div>
                 </div>
               </div>

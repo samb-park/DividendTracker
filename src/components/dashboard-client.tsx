@@ -1,14 +1,48 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
 import { PortfolioCharts } from "./portfolio-charts";
 import { AllocationBars } from "./allocation-bars";
 import { DividendIncomeChart } from "./dividend-income-chart";
 import { PerformanceChart } from "./performance-chart";
+import { AiPanel } from "./ai-panel";
 import { SkeletonBlock } from "./skeleton";
 import { fmt, mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
+
+function ChartTabs({
+  tabs,
+  performanceContent,
+  equityContent,
+}: {
+  tabs: readonly ["PERFORMANCE", "EQUITY"];
+  performanceContent: React.ReactNode;
+  equityContent: React.ReactNode | null;
+}) {
+  const [tab, setTab] = useState<"PERFORMANCE" | "EQUITY">("PERFORMANCE");
+  return (
+    <div className="mb-6 w-full overflow-hidden">
+      <div className="flex border-b border-border">
+        {tabs.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`btn-retro text-[10px] px-4 py-3 border-0 border-r border-b-0 border-border ${tab === t ? "btn-retro-primary" : ""}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <div className="w-full overflow-hidden">
+        {tab === "PERFORMANCE" && performanceContent}
+        {tab === "EQUITY" && (equityContent ?? (
+          <div className="border border-border bg-card p-8 text-center text-xs text-muted-foreground">NO DATA</div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
   const [portfolios] = useState(initialPortfolios);
@@ -289,12 +323,12 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               ({todayPnL >= 0 ? "+" : ""}{todayPnLPct.toFixed(2)}%)
             </div>
           </div>
-          <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors" onClick={() => setDivShowMonthly((v) => !v)} role="button" aria-label={`Toggle between annual and monthly dividend view. Currently showing ${divShowMonthly ? "monthly" : "annual"}`}>
+          <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors border-l-2 border-primary/40" onClick={() => setDivShowMonthly((v) => !v)} role="button" aria-label={`Toggle between annual and monthly dividend view. Currently showing ${divShowMonthly ? "monthly" : "annual"}`}>
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
               {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
               <span className="text-muted-foreground text-[9px] ml-1">▾</span>
             </div>
-            <div className="text-xs font-medium tabular-nums truncate text-primary">
+            <div className="text-sm font-bold tabular-nums truncate text-primary">
               {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}
             </div>
             {divAnnual !== null && holdingsValue > 0 && (
@@ -353,19 +387,22 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         );
       })()}
 
-      {/* CAGR / MDD Performance chart (snapshot-based) */}
-      <PerformanceChart />
-
-      {/* Total Equity line chart */}
-      {holdingSummaries.length > 0 && (
-        <PortfolioCharts
-          holdings={holdingSummaries}
-          holdingsWithTransactions={allHoldings}
-          fxRate={fxRate}
-          totalCashCAD={totalCashCAD}
-          displayCurrency={displayCurrency}
-        />
-      )}
+      {/* Charts: PERFORMANCE | EQUITY tabs */}
+      <ChartTabs
+        tabs={["PERFORMANCE", "EQUITY"] as const}
+        performanceContent={<PerformanceChart />}
+        equityContent={
+          holdingSummaries.length > 0 ? (
+            <PortfolioCharts
+              holdings={holdingSummaries}
+              holdingsWithTransactions={allHoldings}
+              fxRate={fxRate}
+              totalCashCAD={totalCashCAD}
+              displayCurrency={displayCurrency}
+            />
+          ) : null
+        }
+      />
 
       {/* Allocation + Dividend Distribution horizontal bars */}
       {holdingSummaries.length > 0 && (
@@ -383,6 +420,9 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
         displayCurrency={displayCurrency}
         onCurrentYearSummary={onDivSummary}
       />
+
+      {/* AI Assistant Panel */}
+      <AiPanel />
 
       {/* Hidden table just to fetch prices and compute summaries */}
       <div style={{ position: "absolute", visibility: "hidden", height: 0, overflow: "hidden" }}>

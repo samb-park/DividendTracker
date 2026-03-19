@@ -65,6 +65,7 @@ model Transaction {
   createdAt  DateTime          @default(now())
 
   @@index([holdingId, action, date])
+  @@unique([holdingId, action, date, quantity, price])
 }
 
 model CashTransaction {
@@ -79,7 +80,7 @@ model CashTransaction {
   createdAt   DateTime   @default(now())
 
   @@index([portfolioId, date])
-  @@index([portfolioId, action, date, amount, currency])
+  @@unique([portfolioId, action, date, amount, currency])
 }
 
 enum TransactionAction {

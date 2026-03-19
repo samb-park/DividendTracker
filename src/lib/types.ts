@@ -14,7 +14,7 @@ export interface Holding {
   currency: "USD" | "CAD";
   quantity: string | null;
   avgCost: string | null;
-  transactions: Transaction[];
+  transactions?: Transaction[];
 }
 
 export interface Portfolio {
