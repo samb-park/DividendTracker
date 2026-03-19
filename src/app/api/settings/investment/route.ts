@@ -1,6 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+const contributionSchema = z.object({
+  type: z.literal("contribution"),
+  frequency: z.enum(["weekly", "biweekly", "monthly"]),
+  amount: z.number().finite().positive().max(1_000_000),
+  currency: z.enum(["CAD", "USD"]),
+});
+const targetSchema = z.object({
+  type: z.literal("target"),
+  ticker: z.string().regex(/^[A-Z0-9.^-]{1,15}$/i),
+  pct: z.number().finite().min(0).max(100),
+});
+const incomeGoalSchema = z.object({
+  type: z.literal("income_goal"),
+  annualTarget: z.number().finite().positive().max(10_000_000),
+  currency: z.enum(["CAD", "USD"]),
+});
+const contribRoomSchema = z.object({
+  type: z.literal("contrib_room"),
+  tfsaCarryover: z.number().finite().min(0).max(500_000),
+  rrspLimit: z.number().finite().min(0).max(500_000),
+  fhsaCarryover: z.number().finite().min(0).max(100_000),
+});
+const settingsSchema = z.discriminatedUnion("type", [
+  contributionSchema, targetSchema, incomeGoalSchema, contribRoomSchema,
+]);
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +86,11 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const uid = session.user.id;
-  const body = await req.json();
+  const parsed = settingsSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const body = parsed.data;
 
   if (body.type === "contribution") {
     const { frequency, amount, currency } = body;
@@ -71,9 +102,6 @@ export async function POST(req: Request) {
     });
   } else if (body.type === "target") {
     const { ticker, pct } = body;
-    if (!ticker || !/^[A-Z0-9.^-]{1,15}$/i.test(ticker)) {
-      return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
-    }
     const key = userKey(uid, `investment:target:${ticker.toUpperCase()}`);
     await prisma.setting.upsert({
       where: { key },

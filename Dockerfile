@@ -39,6 +39,8 @@ RUN adduser --system --uid 1001 --home /app/data nextjs
 # Copy built application
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
+# Remove any .env files that Next.js may have copied into the standalone bundle
+RUN find . -maxdepth 1 -name ".env*" -delete
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma

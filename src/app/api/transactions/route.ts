@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       quantity: qty,
       price: prc,
       commission: com,
-      notes: notes ? String(notes) : null,
+      notes: notes ? String(notes).slice(0, 500) : null,
     },
   });
   return NextResponse.json(tx);

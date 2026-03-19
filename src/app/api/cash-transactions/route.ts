@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       date: txDate,
       amount: amt,
       currency: currency as "CAD" | "USD",
-      notes: notes ? String(notes) : null,
+      notes: notes ? String(notes).slice(0, 500) : null,
     },
   });
   return NextResponse.json(tx);

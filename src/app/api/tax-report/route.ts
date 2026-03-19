@@ -39,8 +39,13 @@ export async function GET(req: NextRequest) {
     ]),
   ];
 
+  // Sanitize cells: escape quotes and strip leading formula chars (=, +, -, @) to prevent CSV injection
+  const sanitize = (cell: string) => {
+    const s = String(cell).replace(/"/g, '""');
+    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  };
   const csv = rows
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .map((row) => row.map((cell) => `"${sanitize(cell)}"`).join(","))
     .join("\n");
 
   return new NextResponse(csv, {

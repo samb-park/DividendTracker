@@ -22,6 +22,7 @@ interface YearRow {
 interface TickerData {
   ticker: string;
   history: YearRow[];
+  streak: number;
   shares: number;
   currency: string;
 }
@@ -153,26 +154,37 @@ export function DividendGrowthChart() {
       {currentHistory.length > 0 && (
         <>
           {/* Summary row */}
-          <div className="grid grid-cols-3 gap-px bg-border border border-border mb-5">
-            <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
-                {isPortfolio ? "ANNUAL DIV (CAD)" : "LATEST DPS"}
+          {(() => {
+            const streak = isPortfolio ? null : data.find(d => d.ticker === selected)?.streak ?? null;
+            return (
+              <div className="grid grid-cols-4 gap-px bg-border border border-border mb-5">
+                <div className="bg-card p-2">
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
+                    {isPortfolio ? "ANNUAL DIV (CAD)" : "LATEST DPS"}
+                  </div>
+                  <div className="text-sm font-medium tabular-nums text-primary">
+                    {isPortfolio ? "C$" : "$"}{fmt(currentHistory[currentHistory.length - 1]?.annualDPS ?? 0)}
+                  </div>
+                </div>
+                <div className="bg-card p-2">
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">DIV CAGR</div>
+                  <div className={`text-sm font-medium tabular-nums ${cagr !== null && cagr >= 0 ? "text-positive" : "text-negative"}`}>
+                    {cagr !== null ? `${cagr >= 0 ? "+" : ""}${fmt(cagr)}%` : "—"}
+                  </div>
+                </div>
+                <div className="bg-card p-2">
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">STREAK</div>
+                  <div className={`text-sm font-medium tabular-nums ${streak !== null && streak > 0 ? "text-positive" : "text-muted-foreground"}`}>
+                    {streak !== null ? (streak > 0 ? `${streak}Y ↑` : "—") : "—"}
+                  </div>
+                </div>
+                <div className="bg-card p-2">
+                  <div className="text-[10px] text-muted-foreground tracking-wide mb-1">YRS OF DATA</div>
+                  <div className="text-sm font-medium tabular-nums">{currentHistory.length}</div>
+                </div>
               </div>
-              <div className="text-sm font-medium tabular-nums text-primary">
-                {isPortfolio ? "C$" : "$"}{fmt(currentHistory[currentHistory.length - 1]?.annualDPS ?? 0)}
-              </div>
-            </div>
-            <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">DIV CAGR</div>
-              <div className={`text-sm font-medium tabular-nums ${cagr !== null && cagr >= 0 ? "text-positive" : "text-negative"}`}>
-                {cagr !== null ? `${cagr >= 0 ? "+" : ""}${fmt(cagr)}%` : "—"}
-              </div>
-            </div>
-            <div className="bg-card p-2">
-              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">YRS OF DATA</div>
-              <div className="text-sm font-medium tabular-nums">{currentHistory.length}</div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Chart */}
           <div className="h-52">

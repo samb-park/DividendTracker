@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+const patchSchema = z.object({
+  userId: z.string().min(1),
+  approved: z.boolean().optional(),
+  role: z.enum(["ADMIN", "USER"]).optional(),
+});
 
 async function requireAdmin() {
   const session = await auth();
@@ -36,8 +43,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { userId, approved, role } = await req.json();
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const parsed = patchSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { userId, approved, role } = parsed.data;
 
   // Prevent admin from removing their own admin role
   if (userId === session.user.id && role === "USER") {

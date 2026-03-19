@@ -63,12 +63,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // On sign-in, user is present — fetch approved/role from DB and store in token
       if (user?.id) {
         token.userId = user.id;
+        token.validatedAt = Date.now();
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           select: { approved: true, role: true },
         });
         token.approved = dbUser?.approved ?? false;
         token.role = dbUser?.role ?? "USER";
+      } else if (token.userId) {
+        // Re-validate approved/role from DB every 15 minutes so revocations take effect promptly
+        const age = Date.now() - ((token.validatedAt as number) ?? 0);
+        if (age > 15 * 60 * 1000) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.userId as string },
+            select: { approved: true, role: true },
+          });
+          token.approved = dbUser?.approved ?? false;
+          token.role = dbUser?.role ?? "USER";
+          token.validatedAt = Date.now();
+        }
       }
       return token;
     },
