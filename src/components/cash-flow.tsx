@@ -141,12 +141,17 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
   const handleAdd = async () => {
     if (!form.portfolioId || !form.amount || !form.date) return;
     setSaving(true);
-    await fetch("/api/cash-transactions", {
+    const res = await fetch("/api/cash-transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
     });
     setSaving(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(`Failed to save: ${body?.error ?? res.statusText}`);
+      return;
+    }
     setShowForm(false);
     setForm((f) => ({ ...f, amount: "", notes: "" }));
     fetchData(year);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,11 @@ function rangeToStartDate(range: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const range = searchParams.get("range") ?? "1y";
   const ticker = searchParams.get("ticker") ?? "SPY";

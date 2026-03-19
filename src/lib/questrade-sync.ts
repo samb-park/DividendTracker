@@ -54,9 +54,13 @@ function mapCashAction(action: string, type: string, netAmount: number): "DEPOSI
 }
 
 /** Core Questrade sync logic — callable from both the UI route and the cron job */
-export async function runQuestradeSync(): Promise<SyncResult> {
-  const tokenSetting = await prisma.setting.findUnique({ where: { key: "qt_refresh_token" } });
-  const serverSetting = await prisma.setting.findUnique({ where: { key: "qt_api_server" } });
+export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
+  const tokenKey = userId ? `${userId}:qt_refresh_token` : "qt_refresh_token";
+  const serverKey = userId ? `${userId}:qt_api_server` : "qt_api_server";
+  const lastSyncKey = userId ? `${userId}:qt_last_sync` : "qt_last_sync";
+
+  const tokenSetting = await prisma.setting.findUnique({ where: { key: tokenKey } });
+  const serverSetting = await prisma.setting.findUnique({ where: { key: serverKey } });
 
   if (!tokenSetting?.value) {
     throw new Error("No Questrade token configured");
@@ -92,14 +96,14 @@ export async function runQuestradeSync(): Promise<SyncResult> {
   }
 
   await prisma.setting.upsert({
-    where: { key: "qt_refresh_token" },
+    where: { key: tokenKey },
     update: { value: encrypt(refresh_token) },
-    create: { key: "qt_refresh_token", value: encrypt(refresh_token) },
+    create: { key: tokenKey, value: encrypt(refresh_token) },
   });
   await prisma.setting.upsert({
-    where: { key: "qt_api_server" },
+    where: { key: serverKey },
     update: { value: api_server },
-    create: { key: "qt_api_server", value: api_server },
+    create: { key: serverKey, value: api_server },
   });
 
   const activeServer = api_server || serverSetting?.value || "";
@@ -253,9 +257,9 @@ export async function runQuestradeSync(): Promise<SyncResult> {
 
   const now = new Date().toISOString();
   await prisma.setting.upsert({
-    where: { key: "qt_last_sync" },
+    where: { key: lastSyncKey },
     update: { value: now },
-    create: { key: "qt_last_sync", value: now },
+    create: { key: lastSyncKey, value: now },
   });
 
   return result;

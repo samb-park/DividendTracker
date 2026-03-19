@@ -102,18 +102,33 @@ export default function MorePage() {
       setLoading(true);
       fetch("/api/transactions")
         .then(r => r.json())
-        .then(d => { setTxns(d); setLoading(false); })
-        .catch(() => setLoading(false));
+        .then(d => { setTxns(Array.isArray(d) ? d : []); setLoading(false); })
+        .catch(() => { setTxns([]); setLoading(false); });
     }
   }, [activeTab, txns]);
 
   // reset ticker when portfolio changes
   useEffect(() => { setSelectedTicker(""); }, [selectedPortfolio]);
 
+  // reset year when switching between transactions and dividends tabs
+  useEffect(() => {
+    setSelectedYear("");
+  }, [activeTab]);
+
   const yearOptions = useMemo(() =>
     [...new Set((txns ?? []).map(t => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a)),
     [txns]
   );
+
+  const activeYearOptions = useMemo(() => {
+    if (activeTab === "transactions") {
+      return [...new Set((txns ?? []).filter(t => t.action !== "DIVIDEND").map(t => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+    }
+    if (activeTab === "dividends") {
+      return [...new Set((txns ?? []).filter(t => t.action === "DIVIDEND").map(t => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+    }
+    return yearOptions;
+  }, [txns, activeTab, yearOptions]);
 
   const portfolioOptions = useMemo(() =>
     [...new Set((txns ?? []).map(t => t.holding.portfolio.name))].sort(),
@@ -142,16 +157,29 @@ export default function MorePage() {
   return (
     <div>
       {/* Top tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-border pb-3 overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`btn-retro text-xs px-3 py-1 whitespace-nowrap ${activeTab === tab.key ? "btn-retro-primary" : ""}`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div
+        role="tablist"
+        aria-label="History view"
+        className="grid grid-cols-4 border border-border mb-6"
+      >
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.key)}
+              className={`py-2 text-[10px] tracking-widest uppercase font-medium transition-colors border-r border-border last:border-r-0 focus-visible:outline-none ${
+                isActive
+                  ? "bg-primary/10 text-primary border-b-2 border-b-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "cashflow" && <CashFlow fxRate={fxRate} />}
@@ -167,7 +195,7 @@ export default function MorePage() {
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Dropdown
               value={selectedYear}
-              options={yearOptions}
+              options={activeYearOptions}
               onChange={setSelectedYear}
               placeholder="YEAR"
             />
@@ -263,7 +291,7 @@ export default function MorePage() {
                 </thead>
                 <tbody>
                   {divTxns.map(t => {
-                    const amount = parseFloat(t.price);
+                    const amount = parseFloat(t.price) * parseFloat(t.quantity);
                     return (
                       <tr key={t.id}>
                         <td className="text-muted-foreground text-xs">{t.date.slice(0, 10)}</td>
@@ -283,9 +311,9 @@ export default function MorePage() {
                       <td colSpan={3} className="text-xs text-muted-foreground pt-2">TOTAL ({divTxns.length})</td>
                       <td className="text-right tabular-nums text-primary font-medium pt-2">
                         {divTxns.every(t => t.holding.currency === divTxns[0].holding.currency)
-                          ? `${sym(divTxns[0].holding.currency)}${fmt(divTxns.reduce((s, t) => s + parseFloat(t.price), 0))}`
+                          ? `${sym(divTxns[0].holding.currency)}${fmt(divTxns.reduce((s, t) => s + parseFloat(t.price) * parseFloat(t.quantity), 0))}`
                           : `${fmt(divTxns.reduce((s, t) => {
-                              const v = parseFloat(t.price);
+                              const v = parseFloat(t.price) * parseFloat(t.quantity);
                               return s + (t.holding.currency === "USD" ? v * fxRate : v);
                             }, 0))} CAD`
                         }

@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = session.user.id!;
 
-  const setting = await prisma.setting.findUnique({ where: { key: "qt_refresh_token" } });
-  const apiServer = await prisma.setting.findUnique({ where: { key: "qt_api_server" } });
-  const lastSync = await prisma.setting.findUnique({ where: { key: "qt_last_sync" } });
+  const setting = await prisma.setting.findUnique({ where: { key: `${userId}:qt_refresh_token` } });
+  const apiServer = await prisma.setting.findUnique({ where: { key: `${userId}:qt_api_server` } });
+  const lastSync = await prisma.setting.findUnique({ where: { key: `${userId}:qt_last_sync` } });
 
   // Decrypt for preview (support legacy plaintext tokens)
   let tokenPreview: string | null = null;
@@ -38,6 +39,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = session.user.id!;
 
   const { refreshToken } = await req.json();
   if (!refreshToken?.trim()) {
@@ -50,14 +52,14 @@ export async function POST(req: Request) {
 
     // Save new refresh token encrypted (old one is now invalidated by Questrade)
     await prisma.setting.upsert({
-      where: { key: "qt_refresh_token" },
+      where: { key: `${userId}:qt_refresh_token` },
       update: { value: encrypt(tokenData.refresh_token) },
-      create: { key: "qt_refresh_token", value: encrypt(tokenData.refresh_token) },
+      create: { key: `${userId}:qt_refresh_token`, value: encrypt(tokenData.refresh_token) },
     });
     await prisma.setting.upsert({
-      where: { key: "qt_api_server" },
+      where: { key: `${userId}:qt_api_server` },
       update: { value: tokenData.api_server },
-      create: { key: "qt_api_server", value: tokenData.api_server },
+      create: { key: `${userId}:qt_api_server`, value: tokenData.api_server },
     });
 
     return NextResponse.json({
@@ -76,9 +78,10 @@ export async function POST(req: Request) {
 export async function DELETE() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = session.user.id!;
 
   await prisma.setting.deleteMany({
-    where: { key: { in: ["qt_refresh_token", "qt_api_server", "qt_last_sync"] } },
+    where: { key: { in: [`${userId}:qt_refresh_token`, `${userId}:qt_api_server`, `${userId}:qt_last_sync`] } },
   });
   return NextResponse.json({ ok: true });
 }

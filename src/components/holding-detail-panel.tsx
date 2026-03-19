@@ -169,12 +169,12 @@ export function HoldingDetailPanel({
   const filteredDivs = useMemo(() => filterByDate(dividendTxns), [dividendTxns, filterByDate]);
 
   const totalDivsReceived = useMemo(() =>
-    filteredDivs.reduce((s, t) => s + parseFloat(t.price), 0),
+    filteredDivs.reduce((s, t) => s + parseFloat(t.price) * parseFloat(t.quantity), 0),
     [filteredDivs]
   );
 
   const totalDivsAllTime = useMemo(() =>
-    dividendTxns.reduce((s, t) => s + parseFloat(t.price), 0),
+    dividendTxns.reduce((s, t) => s + parseFloat(t.price) * parseFloat(t.quantity), 0),
     [dividendTxns]
   );
 
@@ -182,7 +182,7 @@ export function HoldingDetailPanel({
     const cutoff = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
     return dividendTxns
       .filter((t) => (t.date?.slice(0, 10) ?? "") >= cutoff)
-      .reduce((s, t) => s + parseFloat(t.price), 0);
+      .reduce((s, t) => s + parseFloat(t.price) * parseFloat(t.quantity), 0);
   }, [dividendTxns]);
 
   const actualYieldOnCost = row.costBasis > 0 && actualDivs12m > 0
@@ -207,7 +207,7 @@ export function HoldingDetailPanel({
     const byYear: Record<number, number> = {};
     for (const t of dividendTxns) {
       const yr = parseInt(t.date?.slice(0, 4) ?? "0");
-      if (yr > 2000) byYear[yr] = (byYear[yr] ?? 0) + parseFloat(t.price);
+      if (yr > 2000) byYear[yr] = (byYear[yr] ?? 0) + parseFloat(t.price) * parseFloat(t.quantity);
     }
     const years = Object.keys(byYear).map(Number).sort();
     if (years.length < 2) return null;
@@ -227,7 +227,7 @@ export function HoldingDetailPanel({
     const actualByMonth: Record<string, number> = {};
     for (const t of dividendTxns) {
       const mo = t.date?.slice(0, 7);
-      if (mo) actualByMonth[mo] = (actualByMonth[mo] ?? 0) + parseFloat(t.price);
+      if (mo) actualByMonth[mo] = (actualByMonth[mo] ?? 0) + parseFloat(t.price) * parseFloat(t.quantity);
     }
 
     // Build last 12 months
@@ -700,7 +700,7 @@ export function HoldingDetailPanel({
               <div className="text-muted-foreground text-xs text-center py-4">NO TRANSACTIONS</div>
             ) : (
               <div className="space-y-2">
-                {filteredTxns.map((txn) => (
+                {[...filteredTxns].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
                   <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className={txn.action === "BUY" ? "text-positive" : "text-negative"}>
@@ -848,7 +848,7 @@ export function HoldingDetailPanel({
                         <span className="text-primary">DIV</span>
                         <span className="text-muted-foreground tabular-nums">{txn.date?.slice(0, 10) ?? "—"}</span>
                       </div>
-                      <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price)))}</div>
+                      <div className="tabular-nums text-primary">{sym}{fmt(toDisp(parseFloat(txn.price) * parseFloat(txn.quantity)))}</div>
                     </div>
                   ))}
                 </div>
