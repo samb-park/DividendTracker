@@ -119,6 +119,12 @@ export function HoldingsTable({
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
 
+  const toDisp = (value: number, holdingCurrency: "USD" | "CAD") => {
+    if (!displayCurrency || displayCurrency === holdingCurrency) return value;
+    return displayCurrency === "CAD" ? value * fxRate : value / fxRate;
+  };
+  const dispSym = displayCurrency === "CAD" ? "C$" : displayCurrency === "USD" ? "$" : null;
+
   useEffect(() => {
     fetch("/api/settings/investment").then(r => r.json()).then(d => {
       const targets: Record<string, number> = {};
@@ -267,25 +273,42 @@ export function HoldingsTable({
   }, {} as Record<string, { mkt: number; cost: number; pnl: number }>);
 
   const totalCurrencies = Object.keys(totalsByCur) as ("USD" | "CAD")[];
-  const fmtTotal = (mode: "mkt" | "cost") =>
-    totalCurrencies.map(c => {
+  const fmtTotal = (mode: "mkt" | "cost") => {
+    if (dispSym) {
+      const total = totalCurrencies.reduce((sum, c) => {
+        const s = totalsByCur[c];
+        return sum + toDisp(mode === "mkt" ? s.mkt : s.cost, c);
+      }, 0);
+      return `${dispSym}${fmt(total)}`;
+    }
+    return totalCurrencies.map(c => {
       const s = totalsByCur[c];
       const val = mode === "mkt" ? s.mkt : s.cost;
-      const sym = c === "CAD" ? "C$" : "$";
-      return `${sym}${fmt(val)}`;
+      return `${c === "CAD" ? "C$" : "$"}${fmt(val)}`;
     }).join(" / ");
-  const fmtTotalPnL = () =>
-    totalCurrencies.map(c => {
+  };
+  const fmtTotalPnL = () => {
+    if (dispSym) {
+      const total = totalCurrencies.reduce((sum, c) => sum + toDisp(totalsByCur[c].pnl, c), 0);
+      return `${total >= 0 ? "+" : ""}${dispSym}${fmt(Math.abs(total))}`;
+    }
+    return totalCurrencies.map(c => {
       const s = totalsByCur[c];
-      const sym = c === "CAD" ? "C$" : "$";
-      return `${s.pnl >= 0 ? "+" : ""}${sym}${fmt(Math.abs(s.pnl))}`;
+      return `${s.pnl >= 0 ? "+" : ""}${c === "CAD" ? "C$" : "$"}${fmt(Math.abs(s.pnl))}`;
     }).join(" / ");
-  const fmtTotalPnLPct = () =>
-    totalCurrencies.map(c => {
+  };
+  const fmtTotalPnLPct = () => {
+    if (dispSym) {
+      const totalCost = totalCurrencies.reduce((sum, c) => sum + toDisp(totalsByCur[c].cost, c), 0);
+      const totalPnL = totalCurrencies.reduce((sum, c) => sum + toDisp(totalsByCur[c].pnl, c), 0);
+      return totalCost > 0 ? fmtPct((totalPnL / totalCost) * 100) : "—";
+    }
+    return totalCurrencies.map(c => {
       const s = totalsByCur[c];
       const pct = s.cost > 0 ? (s.pnl / s.cost) * 100 : 0;
       return fmtPct(pct);
     }).join(" / ");
+  };
   const totalPnLPositive = totalCurrencies.every(c => totalsByCur[c].pnl >= 0);
 
   // Contribution allocation (Excel Funds column logic)
@@ -354,7 +377,7 @@ export function HoldingsTable({
           {/* Mobile card list (< sm) */}
           <div className="sm:hidden space-y-2">
             {sortedRows.map((row) => {
-              const cur = row.holding.currency === "CAD" ? "C$" : "$";
+              const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
               const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
               const priceUnavailable = !loadingPrices && !row.price;
               const priceReason = priceReasons[row.holding.ticker];
@@ -382,7 +405,7 @@ export function HoldingsTable({
                           {priceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}
                         </span>
                       ) : (
-                        <span className="text-sm tabular-nums font-medium">{cur}{fmt(row.price!.price)}</span>
+                        <span className="text-sm tabular-nums font-medium">{cur}{fmt(toDisp(row.price!.price, row.holding.currency))}</span>
                       )}
                       {row.price && (
                         <div className={`text-[10px] tabular-nums ${row.price.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
@@ -393,11 +416,11 @@ export function HoldingsTable({
                   </div>
                   <div className="flex items-center justify-between text-[11px] gap-2">
                     <span className="text-muted-foreground tabular-nums">
-                      {row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—"}
+                      {row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—"}
                     </span>
                     <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
                       {row.marketValue > 0
-                        ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(row.unrealizedPnL))} (${fmtPct(row.unrealizedPnLPct)})`
+                        ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))} (${fmtPct(row.unrealizedPnLPct)})`
                         : "—"}
                     </span>
                     <span className="text-muted-foreground tabular-nums flex-shrink-0">
@@ -474,7 +497,7 @@ export function HoldingsTable({
               </thead>
               <tbody>
                 {sortedRows.map((row) => {
-                  const cur = row.holding.currency === "CAD" ? "C$" : "$";
+                  const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
                   const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
                   const deskPriceReason = priceReasons[row.holding.ticker];
                   return (
@@ -507,8 +530,8 @@ export function HoldingsTable({
                         {loadingPrices ? (
                           <span className="text-muted-foreground">...</span>
                         ) : priceMode === "price"
-                          ? (row.price ? `${cur}${fmt(row.price.price)}` : <span className="text-negative text-[10px]" title={deskPriceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>{deskPriceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>)
-                          : (row.avgCost > 0 ? `${cur}${fmt(row.avgCost)}` : "—")}
+                          ? (row.price ? `${cur}${fmt(toDisp(row.price.price, row.holding.currency))}` : <span className="text-negative text-[10px]" title={deskPriceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>{deskPriceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>)
+                          : (row.avgCost > 0 ? `${cur}${fmt(toDisp(row.avgCost, row.holding.currency))}` : "—")}
                       </td>
                       <td className={`text-right tabular-nums hidden sm:table-cell ${
                         dayMode === "day"
@@ -533,8 +556,8 @@ export function HoldingsTable({
                       </td>
                       <td className="text-right tabular-nums">
                         {mktMode === "mkt"
-                          ? (row.marketValue > 0 ? `${cur}${fmt(row.marketValue)}` : "—")
-                          : (row.costBasis > 0 ? `${cur}${fmt(row.costBasis)}` : "—")}
+                          ? (row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—")
+                          : (row.costBasis > 0 ? `${cur}${fmt(toDisp(row.costBasis, row.holding.currency))}` : "—")}
                       </td>
                       <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">
                         {wgtMode === "pct"
@@ -542,13 +565,13 @@ export function HoldingsTable({
                           : (() => {
                               if (!(row.holding.ticker in investTargets)) return "—";
                               const alloc = allocMap[row.holding.ticker] ?? 0;
-                              return `${cur}${fmt(alloc)}`;
+                              return `${cur}${fmt(toDisp(alloc, row.holding.currency))}`;
                             })()}
                       </td>
                       <td className={`text-right tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
                         {row.marketValue > 0 ? (
                           colMode === "usd"
-                            ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(row.unrealizedPnL))}`
+                            ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))}`
                             : fmtPct(row.unrealizedPnLPct)
                         ) : "—"}
                       </td>
@@ -558,8 +581,8 @@ export function HoldingsTable({
                           : (row.price && row.price.fromLowPct > 30 ? "text-positive" : "text-muted-foreground")
                       }`}>
                         {w52Mode === "high"
-                          ? (row.price?.week52High ? `${cur}${fmt(row.price.week52High)} (${fmtPct(row.price.fromHighPct)})` : "—")
-                          : (row.price?.week52Low ? `${cur}${fmt(row.price.week52Low)} (${fmtPct(row.price.fromLowPct)})` : "—")}
+                          ? (row.price?.week52High ? `${cur}${fmt(toDisp(row.price.week52High, row.holding.currency))} (${fmtPct(row.price.fromHighPct)})` : "—")
+                          : (row.price?.week52Low ? `${cur}${fmt(toDisp(row.price.week52Low, row.holding.currency))} (${fmtPct(row.price.fromLowPct)})` : "—")}
                       </td>
                     </tr>
                   );

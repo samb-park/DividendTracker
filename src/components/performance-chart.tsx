@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ComposedChart,
   Area,
@@ -60,6 +60,14 @@ export function PerformanceChart() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
+  const [rangeDropOpen, setRangeDropOpen] = useState(false);
+  const rangeDropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (rangeDropRef.current && !rangeDropRef.current.contains(e.target as Node)) setRangeDropOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
   useEffect(() => {
     if (range === "all" && allLoaded) return;
@@ -139,16 +147,27 @@ export function PerformanceChart() {
             SPY
           </button>
         </div>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`btn-retro text-[10px] px-2 py-0.5 ${range === r ? "btn-retro-primary" : ""}`}
-            >
-              {r.toUpperCase()}
-            </button>
-          ))}
+        <div className="relative" ref={rangeDropRef}>
+          <button
+            className="btn-retro btn-retro-primary text-[10px] flex items-center gap-1.5 min-w-[4rem]"
+            onClick={() => setRangeDropOpen(v => !v)}
+          >
+            <span className="flex-1 text-left">{range.toUpperCase()}</span>
+            <span className="text-muted-foreground">▾</span>
+          </button>
+          {rangeDropOpen && (
+            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
+              {RANGES.map((r) => (
+                <button
+                  key={r}
+                  className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${range === r ? "text-accent" : ""}`}
+                  onClick={() => { setRange(r); setRangeDropOpen(false); }}
+                >
+                  {r.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

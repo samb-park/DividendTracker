@@ -292,15 +292,10 @@ export function PortfolioCharts({
           ) : equityData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={lineChartHeight}>
-                <LineChart data={equityData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                <LineChart data={equityData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" hide />
-                  <YAxis
-                    width={42}
-                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
-                    axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickFormatter={(v) => `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
-                  />
+                  <YAxis hide />
                   <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
                   <Line
                     type="monotone"
