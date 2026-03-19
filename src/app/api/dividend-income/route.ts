@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import YahooFinance from "yahoo-finance2";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,9 @@ function netFactor(accountType: string, currency: string, ticker: string): numbe
 }
 
 export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get("mode") ?? "future";
   const year = parseInt(searchParams.get("year") ?? new Date().getFullYear().toString(), 10);

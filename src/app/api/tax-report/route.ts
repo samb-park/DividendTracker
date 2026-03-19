@@ -7,14 +7,19 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const year = searchParams.get("year") ?? new Date().getFullYear().toString();
+  const rawYear = searchParams.get("year") ?? String(new Date().getFullYear());
+  const yearNum = parseInt(rawYear, 10);
+  if (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100) {
+    return NextResponse.json({ error: "Invalid year" }, { status: 400 });
+  }
+  const year = String(yearNum);
 
   const txns = await prisma.transaction.findMany({
     where: {
       action: "DIVIDEND",
       date: {
         gte: new Date(`${year}-01-01`),
-        lt: new Date(`${parseInt(year) + 1}-01-01`),
+        lt: new Date(`${yearNum + 1}-01-01`),
       },
     },
     orderBy: { date: "asc" },

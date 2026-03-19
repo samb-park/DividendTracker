@@ -11,7 +11,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async signIn({ user }) {
       const allowed = process.env.ALLOWED_EMAIL;
-      if (!allowed) return true; // no restriction set
+      if (!allowed) {
+        console.warn("[AUTH] ALLOWED_EMAIL is not set — any Google account can sign in");
+        return true;
+      }
       return user.email === allowed;
     },
     authorized({ auth: session }) {

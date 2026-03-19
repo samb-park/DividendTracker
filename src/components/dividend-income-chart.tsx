@@ -115,6 +115,7 @@ export function DividendIncomeChart({
   }, []);
 
   const [year, setYear] = useState(CURRENT_YEAR);
+  const [retryKey, setRetryKey] = useState(0);
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
   const [futureData, setFutureData] = useState<DividendIncomeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +147,7 @@ export function DividendIncomeChart({
         setLoading(false);
       })
       .catch(() => { setFetchError(true); setLoading(false); });
-  }, [year, selectedPortfolioId, CURRENT_YEAR]);
+  }, [year, selectedPortfolioId, CURRENT_YEAR, retryKey]);
 
   // Swipe left/right to navigate years
   useEffect(() => {
@@ -343,7 +344,7 @@ export function DividendIncomeChart({
       ) : fetchError ? (
         <div className="flex flex-col items-center justify-center text-xs space-y-2 py-8 border border-dashed border-border">
           <span className="text-negative">FAILED TO LOAD DIVIDEND DATA</span>
-          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); }}>RETRY</button>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setRetryKey(k => k + 1); }}>RETRY</button>
         </div>
       ) : (
         <>

@@ -16,12 +16,19 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
   const [commission, setCommission] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
     const qty = parseFloat(quantity);
     const prc = parseFloat(price);
     if (!quantity || !price || qty <= 0 || prc <= 0) return;
+    const today = new Date().toISOString().split("T")[0];
+    if (date > today) {
+      setError("Transaction date cannot be in the future");
+      return;
+    }
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/transactions", {
         method: "POST",
@@ -36,13 +43,19 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
           notes: notes || null,
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Failed to save transaction");
+        return;
+      }
       onAdd();
       setQuantity("");
       setPrice("");
       setCommission("");
       setNotes("");
       setOpen(false);
+    } catch {
+      setError("Network error — please try again");
     } finally {
       setLoading(false);
     }
@@ -74,7 +87,7 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs text-muted-foreground block mb-1">DATE</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input type="date" value={date} max={new Date().toISOString().split("T")[0]} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">QUANTITY</label>
@@ -93,11 +106,12 @@ export function AddTransactionDialog({ holdingId, ticker, onAdd }: Props) {
           <label className="text-xs text-muted-foreground block mb-1">NOTES (optional)</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="..." />
         </div>
+        {error && <div className="text-negative text-xs mb-3">{error}</div>}
         <div className="flex gap-2">
           <button className="btn-retro btn-retro-primary flex-1" onClick={submit} disabled={loading}>
             {loading ? "[...]" : "[CONFIRM]"}
           </button>
-          <button className="btn-retro flex-1" onClick={() => setOpen(false)}>[CANCEL]</button>
+          <button className="btn-retro flex-1" onClick={() => { setOpen(false); setError(null); }}>[CANCEL]</button>
         </div>
       </div>
     </div>

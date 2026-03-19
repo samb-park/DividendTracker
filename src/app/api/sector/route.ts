@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import YahooFinance from "yahoo-finance2";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ async function getSector(ticker: string): Promise<string> {
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const holdings = await prisma.holding.findMany({
     where: { quantity: { gt: 0 } },
     select: { ticker: true },

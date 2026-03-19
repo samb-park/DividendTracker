@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import YahooFinance from "yahoo-finance2";
+import { auth } from "@/auth";
 const yahooFinance = new YahooFinance();
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,9 @@ function detectFrequencyFromHistory(
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const holdings = await prisma.holding.findMany({
     include: { portfolio: true },
   });

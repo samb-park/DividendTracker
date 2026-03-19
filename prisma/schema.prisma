@@ -57,6 +57,9 @@ model CashTransaction {
   notes       String?
   portfolio   Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
+
+  @@index([portfolioId, date])
+  @@index([portfolioId, action, date, amount, currency])
 }
 
 enum TransactionAction {

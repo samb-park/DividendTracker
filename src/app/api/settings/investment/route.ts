@@ -58,7 +58,10 @@ export async function POST(req: Request) {
     });
   } else if (body.type === "target") {
     const { ticker, pct } = body;
-    const key = `investment:target:${ticker}`;
+    if (!ticker || !/^[A-Z0-9.^-]{1,15}$/i.test(ticker)) {
+      return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+    }
+    const key = `investment:target:${ticker.toUpperCase()}`;
     await prisma.setting.upsert({
       where: { key },
       update: { value: JSON.stringify({ pct }) },

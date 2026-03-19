@@ -60,18 +60,38 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { portfolioId, action, date, amount, currency, notes } = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+  const { portfolioId, action, date, amount, currency, notes } = body;
   if (!portfolioId || !action || !date || !amount || !currency) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+  if (!["DEPOSIT", "WITHDRAWAL"].includes(action as string)) {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+  if (!["CAD", "USD"].includes(currency as string)) {
+    return NextResponse.json({ error: "Invalid currency" }, { status: 400 });
+  }
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
+  }
+  const txDate = new Date(date as string);
+  if (isNaN(txDate.getTime())) {
+    return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  }
   const tx = await prisma.cashTransaction.create({
     data: {
-      portfolioId,
-      action,
-      date: new Date(date),
-      amount,
-      currency,
-      notes: notes ?? null,
+      portfolioId: portfolioId as string,
+      action: action as "DEPOSIT" | "WITHDRAWAL",
+      date: txDate,
+      amount: amt,
+      currency: currency as "CAD" | "USD",
+      notes: notes ? String(notes) : null,
     },
   });
   return NextResponse.json(tx);

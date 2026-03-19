@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { exchangeRefreshToken } from "@/lib/questrade";
 import { auth } from "@/auth";
+import { encrypt, decrypt, isEncrypted } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,20 @@ export async function GET() {
   const apiServer = await prisma.setting.findUnique({ where: { key: "qt_api_server" } });
   const lastSync = await prisma.setting.findUnique({ where: { key: "qt_last_sync" } });
 
+  // Decrypt for preview (support legacy plaintext tokens)
+  let tokenPreview: string | null = null;
+  if (setting?.value) {
+    try {
+      const plain = isEncrypted(setting.value) ? decrypt(setting.value) : setting.value;
+      tokenPreview = `...${plain.slice(-6)}`;
+    } catch {
+      tokenPreview = "...(encrypted)";
+    }
+  }
+
   return NextResponse.json({
     hasToken: !!setting?.value,
-    tokenPreview: setting?.value ? `...${setting.value.slice(-6)}` : null,
+    tokenPreview,
     apiServer: apiServer?.value ?? null,
     lastSync: lastSync?.value ?? null,
   });
@@ -36,11 +48,11 @@ export async function POST(req: Request) {
     // Exchange the token to validate it and get the API server URL
     const tokenData = await exchangeRefreshToken(refreshToken.trim());
 
-    // Save new refresh token (old one is now invalidated by Questrade)
+    // Save new refresh token encrypted (old one is now invalidated by Questrade)
     await prisma.setting.upsert({
       where: { key: "qt_refresh_token" },
-      update: { value: tokenData.refresh_token },
-      create: { key: "qt_refresh_token", value: tokenData.refresh_token },
+      update: { value: encrypt(tokenData.refresh_token) },
+      create: { key: "qt_refresh_token", value: encrypt(tokenData.refresh_token) },
     });
     await prisma.setting.upsert({
       where: { key: "qt_api_server" },
@@ -53,6 +65,7 @@ export async function POST(req: Request) {
       apiServer: tokenData.api_server,
       tokenPreview: `...${tokenData.refresh_token.slice(-6)}`,
     });
+
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

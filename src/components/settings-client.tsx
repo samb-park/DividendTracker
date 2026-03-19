@@ -536,6 +536,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
             const carryover = parseFloat(contribRoom.tfsaCarryover) || 0;
             const total = TFSA_ANNUAL_LIMIT + carryover;
             const used = contribDeposits.tfsa;
+            const overContributed = used > total;
             const remaining = Math.max(0, total - used);
             const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
             return (
@@ -549,10 +550,16 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 <div className="h-1.5 bg-border overflow-hidden">
                   <div className={`h-full ${pct >= 90 ? "bg-negative" : "bg-primary"}`} style={{ width: `${pct}%` }} />
                 </div>
-                <div className={`text-xs tabular-nums ${remaining > 0 ? "text-positive" : "text-negative"}`}>
-                  C${remaining.toLocaleString("en-CA", { maximumFractionDigits: 0 })} remaining
-                  <span className="text-muted-foreground ml-1">(annual ${TFSA_ANNUAL_LIMIT.toLocaleString()} + carryover)</span>
-                </div>
+                {overContributed ? (
+                  <div className="text-xs tabular-nums text-negative font-medium">
+                    ⚠ OVER-CONTRIBUTED by C${(used - total).toLocaleString("en-CA", { maximumFractionDigits: 0 })} — CRA charges 1%/month on excess
+                  </div>
+                ) : (
+                  <div className={`text-xs tabular-nums ${remaining > 0 ? "text-positive" : "text-negative"}`}>
+                    C${remaining.toLocaleString("en-CA", { maximumFractionDigits: 0 })} remaining
+                    <span className="text-muted-foreground ml-1">(annual ${TFSA_ANNUAL_LIMIT.toLocaleString()} + carryover)</span>
+                  </div>
+                )}
                 <div>
                   <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CARRYOVER FROM PRIOR YEARS</div>
                   <input type="number" min="0" step="any" placeholder="0"
