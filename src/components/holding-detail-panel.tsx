@@ -302,7 +302,8 @@ export function HoldingDetailPanel({
   }, [readOnly, row.holding.ticker]);
 
   const deleteHolding = async () => {
-    await fetch(`/api/holdings/${row.holding.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/holdings/${row.holding.id}`, { method: "DELETE" });
+    if (!res.ok) { alert("Failed to delete holding."); return; }
     onRefresh();
     onClose();
   };

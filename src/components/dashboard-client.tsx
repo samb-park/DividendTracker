@@ -292,6 +292,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors" onClick={() => setDivShowMonthly((v) => !v)} role="button" aria-label={`Toggle between annual and monthly dividend view. Currently showing ${divShowMonthly ? "monthly" : "annual"}`}>
             <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
               {divShowMonthly ? "DIV / MONTH" : "DIV / YEAR"}
+              <span className="text-muted-foreground text-[9px] ml-1">▾</span>
             </div>
             <div className="text-xs font-medium tabular-nums truncate text-primary">
               {divAnnual !== null ? `${currencySymbol}${fmt(divShowMonthly ? (divMonthly ?? 0) : divAnnual)}` : "—"}

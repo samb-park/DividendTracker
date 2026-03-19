@@ -105,11 +105,12 @@ export function PerformanceChart() {
     // Normalize portfolio to 100 for benchmark overlay
     const portfolioBase = first.totalCAD;
 
+    const spanYears = days / 365;
     const chartData = snapshots.map((s) => {
       const normalizedPortfolio = portfolioBase > 0 ? (s.totalCAD / portfolioBase) * 100 : null;
       const spyValue = benchMap.get(s.date) ?? null;
       return {
-        date: s.date.slice(5), // MM-DD
+        date: (range === "all" || spanYears >= 1) ? s.date.slice(0, 7) : s.date.slice(5), // YYYY-MM or MM-DD
         fullDate: s.date,
         total: Math.round(s.totalCAD),
         cost: Math.round(s.costBasisCAD),
@@ -120,7 +121,7 @@ export function PerformanceChart() {
     });
 
     return { cagr, mdd, totalReturn, chartData };
-  }, [snapshots, benchmark]);
+  }, [snapshots, benchmark, range]);
 
   const hasSufficientData = snapshots.length >= 2;
   const lastSnapshot = snapshots[snapshots.length - 1];
@@ -160,8 +161,8 @@ export function PerformanceChart() {
               {cagr !== null ? `${cagr >= 0 ? "+" : ""}${cagr.toFixed(2)}%` : "—"}
             </div>
           </div>
-          <div className="bg-card p-2" title="Total Return — overall gain or loss from start to end of the selected period">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL RETURN</div>
+          <div className="bg-card p-2" title="Price Return — overall gain or loss from start to end of the selected period, excluding dividends">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">PRICE RETURN</div>
             <div className={`text-sm font-medium tabular-nums ${totalReturn !== null && totalReturn >= 0 ? "text-positive" : "text-negative"}`}>
               {totalReturn !== null ? `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%` : "—"}
             </div>

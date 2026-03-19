@@ -42,11 +42,6 @@ function detectFrequency(dividends: Array<{ date: string | Date; amount: number 
   return 1;
 }
 
-function parseAccountType(portfolioName: string): string {
-  const match = portfolioName.match(/^(RRSP|TFSA|FHSA|RESP|Margin|Cash)/i);
-  return match ? match[1].toUpperCase() : "MARGIN";
-}
-
 // Heuristic: US-listed tickers have no exchange suffix (e.g. AAPL, VTI)
 // Canadian tickers use .TO, .V, etc. Foreign ADRs in USD may have different rates.
 function isUSListed(ticker: string): boolean {
@@ -106,7 +101,7 @@ export async function GET(req: Request) {
       // For DIVIDEND transactions: quantity=1, price=netAmount (actual received)
       const amount = parseFloat(txn.price.toString()) * parseFloat(txn.quantity.toString());
       const currency = txn.holding.currency;
-      const accountType = parseAccountType(txn.holding.portfolio.name);
+      const accountType = txn.holding.portfolio.accountType ?? "NON_REG";
 
       monthMap.get(monthKey)!.items.push({
         ticker: txn.holding.ticker,
@@ -114,7 +109,7 @@ export async function GET(req: Request) {
         net: amount, // actual received — already post-withholding from broker
         currency,
         accountType,
-        isCanadianEligible: currency === "CAD" && (accountType === "MARGIN" || accountType === "CASH"),
+        isCanadianEligible: currency === "CAD" && accountType === "NON_REG",
       });
     }
   } else {
@@ -196,7 +191,7 @@ export async function GET(req: Request) {
 
       if (!divData) continue;
 
-      const accountType = parseAccountType(h.portfolio.name);
+      const accountType = h.portfolio.accountType ?? "NON_REG";
       const factor = netFactor(accountType, divData.currency, ticker);
       const grossAmount = divData.amountPerShare * qty;
       const netAmount = grossAmount * factor;
@@ -227,7 +222,7 @@ export async function GET(req: Request) {
               net: netAmount,
               currency: divData.currency,
               accountType,
-              isCanadianEligible: divData.currency === "CAD" && (accountType === "MARGIN" || accountType === "CASH"),
+              isCanadianEligible: divData.currency === "CAD" && accountType === "NON_REG",
             });
           }
         }

@@ -62,6 +62,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [contribRoom, setContribRoom] = useState<ContribRoom>({ tfsaCarryover: "", rrspLimit: "", fhsaCarryover: "" });
   const [contribDeposits, setContribDeposits] = useState<{ tfsa: number; rrsp: number; fhsa: number }>({ tfsa: 0, rrsp: 0, fhsa: 0 });
   const [savingRoom, setSavingRoom] = useState(false);
+  const [savedRoom, setSavedRoom] = useState(false);
+  const [savedPlan, setSavedPlan] = useState(false);
+  const [savedGoal, setSavedGoal] = useState(false);
+  const [savedTargets, setSavedTargets] = useState(false);
 
   const targetTotal = useMemo(
     () => tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
@@ -190,7 +194,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
     if (!edit) return;
     setSavingCash(id);
     try {
-      await fetch(`/api/portfolios/${id}`, {
+      const res = await fetch(`/api/portfolios/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -198,8 +202,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
           cashUSD: edit.usd ? parseFloat(edit.usd) : 0,
         }),
       });
+      if (!res.ok) { alert("Failed to save."); return; }
       setCashEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
       await refreshPortfolios();
+    } catch {
+      alert("Failed to save.");
     } finally {
       setSavingCash(null);
     }
@@ -431,9 +438,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 body: JSON.stringify({ type: "contribution", frequency: contribFreq, amount: parseFloat(contribAmount), currency: contribCurrency }),
               });
               setSavingPlan(false);
+              setSavedPlan(true);
+              setTimeout(() => setSavedPlan(false), 2000);
             }}
             className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40">
-            {savingPlan ? "SAVING..." : "[ SAVE PLAN ]"}
+            {savingPlan ? "SAVING..." : savedPlan ? "SAVED ✓" : "[ SAVE PLAN ]"}
           </button>
         </div>
       </div>
@@ -463,9 +472,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 body: JSON.stringify({ type: "income_goal", annualTarget: parseFloat(goalAmount), currency: goalCurrency }),
               });
               setSavingGoal(false);
+              setSavedGoal(true);
+              setTimeout(() => setSavedGoal(false), 2000);
             }}
             className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40">
-            {savingGoal ? "SAVING..." : "[ SAVE GOAL ]"}
+            {savingGoal ? "SAVING..." : savedGoal ? "SAVED ✓" : "[ SAVE GOAL ]"}
           </button>
         </div>
       </div>
@@ -521,8 +532,10 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                     )
                 );
                 setSavingTargets(false);
+                setSavedTargets(true);
+                setTimeout(() => setSavedTargets(false), 2000);
               }}>
-              {savingTargets ? "SAVING..." : "[ SAVE ALL ]"}
+              {savingTargets ? "SAVING..." : savedTargets ? "SAVED ✓" : "[ SAVE ALL ]"}
             </button>
           </div>
         </div>
@@ -650,10 +663,12 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
                 body: JSON.stringify({ type: "contrib_room", ...contribRoom }),
               });
               setSavingRoom(false);
+              setSavedRoom(true);
+              setTimeout(() => setSavedRoom(false), 2000);
             }}
             className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40"
           >
-            {savingRoom ? "SAVING..." : "[ SAVE ROOM ]"}
+            {savingRoom ? "SAVING..." : savedRoom ? "SAVED ✓" : "[ SAVE ROOM ]"}
           </button>
         </div>
       </div>

@@ -30,6 +30,13 @@ function portfolioName(accountType: string, accountNumber: string): string {
   return `${typeMap[accountType] ?? accountType} (${accountNumber.slice(-4)})`;
 }
 
+function mapAccountType(qtType: string): "TFSA" | "RRSP" | "FHSA" | "NON_REG" {
+  if (qtType === "TFSA") return "TFSA";
+  if (qtType === "RRSP") return "RRSP";
+  if (qtType === "FHSA") return "FHSA";
+  return "NON_REG";
+}
+
 function mapAction(action: string, type: string): "BUY" | "SELL" | "DIVIDEND" | null {
   if (action === "Buy") return "BUY";
   if (action === "Sell") return "SELL";
@@ -119,8 +126,8 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     const name = portfolioName(account.type, account.number);
     const portfolio = await prisma.portfolio.upsert({
       where: { id: `qt-${account.number}` },
-      update: { name },
-      create: { id: `qt-${account.number}`, name },
+      update: { name, accountType: mapAccountType(account.type) },
+      create: { id: `qt-${account.number}`, name, accountType: mapAccountType(account.type) },
     });
 
     result.accountsSynced++;

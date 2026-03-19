@@ -41,7 +41,7 @@ const FREQ_LABEL: Record<number, string> = {
 };
 
 /** Project dividend dates anchored to today so future dates are always generated */
-function projectDates(baseDateStr: string, frequency: number, windowDays = 120): string[] {
+function projectDates(baseDateStr: string, frequency: number, windowDays = 365): string[] {
   if (frequency <= 0) return [];
   const intervalMonths = 12 / frequency;
   const base = new Date(baseDateStr + "T12:00:00");

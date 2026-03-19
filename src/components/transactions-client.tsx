@@ -33,7 +33,8 @@ export function TransactionsClient({ initialTransactions }: { initialTransaction
 
   const del = async (id: string) => {
     if (!confirm("Delete this transaction?")) return;
-    await fetch(`/api/transactions/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("Failed to delete transaction."); return; }
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   };
 
@@ -87,7 +88,7 @@ export function TransactionsClient({ initialTransactions }: { initialTransaction
                     {comm > 0 ? `$${fmt(comm)}` : "—"}
                   </td>
                   <td className={`text-right tabular-nums ${t.action === "BUY" ? "text-negative" : "text-positive"}`}>
-                    {t.action === "BUY" ? "-" : "+"}${fmt(Math.abs(total))}
+                    {t.action === "BUY" ? "-" : "+"}{t.holding.currency === "CAD" ? "C$" : "$"}{fmt(Math.abs(total))}
                   </td>
                   <td className="text-xs text-muted-foreground max-w-32 truncate">{t.notes || "—"}</td>
                   <td>
