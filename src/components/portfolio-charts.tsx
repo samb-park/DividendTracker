@@ -294,15 +294,7 @@ export function PortfolioCharts({
               <ResponsiveContainer width="100%" height={lineChartHeight}>
                 <LineChart data={equityData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
-                    tickFormatter={(v: string) => v?.slice(0, 7) ?? ""}
-                    height={16}
-                  />
+                  <XAxis dataKey="date" hide />
                   <YAxis
                     width={42}
                     tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
