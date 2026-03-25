@@ -203,14 +203,18 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
       ? Math.round(((totalValueCAD - totalCostCAD) / totalCostCAD) * 1000) / 10
       : 0;
 
-  let investorProfile: { birthYear?: number; age?: number; goals?: string[] } | null = null;
+  let investorProfile: { birthYear?: number; age?: number; retirementAge?: number; yearsToRetirement?: number; goals?: string[] } | null = null;
   if (investorProfileSetting?.value) {
     try {
-      const raw = JSON.parse(investorProfileSetting.value) as { birthYear?: number; age?: number; goals?: string[] };
+      const raw = JSON.parse(investorProfileSetting.value) as { birthYear?: number; age?: number; retirementAge?: number; goals?: string[] };
       const birthYear = raw.birthYear ?? raw.age;
+      const currentAge = birthYear ? new Date().getFullYear() - birthYear : undefined;
+      const retirementAge = raw.retirementAge;
       investorProfile = {
         birthYear,
-        age: birthYear ? new Date().getFullYear() - birthYear : undefined,
+        age: currentAge,
+        retirementAge,
+        yearsToRetirement: (currentAge && retirementAge) ? Math.max(0, retirementAge - currentAge) : undefined,
         goals: raw.goals,
       };
     } catch { /* ignore */ }

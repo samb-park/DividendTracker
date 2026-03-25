@@ -18,7 +18,12 @@ export async function POST(req: Request) {
   if (!message?.trim()) return NextResponse.json({ error: "message is required" }, { status: 400 });
 
   const context = await buildPortfolioContext(userId);
-  const systemPrompt = `캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. 간결하게 답변 (3문장 이내). 포트폴리오 데이터:\n${context}`;
+  const parsed = JSON.parse(context) as { investorProfile?: { age?: number; retirementAge?: number; yearsToRetirement?: number } };
+  const profile = parsed.investorProfile;
+  const retirementNote = (profile?.retirementAge && profile?.yearsToRetirement !== undefined)
+    ? ` 투자자는 ${profile.retirementAge}세 은퇴 목표 (${profile.yearsToRetirement}년 남음). 은퇴 시점을 고려한 배당 성장 전략을 우선시할 것.`
+    : "";
+  const systemPrompt = `캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. 간결하게 답변 (3문장 이내).${retirementNote} 포트폴리오 데이터:\n${context}`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

@@ -106,6 +106,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
 
   // Investor profile
   const [profileAge, setProfileAge] = useState("");
+  const [profileRetirementAge, setProfileRetirementAge] = useState("");
   const [profileGoals, setProfileGoals] = useState<string[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -169,6 +170,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       }
       if (data.investorProfile) {
         setProfileAge(String(data.investorProfile.birthYear ?? ""));
+        setProfileRetirementAge(String(data.investorProfile.retirementAge ?? ""));
         setProfileGoals(data.investorProfile.goals ?? []);
       }
       const t: Record<string, { pct: string }> = {};
@@ -483,14 +485,25 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       {/* Investor Profile */}
       <Section title="INVESTOR PROFILE — AI PERSONALIZATION" defaultOpen={true} badge={profileGoals.length > 0 ? "SET" : undefined}>
         <div className="text-[10px] text-muted-foreground">Set your birth year and investment goals for personalized AI briefings.</div>
-        <div>
-          <div className="text-[10px] tracking-wide text-muted-foreground mb-2">BIRTH YEAR</div>
-          <input
-            type="number" min="1940" max={new Date().getFullYear() - 18} placeholder="e.g. 1986"
-            value={profileAge}
-            onChange={e => setProfileAge(e.target.value)}
-            className="w-32 !py-1 text-xs"
-          />
+        <div className="flex gap-4 flex-wrap">
+          <div>
+            <div className="text-[10px] tracking-wide text-muted-foreground mb-2">BIRTH YEAR</div>
+            <input
+              type="number" min="1940" max={new Date().getFullYear() - 18} placeholder="e.g. 1986"
+              value={profileAge}
+              onChange={e => setProfileAge(e.target.value)}
+              className="w-32 !py-1 text-xs"
+            />
+          </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-muted-foreground mb-2">RETIREMENT AGE</div>
+            <input
+              type="number" min="40" max="80" placeholder="e.g. 60"
+              value={profileRetirementAge}
+              onChange={e => setProfileRetirementAge(e.target.value)}
+              className="w-24 !py-1 text-xs"
+            />
+          </div>
         </div>
         <div>
           <div className="text-[10px] tracking-wide text-muted-foreground mb-2">INVESTMENT GOALS (select all that apply)</div>
@@ -515,7 +528,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
             await fetch("/api/settings/investment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "investor_profile", birthYear: parseInt(profileAge), goals: profileGoals }),
+              body: JSON.stringify({ type: "investor_profile", birthYear: parseInt(profileAge), retirementAge: profileRetirementAge ? parseInt(profileRetirementAge) : undefined, goals: profileGoals }),
             });
             setSavingProfile(false);
             setSavedProfile(true);
