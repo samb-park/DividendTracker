@@ -8,6 +8,7 @@ import { DividendIncomeChart } from "./dividend-income-chart";
 import { PerformanceChart } from "./performance-chart";
 import { AiPanel } from "./ai-panel";
 import { UpcomingDividends } from "./upcoming-dividends";
+import { NewsCard } from "./news-card";
 import { SkeletonBlock } from "./skeleton";
 import { fmt, mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
@@ -190,6 +191,7 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
   return (
     <div>
+      <NewsCard />
       {/* Account selector + currency toggle — full width above grid */}
       <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
         <div className="relative" ref={acctDropdownRef}>
