@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 
-const AI_MAX_CALLS_PER_DAY = 2;
+const AI_MAX_CALLS_PER_DAY = 100;
 const AI_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const DEFAULT_FX_RATE = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
 
