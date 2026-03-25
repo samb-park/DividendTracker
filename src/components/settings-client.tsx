@@ -107,6 +107,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   // Investor profile
   const [profileAge, setProfileAge] = useState("");
   const [profileRetirementAge, setProfileRetirementAge] = useState("");
+  const [profileIncome, setProfileIncome] = useState("");
   const [profileGoals, setProfileGoals] = useState<string[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -171,6 +172,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       if (data.investorProfile) {
         setProfileAge(String(data.investorProfile.birthYear ?? ""));
         setProfileRetirementAge(String(data.investorProfile.retirementAge ?? ""));
+        setProfileIncome(String(data.investorProfile.annualIncome ?? ""));
         setProfileGoals(data.investorProfile.goals ?? []);
       }
       const t: Record<string, { pct: string }> = {};
@@ -504,6 +506,15 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
               className="w-24 !py-1 text-xs"
             />
           </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-muted-foreground mb-2">ANNUAL INCOME (CAD)</div>
+            <input
+              type="number" min="0" max="9999999" placeholder="e.g. 90000"
+              value={profileIncome}
+              onChange={e => setProfileIncome(e.target.value)}
+              className="w-36 !py-1 text-xs"
+            />
+          </div>
         </div>
         <div>
           <div className="text-[10px] tracking-wide text-muted-foreground mb-2">INVESTMENT GOALS (select all that apply)</div>
@@ -528,7 +539,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
             await fetch("/api/settings/investment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "investor_profile", birthYear: parseInt(profileAge), retirementAge: profileRetirementAge ? parseInt(profileRetirementAge) : undefined, goals: profileGoals }),
+              body: JSON.stringify({ type: "investor_profile", birthYear: parseInt(profileAge), retirementAge: profileRetirementAge ? parseInt(profileRetirementAge) : undefined, annualIncome: profileIncome ? parseInt(profileIncome) : undefined, goals: profileGoals }),
             });
             setSavingProfile(false);
             setSavedProfile(true);

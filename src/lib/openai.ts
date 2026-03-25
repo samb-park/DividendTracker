@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getPrice, getFxRate } from "@/lib/price";
 
 const AI_MAX_CALLS_PER_DAY = 100;
 const AI_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -39,7 +40,6 @@ export async function callOpenAI(
 // ── Portfolio context builder ─────────────────────────────────────────────────
 
 export async function buildPortfolioContext(userId: string): Promise<string> {
-  // Use include to get all fields (accountType may not yet be in generated Prisma client select type)
   const portfolios = (await prisma.portfolio.findMany({
     where: { userId },
     include: {
@@ -71,34 +71,52 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     }>;
   }>;
 
-  // Fetch contribution room + investor profile settings
-  const [contribRoomSetting, tfsaRoomSetting, rrspRoomSetting, investorProfileSetting] = await Promise.all([
+  // Fetch settings in parallel
+  const [contribRoomSetting, tfsaRoomSetting, rrspRoomSetting, investorProfileSetting, targetSettings, fxSetting] = await Promise.all([
     prisma.setting.findUnique({ where: { key: `${userId}:investment_settings` } }),
     prisma.setting.findUnique({ where: { key: `${userId}:tfsa_carryover` } }),
     prisma.setting.findUnique({ where: { key: `${userId}:rrsp_limit` } }),
     prisma.setting.findUnique({ where: { key: `${userId}:investment:investor_profile` } }),
+    prisma.setting.findMany({ where: { key: { startsWith: `${userId}:investment:target:` } } }),
+    prisma.setting.findUnique({ where: { key: "fx_rate_usd_cad" } }),
   ]);
 
-  // Parse saved contrib room if stored in investment_settings JSON
+  // Parse contrib room
   let tfsaRoom = 0;
   let rrspRoom = 0;
   if (contribRoomSetting?.value) {
     try {
-      const parsed = JSON.parse(contribRoomSetting.value) as {
-        contribRoom?: { tfsaCarryover?: string; rrspLimit?: string };
-      };
+      const parsed = JSON.parse(contribRoomSetting.value) as { contribRoom?: { tfsaCarryover?: string; rrspLimit?: string } };
       tfsaRoom = parseFloat(parsed.contribRoom?.tfsaCarryover ?? "0") || 0;
       rrspRoom = parseFloat(parsed.contribRoom?.rrspLimit ?? "0") || 0;
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }
   if (tfsaRoomSetting?.value) tfsaRoom = parseFloat(tfsaRoomSetting.value) || tfsaRoom;
   if (rrspRoomSetting?.value) rrspRoom = parseFloat(rrspRoomSetting.value) || rrspRoom;
 
-  // Try to get a recent FX rate from Settings
-  const fxSetting = await prisma.setting.findUnique({ where: { key: "fx_rate_usd_cad" } });
-  const fxRate = fxSetting ? parseFloat(fxSetting.value) || DEFAULT_FX_RATE : DEFAULT_FX_RATE;
+  // Parse target allocations: { "AAPL": 10, "VFV.TO": 20, ... }
+  const targetAlloc: Record<string, number> = {};
+  const targetPrefix = `${userId}:investment:target:`;
+  for (const s of targetSettings) {
+    const ticker = s.key.slice(targetPrefix.length);
+    try { targetAlloc[ticker] = (JSON.parse(s.value) as { pct: number }).pct; } catch { /* ignore */ }
+  }
+
+  // FX rate
+  const fxRateFromDB = fxSetting ? parseFloat(fxSetting.value) : null;
+  let fxRate = fxRateFromDB && fxRateFromDB > 0 ? fxRateFromDB : DEFAULT_FX_RATE;
+  try {
+    const live = await getFxRate();
+    if (!live.fallback) fxRate = live.rate;
+  } catch { /* use cached */ }
+
+  // Collect all unique tickers for price fetch
+  const allTickers = Array.from(new Set(portfolios.flatMap(p => p.holdings.map(h => h.ticker))));
+  const priceMap = new Map<string, Awaited<ReturnType<typeof getPrice>>>();
+  await Promise.allSettled(allTickers.map(async t => {
+    const p = await getPrice(t);
+    priceMap.set(t, p);
+  }));
 
   let totalValueCAD = 0;
   let totalCostCAD = 0;
@@ -108,113 +126,149 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     name: string;
     type: string;
     valueCAD: number;
-    holdings: Array<{ ticker: string; valuePct: number; yld: number; annualDiv: number }>;
+    costCAD: number;
+    gainCAD: number;
+    gainPct: number;
+    todayChangeCAD: number;
+    holdings: Array<{
+      ticker: string;
+      shares: number;
+      price: number | null;
+      todayChangePct: number | null;
+      todayChangeCAD: number | null;
+      valueCAD: number;
+      costCAD: number;
+      gainPct: number;
+      currentPct: number;
+      targetPct: number | null;
+      diffPct: number | null;
+      annualDivCAD: number;
+      divPerShare: number | null;
+      yld: number | null;
+    }>;
   }> = [];
 
   for (const portfolio of portfolios) {
     let acctValueCAD = 0;
+    let acctCostCAD = 0;
+    let acctTodayChangeCAD = 0;
+
     const holdingItems: Array<{
       ticker: string;
+      shares: number;
+      price: number | null;
+      todayChangePct: number | null;
+      todayChangeCAD: number | null;
       valueCAD: number;
       costCAD: number;
+      gainPct: number;
       annualDivCAD: number;
+      divPerShare: number | null;
+      yld: number | null;
     }> = [];
 
     for (const holding of portfolio.holdings) {
       const shares = parseFloat(holding.quantity.toString());
       if (shares <= 0) continue;
 
-      const buys = holding.transactions.filter((t) => t.action === "BUY");
-      const divs = holding.transactions.filter((t) => t.action === "DIVIDEND");
-
-      const totalBought = buys.reduce((s, t) => s + parseFloat(t.quantity.toString()), 0);
-
-      const totalCost = buys.reduce(
-        (s, t) =>
-          s +
-          parseFloat(t.quantity.toString()) * parseFloat(t.price.toString()) +
-          parseFloat(t.commission.toString()),
-        0
-      );
-      const avgCost = totalBought > 0 ? totalCost / totalBought : 0;
-      const costBasis = avgCost * shares;
-
-      // Estimate current value using avg cost as a proxy (no live prices in context builder)
-      // This keeps the context builder fast and free of external API calls
-      const estimatedValue = costBasis;
-
       const isFx = holding.currency === "USD";
       const fx = isFx ? fxRate : 1;
-      const valueCAD = estimatedValue * fx;
+
+      const buys = holding.transactions.filter(t => t.action === "BUY");
+      const divTxs = holding.transactions.filter(t => t.action === "DIVIDEND");
+
+      const totalBought = buys.reduce((s, t) => s + parseFloat(t.quantity.toString()), 0);
+      const totalCost = buys.reduce((s, t) =>
+        s + parseFloat(t.quantity.toString()) * parseFloat(t.price.toString()) + parseFloat(t.commission.toString()), 0);
+      const avgCost = totalBought > 0 ? totalCost / totalBought : 0;
+      const costBasis = avgCost * shares;
       const costCAD = costBasis * fx;
 
-      // Sum all DIVIDEND transactions as annual estimate proxy
-      const recentDivCAD = divs.reduce((s, t) => {
-        const amount =
-          parseFloat(t.quantity.toString()) * parseFloat(t.price.toString());
-        return s + amount * fx;
-      }, 0);
+      // Live price
+      const priceData = priceMap.get(holding.ticker);
+      const livePrice = priceData?.price ?? null;
+      const liveValue = livePrice !== null ? livePrice * shares : costBasis;
+      const valueCAD = liveValue * fx;
+      const gainPct = costBasis > 0 ? Math.round(((liveValue - costBasis) / costBasis) * 1000) / 10 : 0;
 
-      // Annualize: use total divs as annual estimate (or 0 if none)
-      const annualEstimateCAD = recentDivCAD;
+      // Today's change
+      const todayChangePct = priceData?.changePercent ?? null;
+      const todayChangeCAD = livePrice !== null ? (priceData?.change ?? 0) * shares * fx : null;
+
+      // Dividend
+      const divPerShare = priceData?.dividendRate ?? priceData?.trailingAnnualDividendRate ?? null;
+      const annualDivFromLive = divPerShare !== null ? divPerShare * shares * fx : null;
+      const annualDivFromTx = divTxs.reduce((s, t) =>
+        s + parseFloat(t.quantity.toString()) * parseFloat(t.price.toString()) * fx, 0);
+      const annualDiv = annualDivFromLive ?? annualDivFromTx;
+      const yld = priceData?.dividendYield ?? null;
 
       holdingItems.push({
         ticker: holding.ticker,
+        shares: Math.round(shares * 100) / 100,
+        price: livePrice !== null ? Math.round(livePrice * 100) / 100 : null,
+        todayChangePct: todayChangePct !== null ? Math.round(todayChangePct * 100) / 100 : null,
+        todayChangeCAD: todayChangeCAD !== null ? Math.round(todayChangeCAD) : null,
         valueCAD,
         costCAD,
-        annualDivCAD: annualEstimateCAD,
+        gainPct,
+        annualDivCAD: annualDiv,
+        divPerShare: divPerShare !== null ? Math.round(divPerShare * 100) / 100 : null,
+        yld: yld !== null ? Math.round(yld * 10) / 10 : null,
       });
 
       acctValueCAD += valueCAD;
-      totalCostCAD += costCAD;
-      annualDivCAD += annualEstimateCAD;
+      acctCostCAD += costCAD;
+      acctTodayChangeCAD += todayChangeCAD ?? 0;
+      annualDivCAD += annualDiv;
     }
 
     totalValueCAD += acctValueCAD;
+    totalCostCAD += acctCostCAD;
 
-    // Top 10 holdings by value
-    const topHoldings = holdingItems
-      .filter((h) => h.valueCAD > 0)
-      .sort((a, b) => b.valueCAD - a.valueCAD)
-      .slice(0, 10);
+    const sortedHoldings = holdingItems.sort((a, b) => b.valueCAD - a.valueCAD).slice(0, 15);
 
-    const holdingSummaries = topHoldings.map((h) => ({
-      ticker: h.ticker,
-      valuePct: acctValueCAD > 0 ? Math.round((h.valueCAD / acctValueCAD) * 1000) / 10 : 0,
-      yld:
-        h.valueCAD > 0
-          ? Math.round((h.annualDivCAD / h.valueCAD) * 1000) / 10
-          : 0,
-      annualDiv: Math.round(h.annualDivCAD),
-    }));
-
-    if (acctValueCAD > 0 || topHoldings.length > 0) {
-      accountSummaries.push({
-        name: portfolio.name,
-        type: portfolio.accountType,
-        valueCAD: Math.round(acctValueCAD),
-        holdings: holdingSummaries,
-      });
-    }
+    accountSummaries.push({
+      name: portfolio.name,
+      type: portfolio.accountType,
+      valueCAD: Math.round(acctValueCAD),
+      costCAD: Math.round(acctCostCAD),
+      gainCAD: Math.round(acctValueCAD - acctCostCAD),
+      gainPct: acctCostCAD > 0 ? Math.round(((acctValueCAD - acctCostCAD) / acctCostCAD) * 1000) / 10 : 0,
+      todayChangeCAD: Math.round(acctTodayChangeCAD),
+      holdings: sortedHoldings.map(h => ({
+        ...h,
+        valueCAD: Math.round(h.valueCAD),
+        costCAD: Math.round(h.costCAD),
+        annualDivCAD: Math.round(h.annualDivCAD),
+        currentPct: acctValueCAD > 0 ? Math.round((h.valueCAD / acctValueCAD) * 1000) / 10 : 0,
+        targetPct: targetAlloc[h.ticker] ?? null,
+        diffPct: targetAlloc[h.ticker] != null && acctValueCAD > 0
+          ? Math.round(((h.valueCAD / acctValueCAD) * 100 - targetAlloc[h.ticker]) * 10) / 10
+          : null,
+      })),
+    });
   }
 
-  const returnPct =
-    totalCostCAD > 0
-      ? Math.round(((totalValueCAD - totalCostCAD) / totalCostCAD) * 1000) / 10
-      : 0;
+  const returnPct = totalCostCAD > 0
+    ? Math.round(((totalValueCAD - totalCostCAD) / totalCostCAD) * 1000) / 10
+    : 0;
 
-  let investorProfile: { birthYear?: number; age?: number; retirementAge?: number; yearsToRetirement?: number; goals?: string[] } | null = null;
+  let investorProfile: { birthYear?: number; age?: number; retirementAge?: number; yearsToRetirement?: number; annualIncomeCAD?: number; rrspRoomEstimate?: number; goals?: string[] } | null = null;
   if (investorProfileSetting?.value) {
     try {
-      const raw = JSON.parse(investorProfileSetting.value) as { birthYear?: number; age?: number; retirementAge?: number; goals?: string[] };
+      const raw = JSON.parse(investorProfileSetting.value) as { birthYear?: number; age?: number; retirementAge?: number; annualIncome?: number; goals?: string[] };
       const birthYear = raw.birthYear ?? raw.age;
       const currentAge = birthYear ? new Date().getFullYear() - birthYear : undefined;
       const retirementAge = raw.retirementAge;
+      const annualIncome = raw.annualIncome;
       investorProfile = {
         birthYear,
         age: currentAge,
         retirementAge,
         yearsToRetirement: (currentAge && retirementAge) ? Math.max(0, retirementAge - currentAge) : undefined,
+        annualIncomeCAD: annualIncome,
+        rrspRoomEstimate: annualIncome ? Math.min(Math.round(annualIncome * 0.18), 32490) : undefined,
         goals: raw.goals,
       };
     } catch { /* ignore */ }
@@ -223,14 +277,16 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   const context = {
     date: new Date().toISOString().split("T")[0],
     currency: "CAD",
+    fxRate: Math.round(fxRate * 10000) / 10000,
     totalValueCAD: Math.round(totalValueCAD),
     totalCostCAD: Math.round(totalCostCAD),
+    totalGainCAD: Math.round(totalValueCAD - totalCostCAD),
     returnPct,
     annualDivCAD: Math.round(annualDivCAD),
     monthlyDivCAD: Math.round(annualDivCAD / 12),
     accounts: accountSummaries,
     contributions: {
-      tfsa: { room: Math.round(tfsaRoom + 7000) }, // 7000 = 2026 annual limit
+      tfsa: { room: Math.round(tfsaRoom + 7000) },
       rrsp: { room: Math.round(rrspRoom) },
     },
     ...(investorProfile ? { investorProfile } : {}),

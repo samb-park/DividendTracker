@@ -18,12 +18,15 @@ export async function POST(req: Request) {
   if (!message?.trim()) return NextResponse.json({ error: "message is required" }, { status: 400 });
 
   const context = await buildPortfolioContext(userId);
-  const parsed = JSON.parse(context) as { investorProfile?: { age?: number; retirementAge?: number; yearsToRetirement?: number } };
+  const parsed = JSON.parse(context) as { investorProfile?: { age?: number; retirementAge?: number; yearsToRetirement?: number; annualIncomeCAD?: number; rrspRoomEstimate?: number } };
   const profile = parsed.investorProfile;
-  const retirementNote = (profile?.retirementAge && profile?.yearsToRetirement !== undefined)
-    ? ` 투자자는 ${profile.retirementAge}세 은퇴 목표 (${profile.yearsToRetirement}년 남음). 은퇴 시점을 고려한 배당 성장 전략을 우선시할 것.`
-    : "";
-  const systemPrompt = `캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. 간결하게 답변 (3문장 이내).${retirementNote} 포트폴리오 데이터:\n${context}`;
+  const notes: string[] = [];
+  if (profile?.retirementAge && profile?.yearsToRetirement !== undefined)
+    notes.push(`${profile.retirementAge}세 은퇴 목표 (${profile.yearsToRetirement}년 남음)`);
+  if (profile?.annualIncomeCAD)
+    notes.push(`연소득 CAD $${profile.annualIncomeCAD.toLocaleString()} (RRSP 연간 한도 추정 ~$${profile.rrspRoomEstimate?.toLocaleString()})`);
+  const profileNote = notes.length > 0 ? ` 투자자 정보: ${notes.join(", ")}. 이를 바탕으로 맞춤 조언.` : "";
+  const systemPrompt = `캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. 간결하게 답변 (3문장 이내).${profileNote} 포트폴리오 데이터:\n${context}`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

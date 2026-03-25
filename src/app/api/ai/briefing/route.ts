@@ -14,11 +14,14 @@ export const dynamic = "force-dynamic";
 
 const yahooFinance = new YahooFinance();
 
-function buildSystemPrompt(profile?: { age?: number; retirementAge?: number; yearsToRetirement?: number }): string {
-  const retirementNote = (profile?.retirementAge && profile?.yearsToRetirement !== undefined)
-    ? ` 투자자는 ${profile.retirementAge}세 은퇴 목표 (${profile.yearsToRetirement}년 남음). 은퇴 시점 기준 배당 성장 속도와 TFSA/RRSP 활용 전략을 우선시할 것.`
-    : "";
-  return `당신은 캐나다 배당 투자 전문 어시스턴트입니다. TFSA 연 $7,000 납입한도, RRSP 소득공제, US배당→TFSA 15% 원천징수 손실, RRSP는 면제.${retirementNote} 투자자 프로필(나이, 목표)이 있으면 그에 맞는 맞춤 조언을 포함하세요. 최신 뉴스가 있으면 포트폴리오에 미치는 영향을 언급하세요. 답변은 3-5개 핵심 인사이트를 한국어로, 각 2문장 이내로 간결하게.`;
+function buildSystemPrompt(profile?: { age?: number; retirementAge?: number; yearsToRetirement?: number; annualIncomeCAD?: number; rrspRoomEstimate?: number }): string {
+  const notes: string[] = [];
+  if (profile?.retirementAge && profile?.yearsToRetirement !== undefined)
+    notes.push(`${profile.retirementAge}세 은퇴 목표 (${profile.yearsToRetirement}년 남음)`);
+  if (profile?.annualIncomeCAD)
+    notes.push(`연소득 CAD $${profile.annualIncomeCAD.toLocaleString()}, RRSP 연간 한도 추정 ~$${profile.rrspRoomEstimate?.toLocaleString()}`);
+  const profileNote = notes.length > 0 ? ` 투자자 정보: ${notes.join(" / ")}. 은퇴 시점과 소득 수준에 맞는 TFSA/RRSP 전략을 우선시할 것.` : "";
+  return `당신은 캐나다 배당 투자 전문 어시스턴트입니다. TFSA 연 $7,000 납입한도, RRSP 소득공제, US배당→TFSA 15% 원천징수 손실, RRSP는 면제.${profileNote} 투자자 프로필(나이, 목표)이 있으면 그에 맞는 맞춤 조언을 포함하세요. 최신 뉴스가 있으면 포트폴리오에 미치는 영향을 언급하세요. 답변은 3-5개 핵심 인사이트를 한국어로, 각 2문장 이내로 간결하게.`;
 }
 
 async function getTopHoldingNews(tickers: string[]): Promise<string> {
@@ -54,7 +57,7 @@ export async function POST() {
   if (!allowed) return NextResponse.json({ error: "Daily AI call limit reached", remaining: 0 }, { status: 429 });
 
   const contextStr = await buildPortfolioContext(userId);
-  const context = JSON.parse(contextStr) as { accounts?: { holdings?: { ticker: string }[] }[]; investorProfile?: { age?: number; retirementAge?: number; yearsToRetirement?: number } };
+  const context = JSON.parse(contextStr) as { accounts?: { holdings?: { ticker: string }[] }[]; investorProfile?: { age?: number; retirementAge?: number; yearsToRetirement?: number; annualIncomeCAD?: number; rrspRoomEstimate?: number } };
 
   // Collect top tickers for news
   const tickers = Array.from(

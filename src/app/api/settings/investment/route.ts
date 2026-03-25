@@ -29,6 +29,7 @@ const investorProfileSchema = z.object({
   type: z.literal("investor_profile"),
   birthYear: z.number().int().min(1940).max(new Date().getFullYear() - 18),
   retirementAge: z.number().int().min(40).max(80).optional(),
+  annualIncome: z.number().int().min(0).max(9_999_999).optional(),
   goals: z.array(z.enum(["retirement", "house", "education", "short_term", "passive_income", "wealth_building"])).min(1).max(6),
 });
 const settingsSchema = z.discriminatedUnion("type", [
@@ -135,12 +136,12 @@ export async function POST(req: Request) {
       create: { key, value: JSON.stringify({ tfsaCarryover, rrspLimit, fhsaCarryover }) },
     });
   } else if (body.type === "investor_profile") {
-    const { birthYear, retirementAge, goals } = body;
+    const { birthYear, retirementAge, annualIncome, goals } = body;
     const key = userKey(uid, "investment:investor_profile");
     await prisma.setting.upsert({
       where: { key },
-      update: { value: JSON.stringify({ birthYear, retirementAge, goals }) },
-      create: { key, value: JSON.stringify({ birthYear, retirementAge, goals }) },
+      update: { value: JSON.stringify({ birthYear, retirementAge, annualIncome, goals }) },
+      create: { key, value: JSON.stringify({ birthYear, retirementAge, annualIncome, goals }) },
     });
   }
   return NextResponse.json({ ok: true });
