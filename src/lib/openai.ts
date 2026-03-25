@@ -1,35 +1,39 @@
 import { prisma } from "@/lib/db";
-import { execFile } from "child_process";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
 
 const AI_MAX_CALLS_PER_DAY = 2;
 const AI_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const DEFAULT_FX_RATE = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
 
-// ── Codex CLI call ────────────────────────────────────────────────────────────
+// ── GitHub Models API call ────────────────────────────────────────────────────
 
 export async function callOpenAI(
   _apiKey: string,
   messages: { role: string; content: string }[],
-  _maxTokens = 400
+  maxTokens = 400
 ): Promise<string> {
-  // Build a single prompt from system + user messages
-  const prompt = messages
-    .map((m) => (m.role === "system" ? `[지침]\n${m.content}` : m.content))
-    .join("\n\n");
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error("GITHUB_TOKEN not configured");
 
-  const { stdout } = await execFileAsync(
-    "codex",
-    ["exec", "--skip-git-repo-check", prompt],
-    {
-      timeout: 60000,
-      env: { ...process.env, HOME: "/app/data" },
-    }
-  );
+  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages,
+      max_tokens: maxTokens,
+    }),
+  });
 
-  return stdout.trim();
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GitHub Models API error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json() as { choices: { message: { content: string } }[] };
+  return data.choices[0]?.message?.content?.trim() ?? "";
 }
 
 // ── Portfolio context builder ─────────────────────────────────────────────────
