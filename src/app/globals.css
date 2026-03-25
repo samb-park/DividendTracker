@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -33,6 +33,41 @@
   --radius: 2px;
 }
 
+[data-theme="light"] {
+  --background:      42 25% 94%;
+  --foreground:      42  8% 15%;
+  --card:            42 20% 97%;
+  --card-foreground: 42  8% 15%;
+  --popover:         42 20% 97%;
+  --popover-foreground: 42 8% 15%;
+  --primary:         142 55% 35%;
+  --primary-foreground: 42 25% 96%;
+  --secondary:       42 15% 88%;
+  --secondary-foreground: 42 8% 15%;
+  --muted:           42 15% 90%;
+  --muted-foreground: 42 8% 42%;
+  --accent:          32 75% 40%;
+  --accent-foreground: 42 25% 96%;
+  --destructive:     0 65% 45%;
+  --destructive-foreground: 42 25% 96%;
+  --border:          42 12% 78%;
+  --input:           42 18% 92%;
+  --ring:            142 55% 35%;
+  --positive:        142 55% 35%;
+  --negative:        0 65% 45%;
+  --chart-1: 142 55% 35%;
+  --chart-2:  32 75% 40%;
+  --chart-3: 196 65% 38%;
+  --chart-4: 270 45% 48%;
+  --chart-5:   0 65% 45%;
+}
+
+/* scanline 제거 (밝은 배경에서 무의미) */
+[data-theme="light"] body::before { display: none; }
+
+/* glow 효과 제거 */
+[data-theme="light"] .text-positive { text-shadow: none; }
+
 * {
   border-color: hsl(var(--border));
   box-sizing: border-box;
@@ -48,6 +83,7 @@ body {
   color: hsl(var(--foreground));
   font-family: 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 13px;
+  font-weight: 600;
   line-height: 1.6;
   overscroll-behavior: none;
   overflow-x: hidden;
@@ -98,7 +134,7 @@ th {
   border-bottom: 1px solid hsl(var(--border));
   padding: 8px;
   text-align: left;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 td {
@@ -228,4 +264,36 @@ tr.cursor-pointer {
   .safe-top {
     padding-top: env(safe-area-inset-top);
   }
+}
+
+
+/* Chart tooltip: ensure visibility on all themes */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.recharts-tooltip-item {
+  color: hsl(var(--foreground)) !important;
+}
+.recharts-tooltip-label {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Mobile: hide chart tooltip by default, show on tap or horizontal scrub */
+@media (hover: none) {
+  .recharts-tooltip-wrapper {
+    display: none !important;
+    pointer-events: none;
+  }
+  .chart-touch-active .recharts-tooltip-wrapper {
+    display: block !important;
+  }
+}
+
+/* Prevent text selection / callout on chart touch zones */
+.chart-touch-zone {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }

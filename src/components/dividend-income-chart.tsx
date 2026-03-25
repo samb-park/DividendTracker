@@ -11,6 +11,7 @@ import {
   Cell,
 } from "recharts";
 import { fmt } from "@/lib/utils";
+import { RETRO_TOOLTIP_STYLE, COLOR_ACTUAL, COLOR_PROJECTED, COLOR_SELECTED } from "@/lib/chart-tokens";
 
 interface DividendItem {
   ticker: string;
@@ -33,18 +34,6 @@ interface DividendIncomeData {
 
 const MONTH_LABELS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
-const RETRO_TOOLTIP_STYLE = {
-  backgroundColor: "#161616",
-  border: "1px solid #333",
-  borderRadius: "0",
-  fontFamily: "'IBM Plex Mono', monospace",
-  fontSize: "11px",
-  color: "#e8e6d9",
-};
-
-const COLOR_ACTUAL = "hsl(142, 69%, 58%)";
-const COLOR_PROJECTED = "hsl(142, 50%, 38%)";
-const COLOR_SELECTED = "hsl(38, 92%, 55%)";
 
 function toDisplayAmt(amount: number, currency: string, displayCurrency: "CAD" | "USD", fxRate: number) {
   if (displayCurrency === "CAD") return currency === "USD" ? amount * fxRate : amount;
@@ -120,6 +109,7 @@ export function DividendIncomeChart({
   }, []);
 
   const [year, setYear] = useState(CURRENT_YEAR);
+  const [availableYears, setAvailableYears] = useState<number[]>([CURRENT_YEAR]);
   const [retryKey, setRetryKey] = useState(0);
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
   const [futureData, setFutureData] = useState<DividendIncomeData | null>(null);
@@ -130,6 +120,17 @@ export function DividendIncomeChart({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/dividend-income?mode=years&portfolioId=${selectedPortfolioId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const years: number[] = d.years ?? [];
+        if (!years.includes(CURRENT_YEAR)) years.unshift(CURRENT_YEAR);
+        setAvailableYears(years.sort((a, b) => b - a));
+      })
+      .catch(() => {});
+  }, [selectedPortfolioId, CURRENT_YEAR]);
 
   useEffect(() => {
     setLoading(true);
@@ -296,7 +297,7 @@ export function DividendIncomeChart({
       <div className="flex items-center justify-between mb-3">
         <YearDropdown
           value={year}
-          options={Array.from({ length: 16 }, (_, i) => CURRENT_YEAR + 10 - i)}
+          options={availableYears}
           onChange={setYear}
         />
         <div className="flex items-center gap-1.5">
@@ -365,7 +366,8 @@ export function DividendIncomeChart({
         </div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={180}>
+        <div className="chart-touch-zone h-[180px] lg:h-[240px]">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
               margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
@@ -405,8 +407,10 @@ export function DividendIncomeChart({
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
 
           {/* Legend: actual vs projected */}
+
           <div className="flex gap-4 mt-2 ml-1">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: COLOR_ACTUAL }} />
@@ -503,11 +507,6 @@ export function DividendIncomeChart({
         </div>
       )}
 
-      {!loading && !fetchError && chartData.every((d) => d.value === 0) && (
-        <div className="text-muted-foreground text-xs text-center py-4">
-          NO DIVIDEND DATA FOR {year}
-        </div>
-      )}
       {hasCanadianEligible && (
         <div className="text-[9px] text-muted-foreground/60 mt-2 border-l-2 border-accent/30 pl-2">
           🍁 CAD dividends in non-registered accounts are shown gross. Canadian eligible dividends

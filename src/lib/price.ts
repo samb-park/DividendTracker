@@ -40,6 +40,13 @@ const TTL = 5 * 60 * 1000; // 5 minutes
 type PriceError = "not_found" | "network";
 const errorCache = new Map<string, { reason: PriceError; time: number }>();
 
+export function clearPriceCache() {
+  cache.clear();
+  errorCache.clear();
+  historyCache.clear();
+  fxCache = null;
+}
+
 export function getPriceError(ticker: string): PriceError | null {
   const e = errorCache.get(ticker);
   if (!e || Date.now() - e.time > TTL) return null;

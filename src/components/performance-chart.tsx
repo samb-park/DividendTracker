@@ -18,6 +18,7 @@ interface Snapshot {
   totalCAD: number;
   costBasisCAD: number;
   cashCAD: number;
+  cumulativeDividendCAD?: number;
 }
 
 const RANGES = ["3m", "6m", "1y", "all"] as const;
@@ -26,12 +27,6 @@ type Range = (typeof RANGES)[number];
 interface BenchmarkPoint {
   date: string;
   value: number;
-}
-
-function fmt(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toFixed(0);
 }
 
 function computeMDD(values: number[]): number {
@@ -92,8 +87,8 @@ export function PerformanceChart() {
       .catch(() => { setBenchmark([]); setBenchmarkError(true); });
   }, [range, showBenchmark]);
 
-  const { cagr, mdd, totalReturn, chartData } = useMemo(() => {
-    if (snapshots.length < 2) return { cagr: null, mdd: null, totalReturn: null, chartData: [] };
+  const { cagr, mdd, totalReturn, chartData, hasTotalReturn } = useMemo(() => {
+    if (snapshots.length < 2) return { cagr: null, mdd: null, totalReturn: null, chartData: [], hasTotalReturn: false };
 
     const first = snapshots[0];
     const last = snapshots[snapshots.length - 1];
@@ -114,21 +109,29 @@ export function PerformanceChart() {
     const portfolioBase = first.totalCAD;
 
     const spanYears = days / 365;
+    const firstCumDiv = first.cumulativeDividendCAD ?? 0;
+    const hasTotalReturn = snapshots.some((s) => (s.cumulativeDividendCAD ?? 0) > 0);
     const chartData = snapshots.map((s) => {
       const normalizedPortfolio = portfolioBase > 0 ? (s.totalCAD / portfolioBase) * 100 : null;
       const spyValue = benchMap.get(s.date) ?? null;
+      const cumDiv = s.cumulativeDividendCAD ?? 0;
+      const totalReturnCAD = s.totalCAD + (cumDiv - firstCumDiv);
+      const normalizedTotalReturn = portfolioBase > 0 ? (totalReturnCAD / portfolioBase) * 100 : null;
       return {
-        date: (range === "all" || spanYears >= 1) ? s.date.slice(0, 7) : s.date.slice(5), // YYYY-MM or MM-DD
+        date: (range === "all" || spanYears >= 1) ? s.date.slice(0, 7) : s.date.slice(5),
         fullDate: s.date,
         total: Math.round(s.totalCAD),
         cost: Math.round(s.costBasisCAD),
         gain: Math.round(s.totalCAD - s.costBasisCAD),
         portfolioNorm: normalizedPortfolio,
         spyNorm: spyValue,
+        totalReturn: Math.round(totalReturnCAD),
+        totalReturnNorm: normalizedTotalReturn,
       };
     });
 
-    return { cagr, mdd, totalReturn, chartData };
+    return { cagr, mdd, totalReturn, chartData, hasTotalReturn };
+
   }, [snapshots, benchmark, range]);
 
   const hasSufficientData = snapshots.length >= 2;
@@ -213,24 +216,37 @@ export function PerformanceChart() {
         </div>
       ) : (
         <div>
-          {showBenchmark && (
-            <div className="flex items-center gap-4 mb-2 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
-                PORTFOLIO
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 border-t border-dashed border-accent" />
-                SPY
-              </span>
-              {benchmarkError ? (
-                <span className="ml-auto text-[9px] text-negative">SPY DATA UNAVAILABLE</span>
-              ) : (
-                <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
-              )}
-            </div>
-          )}
-          <div className="h-48">
+          <div className="flex items-center gap-4 mb-2 text-[10px] text-muted-foreground">
+            {showBenchmark ? (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
+                  PORTFOLIO
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 border-t border-dashed border-accent" />
+                  SPY
+                </span>
+                {benchmarkError ? (
+                  <span className="ml-auto text-[9px] text-negative">SPY DATA UNAVAILABLE</span>
+                ) : (
+                  <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
+                )}
+              </>
+            ) : hasTotalReturn ? (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
+                  PRICE
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-px" style={{ height: 2, backgroundColor: "hsl(196,80%,60%)" }} />
+                  TOTAL RETURN
+                </span>
+              </>
+            ) : null}
+          </div>
+          <div className="h-48 lg:h-72 chart-touch-zone">
             <ResponsiveContainer width="100%" height="100%">
               {showBenchmark ? (
                 <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
@@ -291,8 +307,9 @@ export function PerformanceChart() {
                       fontFamily: "inherit",
                     }}
                     formatter={(value: number, name: string) => {
-                      if (name === "total") return [`C$${value.toLocaleString("en-CA")}`, "Portfolio"];
+                      if (name === "total") return [`C$${value.toLocaleString("en-CA")}`, "Price"];
                       if (name === "cost") return [`C$${value.toLocaleString("en-CA")}`, "Cost Basis"];
+                      if (name === "totalReturn") return [`C$${value.toLocaleString("en-CA")}`, "Total Return"];
                       return [value, name];
                     }}
                     labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
@@ -314,6 +331,16 @@ export function PerformanceChart() {
                     fill="url(#totalGrad)"
                     dot={false}
                   />
+                  {hasTotalReturn && (
+                    <Line
+                      type="monotone"
+                      dataKey="totalReturn"
+                      stroke="hsl(196,80%,60%)"
+                      strokeWidth={1}
+                      dot={false}
+                      strokeDasharray="3 2"
+                    />
+                  )}
                   <ReferenceLine
                     y={chartData[0]?.cost}
                     stroke="hsl(var(--muted-foreground))"

@@ -44,6 +44,7 @@ model Holding {
   currency     Currency      @default(USD)
   quantity     Decimal?      @db.Decimal(18, 6)
   avgCost      Decimal?      @db.Decimal(18, 4)
+  source       String?       // "questrade" if imported via broker sync
   portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   createdAt    DateTime      @default(now())
@@ -60,6 +61,7 @@ model Transaction {
   price      Decimal           @db.Decimal(18, 4)
   commission Decimal           @default(0) @db.Decimal(18, 4)
   fxRateCAD  Decimal?          @db.Decimal(10, 6)  // CAD/USD rate on transaction date (for CRA reporting)
+  source     String?           // "questrade" if imported via broker sync
   notes      String?
   holding    Holding           @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   createdAt  DateTime          @default(now())

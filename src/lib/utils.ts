@@ -18,12 +18,13 @@ export function mergeHoldings(portfolios: { holdings: Holding[] }[]): Holding[] 
           : 0;
         map.set(h.ticker, {
           ...existing,
+          allHoldingIds: [...(existing.allHoldingIds ?? [existing.id]), h.id],
           quantity: totalQty.toString(),
           avgCost: weightedAvgCost.toString(),
           transactions: [...(existing.transactions ?? []), ...(h.transactions ?? [])],
         });
       } else {
-        map.set(h.ticker, { ...h, transactions: [...(h.transactions ?? [])] });
+        map.set(h.ticker, { ...h, allHoldingIds: [h.id], transactions: [...(h.transactions ?? [])] });
       }
     }
   }
@@ -39,6 +40,12 @@ export function fmt(n: number, decimals = 2) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+}
+
+export function fmtCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toFixed(0);
 }
 
 export function fmtCurrency(n: number, currency: "USD" | "CAD" = "USD") {

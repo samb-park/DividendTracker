@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AddHoldingDialog } from "./add-holding-dialog";
 import { HoldingDetailPanel } from "./holding-detail-panel";
 import { mergeHoldings } from "@/lib/utils";
@@ -89,6 +89,8 @@ export function HoldingsTable({
   readOnly = false,
   displayCurrency,
   allPortfolios,
+  selectedPortfolioId,
+  onPortfolioChange,
 }: {
   portfolioId: string;
   initialHoldings: Holding[];
@@ -97,6 +99,8 @@ export function HoldingsTable({
   readOnly?: boolean;
   displayCurrency?: "USD" | "CAD";
   allPortfolios?: { id: string; name: string }[];
+  selectedPortfolioId?: string;
+  onPortfolioChange?: (id: string) => void;
 }) {
   const [holdings, setHoldings] = useState(initialHoldings);
   const [prices, setPrices] = useState<Record<string, PriceData | null>>({});
@@ -116,8 +120,11 @@ export function HoldingsTable({
   const [dividendCutPcts, setDividendCutPcts] = useState<Record<string, number>>({});
   const [dividendHistory, setDividendHistory] = useState<Set<string>>(new Set());
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
-  const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD" } | null>(null);
+  const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD"; frequency?: string } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
+  const [longPressInfo, setLongPressInfo] = useState<{ ticker: string; currency: "USD" | "CAD"; marketValue: number; shares: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
 
   const toDisp = (value: number, holdingCurrency: "USD" | "CAD") => {
     if (!displayCurrency || displayCurrency === holdingCurrency) return value;
@@ -132,7 +139,7 @@ export function HoldingsTable({
         targets[ticker] = (val as { pct: number }).pct;
       }
       setInvestTargets(targets);
-      if (d.contribution) setInvestContrib({ amount: d.contribution.amount, currency: d.contribution.currency });
+      if (d.contribution) setInvestContrib({ amount: d.contribution.amount, currency: d.contribution.currency, frequency: d.contribution.frequency });
     }).catch(() => {});
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
     fetch("/api/dividend-growth").then(r => r.json()).then(d => {
@@ -172,6 +179,18 @@ export function HoldingsTable({
     setSelectedRowId(id);
     onDetailOpen?.(id !== null);
   }, [onDetailOpen]);
+
+  const startRowLongPress = useCallback((info: { ticker: string; currency: "USD" | "CAD"; marketValue: number; shares: number }) => {
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setLongPressInfo(info);
+    }, 500);
+  }, []);
+
+  const cancelRowLongPress = useCallback(() => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  }, []);
 
   const fetchPrices = useCallback(async (hs: Holding[]) => {
     const results: Record<string, PriceData | null> = {};
@@ -384,8 +403,12 @@ export function HoldingsTable({
               return (
                 <div
                   key={row.holding.id}
-                  className={`border border-border p-3 cursor-pointer active:bg-border/20 ${selectedRowId === row.holding.id ? "bg-border/30 border-accent" : "bg-card"}`}
-                  onClick={() => selectRow(row.holding.id)}
+                  className={`border border-border p-3 cursor-pointer select-none active:bg-border/20 ${selectedRowId === row.holding.id ? "bg-border/30 border-accent" : "bg-card"}`}
+                  onClick={() => { if (!longPressTriggeredRef.current) selectRow(row.holding.id); }}
+                  onPointerDown={() => startRowLongPress({ ticker: row.holding.ticker, currency: row.holding.currency, marketValue: row.marketValue, shares: row.shares })}
+                  onPointerUp={cancelRowLongPress}
+                  onPointerLeave={cancelRowLongPress}
+                  onContextMenu={e => e.preventDefault()}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
@@ -426,17 +449,6 @@ export function HoldingsTable({
                     <span className="text-muted-foreground tabular-nums flex-shrink-0">
                       {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
                     </span>
-                    {dividendCuts.has(row.holding.ticker) ? (
-                      <span className="text-[11px] flex-shrink-0 text-negative" title="Dividend cut in most recent year">
-                        ↓{dividendCutPcts[row.holding.ticker] != null ? `${dividendCutPcts[row.holding.ticker].toFixed(0)}%` : " CUT"}
-                      </span>
-                    ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
-                      <span className={`text-[11px] flex-shrink-0 ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
-                        ↑{streaks[row.holding.ticker]}Y
-                      </span>
-                    ) : dividendHistory.has(row.holding.ticker) ? (
-                      <span className="text-[11px] flex-shrink-0 text-muted-foreground/50" title="Dividend unchanged">—</span>
-                    ) : null}
                   </div>
                 </div>
               );
@@ -508,17 +520,6 @@ export function HoldingsTable({
                     >
                       <td className="font-medium text-accent">
                         <span>{row.holding.ticker}</span>
-                        {dividendCuts.has(row.holding.ticker) ? (
-                          <span className="ml-1 text-[9px] text-negative" title="Dividend cut in most recent year">
-                            ↓{dividendCutPcts[row.holding.ticker] != null ? `${dividendCutPcts[row.holding.ticker].toFixed(0)}%` : ""}
-                          </span>
-                        ) : (streaks[row.holding.ticker] ?? 0) > 0 ? (
-                          <span className={`ml-1 text-[9px] ${(streaks[row.holding.ticker] ?? 0) >= 5 ? "text-positive" : "text-muted-foreground"}`} title={`${streaks[row.holding.ticker]} consecutive years of dividend growth`}>
-                            ↑{streaks[row.holding.ticker]}
-                          </span>
-                        ) : dividendHistory.has(row.holding.ticker) ? (
-                          <span className="ml-1 text-[9px] text-muted-foreground/50" title="Dividend unchanged in most recent year">—</span>
-                        ) : null}
                       </td>
                       <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
                         {row.holding.name || "—"}
@@ -613,6 +614,67 @@ export function HoldingsTable({
         )}
       </div>
 
+      {/* Long press quick-info popup */}
+      {longPressInfo && (() => {
+        const lp = longPressInfo;
+        const cur = dispSym ?? (lp.currency === "CAD" ? "C$" : "$");
+        const weight = totalMarketValue > 0 ? (lp.marketValue / totalMarketValue) * 100 : 0;
+        const target = investTargets[lp.ticker];
+        const alloc = allocMap[lp.ticker];
+        const gap = target != null ? target - weight : null;
+        const freqLabel: Record<string, string> = { weekly: "WEEKLY", biweekly: "BI-WEEKLY", monthly: "MONTHLY" };
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setLongPressInfo(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative bg-background border border-border w-full max-w-sm mx-4 mb-8 p-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-accent font-medium tracking-wide">{lp.ticker}</span>
+                <span className="text-[10px] text-muted-foreground">INVESTMENT PLAN</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">CURRENT WEIGHT</div>
+                  <div className="tabular-nums">{weight.toFixed(1)}%</div>
+                </div>
+                {target != null && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">TARGET WEIGHT</div>
+                    <div className={`tabular-nums ${gap != null && gap > 0 ? "text-positive" : gap != null && gap < 0 ? "text-negative" : ""}`}>
+                      {target.toFixed(1)}%
+                      {gap != null && <span className="text-muted-foreground ml-1">({gap > 0 ? "+" : ""}{gap.toFixed(1)}%)</span>}
+                    </div>
+                  </div>
+                )}
+                {investContrib && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">CONTRIBUTION</div>
+                    <div className="tabular-nums">
+                      {investContrib.currency === "CAD" ? "C$" : "$"}{fmt(investContrib.amount)}
+                      {investContrib.frequency && <span className="text-muted-foreground ml-1 text-[10px]">/ {freqLabel[investContrib.frequency] ?? investContrib.frequency}</span>}
+                    </div>
+                  </div>
+                )}
+                {alloc != null && alloc > 0 ? (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">NEXT BUY</div>
+                    <div className="tabular-nums text-primary">{cur}{fmt(alloc)}</div>
+                  </div>
+                ) : target != null && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">NEXT BUY</div>
+                    <div className="tabular-nums text-muted-foreground">AT TARGET</div>
+                  </div>
+                )}
+              </div>
+              <button className="btn-retro w-full mt-4 text-xs py-2" onClick={() => setLongPressInfo(null)}>CLOSE</button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Detail panel — inline on desktop */}
       {selectedRow && (
         <HoldingDetailPanel
@@ -626,6 +688,8 @@ export function HoldingsTable({
           contribCAD={contribCAD}
           fxRateForAlloc={fxRate}
           allPortfolios={allPortfolios}
+          selectedPortfolioId={selectedPortfolioId}
+          onPortfolioChange={onPortfolioChange}
         />
       )}
     </div>

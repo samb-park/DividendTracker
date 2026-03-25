@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { AddTransactionDialog } from "./add-transaction-dialog";
-import { X, Trash2 } from "lucide-react";
+import { X } from "lucide-react";
+import { fmt, fmtPct } from "@/lib/utils";
+import { COLOR_ACTUAL, COLOR_PROJECTED } from "@/lib/chart-tokens";
 import {
   BarChart,
   Bar,
@@ -44,6 +46,7 @@ interface PriceData {
 interface HoldingRow {
   holding: {
     id: string;
+    allHoldingIds?: string[];
     ticker: string;
     name: string | null;
     currency: "USD" | "CAD";
@@ -60,14 +63,6 @@ interface HoldingRow {
   unrealizedPnLPct: number;
 }
 
-function fmt(n: number, d = 2) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: d, maximumFractionDigits: d });
-}
-
-function fmtPct(n: number) {
-  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
-}
-
 type DetailTab = "transactions" | "dividends";
 
 interface InvestmentSettings {
@@ -80,8 +75,6 @@ function convertCurrency(amount: number, from: "USD" | "CAD", to: "USD" | "CAD",
   return from === "USD" ? amount * fxRate : amount / fxRate;
 }
 
-const COLOR_ACTUAL = "hsl(142, 69%, 58%)";
-const COLOR_PROJECTED = "hsl(142, 50%, 38%)";
 
 export function HoldingDetailPanel({
   row,
@@ -94,6 +87,8 @@ export function HoldingDetailPanel({
   contribCAD = 0,
   fxRateForAlloc = 1.35,
   allPortfolios,
+  selectedPortfolioId,
+  onPortfolioChange,
 }: {
   row: HoldingRow;
   readOnly: boolean;
@@ -105,9 +100,12 @@ export function HoldingDetailPanel({
   contribCAD?: number;
   fxRateForAlloc?: number;
   allPortfolios?: { id: string; name: string }[];
+  selectedPortfolioId?: string;
+  onPortfolioChange?: (id: string) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
+  const acctDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
   const [showHistory, setShowHistory] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -115,12 +113,21 @@ export function HoldingDetailPanel({
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
   const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null);
   const [panelTxns, setPanelTxns] = useState<Transaction[]>([]);
+  const [txnMenu, setTxnMenu] = useState<{ txn: Transaction; y: number } | null>(null);
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [txnsLoading, setTxnsLoading] = useState(true);
+  const [txnsError, setTxnsError] = useState(false);
+  const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
 
   const fetchTxns = useCallback(async () => {
     setTxnsLoading(true);
+    setTxnsError(false);
     try {
-      const res = await fetch(`/api/transactions?holdingId=${row.holding.id}`);
+      const ids = row.holding.allHoldingIds ?? [row.holding.id];
+      const param = ids.length > 1 ? `holdingIds=${ids.join(",")}` : `holdingId=${ids[0]}`;
+      const res = await fetch(`/api/transactions?${param}`);
+      if (!res.ok) throw new Error("fetch failed");
       const data = await res.json();
       if (Array.isArray(data)) {
         setPanelTxns(data.map((t: Record<string, unknown>) => ({
@@ -131,11 +138,15 @@ export function HoldingDetailPanel({
           commission: String(t.commission),
           date: typeof t.date === "string" ? t.date.slice(0, 10) : undefined,
           notes: (t.notes as string | null | undefined) ?? null,
+          source: (t.source as string | null | undefined) ?? null,
         })));
       }
-    } catch { /* silent */ }
-    finally { setTxnsLoading(false); }
-  }, [row.holding.id]);
+    } catch {
+      setTxnsError(true);
+    } finally {
+      setTxnsLoading(false);
+    }
+  }, [row.holding.id, row.holding.allHoldingIds?.join(",")]);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { fetchTxns(); }, [fetchTxns]);
@@ -158,6 +169,9 @@ export function HoldingDetailPanel({
     const handler = (e: MouseEvent) => {
       if (curDropdownRef.current && !curDropdownRef.current.contains(e.target as Node)) {
         setCurDropdownOpen(false);
+      }
+      if (acctDropdownRef.current && !acctDropdownRef.current.contains(e.target as Node)) {
+        setAcctDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -344,6 +358,21 @@ export function HoldingDetailPanel({
     }
   };
 
+  const updateTxn = async (id: string, data: Partial<{ action: string; date: string; quantity: string; price: string; commission: string; notes: string }>) => {
+    const res = await fetch(`/api/transactions/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (res.ok) { onRefresh(); fetchTxns(); }
+  };
+
+  const startLongPress = (e: React.MouseEvent | React.TouchEvent, txn: Transaction) => {
+    const y = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    longPressTimerRef.current = setTimeout(() => {
+      setTxnMenu({ txn, y });
+    }, 500);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  };
+
   // 52W range bar position
   const range52WPct = p && p.week52High > p.week52Low && !isNaN(p.week52High) && !isNaN(p.week52Low)
     ? ((p.price - p.week52Low) / (p.week52High - p.week52Low)) * 100
@@ -372,13 +401,49 @@ export function HoldingDetailPanel({
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <AddTransactionDialog
-            {...(allPortfolios
-              ? { portfolios: allPortfolios }
-              : { holdingId: row.holding.id })}
-            ticker={row.holding.ticker}
-            onAdd={() => { onRefresh(); fetchTxns(); }}
-          />
+          {row.holding.source !== "questrade" && (
+            <AddTransactionDialog
+              {...(allPortfolios
+                ? { portfolios: allPortfolios }
+                : { holdingId: row.holding.id })}
+              ticker={row.holding.ticker}
+              onAdd={() => { onRefresh(); fetchTxns(); }}
+            />
+          )}
+          {allPortfolios && allPortfolios.length > 1 && (
+            <div className="relative" ref={acctDropdownRef}>
+              <button
+                className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1"
+                onClick={() => setAcctDropdownOpen((v) => !v)}
+              >
+                <span className="flex-1 text-left truncate max-w-[5rem]">
+                  {selectedPortfolioId === "all" || !selectedPortfolioId
+                    ? "ALL"
+                    : (allPortfolios.find(p => p.id === selectedPortfolioId)?.name ?? "ALL")}
+                </span>
+                <span className="text-muted-foreground">▾</span>
+              </button>
+              {acctDropdownOpen && (
+                <div className="absolute top-full right-0 mt-0.5 z-[60] bg-card border border-border min-w-full">
+                  <button
+                    className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${(!selectedPortfolioId || selectedPortfolioId === "all") ? "text-accent" : ""}`}
+                    onClick={() => { onPortfolioChange?.("all"); onClose(); setAcctDropdownOpen(false); }}
+                  >
+                    ALL
+                  </button>
+                  {allPortfolios.map(p => (
+                    <button
+                      key={p.id}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${selectedPortfolioId === p.id ? "text-accent" : ""}`}
+                      onClick={() => { onPortfolioChange?.(p.id); onClose(); setAcctDropdownOpen(false); }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative" ref={curDropdownRef}>
             <button
               className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
@@ -401,7 +466,9 @@ export function HoldingDetailPanel({
               </div>
             )}
           </div>
-          <button className="btn-retro p-1.5" onClick={onClose}><X size={16} /></button>
+          <button className="btn-retro px-2 py-1 text-[10px] flex items-center gap-1" onClick={onClose}>
+            <X size={12} />CLOSE
+          </button>
         </div>
       </div>
 
@@ -705,8 +772,11 @@ export function HoldingDetailPanel({
           <div className="border border-border bg-card p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               <div className="text-[10px] text-muted-foreground tracking-wide">
-                {txnsLoading ? "LOADING..." : `TRANSACTIONS (${filteredTxns.length}/${buysSells.length})`}
+                {txnsLoading ? "LOADING..." : txnsError ? "FAILED TO LOAD" : `TRANSACTIONS (${filteredTxns.length}/${buysSells.length})`}
               </div>
+              {txnsError && (
+                <button className="btn-retro text-[9px] px-2 py-0.5" onClick={() => fetchTxns()}>RETRY</button>
+              )}
             </div>
             {buysSells.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px]">
@@ -731,7 +801,16 @@ export function HoldingDetailPanel({
             ) : (
               <div className="space-y-2">
                 {[...filteredTxns].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
-                  <div key={txn.id} className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0">
+                  <div
+                    key={txn.id}
+                    className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0 select-none cursor-default"
+                    onMouseDown={(e) => row.holding.source !== "questrade" && startLongPress(e, txn)}
+                    onMouseUp={cancelLongPress}
+                    onMouseLeave={cancelLongPress}
+                    onTouchStart={(e) => row.holding.source !== "questrade" && startLongPress(e, txn)}
+                    onTouchEnd={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
+                  >
                     <div className="flex items-center gap-2">
                       <span className={txn.action === "BUY" ? "text-positive" : "text-negative"}>
                         {txn.action}
@@ -740,27 +819,105 @@ export function HoldingDetailPanel({
                       <span className="text-muted-foreground">@</span>
                       <span className="tabular-nums">{sym}{fmt(toDisp(parseFloat(txn.price)))}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-right">
-                        <div className="tabular-nums text-muted-foreground">
-                          {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
-                        </div>
-                        {txn.date && (
-                          <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
-                        )}
+                    <div className="text-right">
+                      <div className="tabular-nums text-muted-foreground">
+                        {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
                       </div>
-                      <button
-                        className="btn-retro p-0.5 text-negative border-negative/30 hover:border-negative ml-2 flex-shrink-0"
-                        onClick={() => deleteTxn(txn.id)}
-                        disabled={deletingTxnId === txn.id}
-                      >
-                        <Trash2 size={10} />
-                      </button>
+                      {txn.date && (
+                        <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
+            {/* Long-press context menu */}
+            {txnMenu && mounted && createPortal(
+                <div className="fixed inset-0 z-[200]" onClick={() => setTxnMenu(null)}>
+                  <div
+                    className="absolute bg-card border border-border shadow-lg min-w-[160px]"
+                    style={{ top: Math.min(txnMenu.y, window.innerHeight - 120), left: "50%", transform: "translateX(-50%)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-[10px] text-muted-foreground px-3 py-2 border-b border-border tracking-wide">
+                      {txnMenu.txn.action} · {txnMenu.txn.date?.slice(0, 10)}
+                    </div>
+                    <button
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-border/30"
+                      onClick={() => { setEditingTxn(txnMenu.txn); setTxnMenu(null); }}
+                    >
+                      EDIT
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-xs text-negative hover:bg-border/30"
+                      disabled={deletingTxnId === txnMenu.txn.id}
+                      onClick={async () => { const id = txnMenu.txn.id; setTxnMenu(null); await deleteTxn(id); }}
+                    >
+                      {deletingTxnId === txnMenu.txn.id ? "DELETING..." : "DELETE"}
+                    </button>
+                  </div>
+                </div>,
+                document.body
+              )}
+              {/* Edit form */}
+              {editingTxn && mounted && createPortal(
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60" onClick={() => setEditingTxn(null)}>
+                  <div className="bg-card border border-border p-4 w-[90vw] max-w-sm" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[10px] text-muted-foreground tracking-wide mb-3">EDIT — {editingTxn.action}</div>
+                    <form
+                      className="space-y-2"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.currentTarget);
+                        await updateTxn(editingTxn.id, {
+                          action: fd.get("action") as string,
+                          date: fd.get("date") as string,
+                          quantity: fd.get("quantity") as string,
+                          price: fd.get("price") as string,
+                          commission: fd.get("commission") as string,
+                          notes: fd.get("notes") as string,
+                        });
+                        setEditingTxn(null);
+                      }}
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">ACTION</div>
+                          <select name="action" defaultValue={editingTxn.action} className="text-xs w-full">
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                          </select>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">DATE</div>
+                          <input name="date" type="date" defaultValue={editingTxn.date?.slice(0, 10)} className="text-xs w-full" required />
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">QTY</div>
+                          <input name="quantity" type="number" step="any" defaultValue={editingTxn.quantity} className="text-xs w-full" required />
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">PRICE</div>
+                          <input name="price" type="number" step="any" defaultValue={editingTxn.price} className="text-xs w-full" required />
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">COMMISSION</div>
+                          <input name="commission" type="number" step="any" defaultValue={editingTxn.commission} className="text-xs w-full" />
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground mb-1">NOTES</div>
+                          <input name="notes" type="text" defaultValue={editingTxn.notes ?? ""} className="text-xs w-full" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button type="submit" className="btn-retro btn-retro-primary text-xs flex-1">SAVE</button>
+                        <button type="button" className="btn-retro text-xs flex-1" onClick={() => setEditingTxn(null)}>CANCEL</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>,
+                document.body
+              )}
           </div>
         )}
 
@@ -787,20 +944,16 @@ export function HoldingDetailPanel({
                     )}
                   </div>
                 </div>
+                <div className="chart-touch-zone">
                 <ResponsiveContainer width="100%" height={120}>
-                  <BarChart data={divChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={14}>
+                  <BarChart data={divChartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} barSize={14}>
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => v > 0 ? `${sym}${v.toFixed(0)}` : ""}
-                    />
+                    <YAxis hide />
                     <Tooltip
                       contentStyle={{
                         background: "hsl(var(--card))",
@@ -827,6 +980,7 @@ export function HoldingDetailPanel({
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             )}
 

@@ -213,12 +213,13 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
 
           const holding = await prisma.holding.upsert({
             where: { portfolioId_ticker: { portfolioId: portfolio.id, ticker: act.symbol } },
-            update: {},
+            update: { source: "questrade" },
             create: {
               portfolioId: portfolio.id,
               ticker: act.symbol,
               name: act.symbol,
               currency: act.currency === "CAD" ? "CAD" : "USD",
+              source: "questrade",
             },
           });
 
@@ -235,6 +236,7 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
               quantity: txQuantity,
               price: txPrice,
               commission: isDividend ? 0 : Math.abs(act.commission ?? 0),
+              source: "questrade",
               notes: act.description || null,
             }],
             skipDuplicates: true,

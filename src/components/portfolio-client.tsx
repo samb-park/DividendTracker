@@ -115,6 +115,8 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
           readOnly={isAllMode}
           displayCurrency={displayCurrency}
           allPortfolios={isAllMode ? portfolios.map((p) => ({ id: p.id, name: p.name })) : undefined}
+          selectedPortfolioId={displayPortfolioId}
+          onPortfolioChange={(id) => { setActiveTab(id); setHoldingSummaries([]); }}
         />
       ) : (
         <div className="text-muted-foreground text-xs py-12 text-center border border-dashed border-border">

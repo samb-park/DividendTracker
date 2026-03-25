@@ -242,31 +242,69 @@ export function AllocationBars({
             <div className="text-[10px] text-muted-foreground py-4 text-center">NO SECTOR DATA</div>
           ) : (
             <>
-              <div className="text-[10px] text-muted-foreground mb-3">By Market Value</div>
               <HorizontalBar entries={sectorEntries} total={sectorTotal} />
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {sectorEntries.map((e) => {
-                  const gap = sectorGaps?.find(g => g.sector === e.ticker);
-                  const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
-                  return (
-                    <div key={e.ticker} className="flex items-center gap-2 text-[11px] min-w-0">
-                      <span className="flex-shrink-0 inline-block w-2.5 h-2.5 rounded-[1px]" style={{ backgroundColor: e.color }} />
-                      <span className="font-medium truncate">{e.ticker}</span>
-                      <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
-                        {currentPct.toFixed(1)}%
-                        {gap && gap.targetPct > 0 && (
-                          <span
-                            className={`ml-1 text-[9px] ${gap.gap > 1 ? "text-yellow-500" : gap.gap < -1 ? "text-muted-foreground/60" : "text-positive"}`}
-                            title={`Target: ${gap.targetPct.toFixed(1)}% · Current: ${gap.currentPct.toFixed(1)}% · ${gap.gap > 0 ? "Overweight" : gap.gap < 0 ? "Underweight" : "On target"}`}
-                          >
-                            {gap.gap >= 0 ? "+" : ""}{gap.gap.toFixed(1)}
+              {hasSectorTargets ? (
+                // Gap bar chart: current vs target per sector
+                <div className="space-y-3 mt-3">
+                  {sectorEntries.map((e) => {
+                    const gap = sectorGaps?.find(g => g.sector === e.ticker);
+                    const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
+                    const targetPct = gap?.targetPct ?? 0;
+                    const gapVal = gap?.gap ?? 0;
+                    const barColor = gapVal > 2 ? "hsl(45,100%,60%)" : gapVal < -2 ? "hsl(210,80%,60%)" : "hsl(142,69%,58%)";
+                    return (
+                      <div key={e.ticker}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="flex items-center gap-1.5 text-[11px]">
+                            <span className="inline-block w-2 h-2 rounded-[1px] shrink-0" style={{ backgroundColor: e.color }} />
+                            <span className="truncate">{e.ticker}</span>
                           </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                          <span className="text-[10px] tabular-nums ml-2 shrink-0" style={{ color: barColor }}>
+                            {currentPct.toFixed(1)}%
+                            {targetPct > 0 && (
+                              <span className="ml-1 text-muted-foreground">
+                                {gapVal >= 0 ? "+" : ""}{gapVal.toFixed(1)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="relative h-1.5 bg-border overflow-visible">
+                          <div
+                            style={{ width: `${Math.min(currentPct, 100)}%`, backgroundColor: barColor }}
+                            className="absolute h-full transition-all"
+                          />
+                          {targetPct > 0 && (
+                            <div
+                              style={{ left: `${Math.min(targetPct, 100)}%` }}
+                              className="absolute top-[-2px] h-[calc(100%+4px)] w-px bg-muted-foreground opacity-60"
+                              title={`Target: ${targetPct.toFixed(1)}%`}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="text-[9px] text-muted-foreground/50 text-right mt-1">
+                    bar = current · line = target
+                  </div>
+                </div>
+              ) : (
+                // No targets: simple list
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3">
+                  {sectorEntries.map((e) => {
+                    const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
+                    return (
+                      <div key={e.ticker} className="flex items-center gap-2 text-[11px] min-w-0">
+                        <span className="flex-shrink-0 inline-block w-2.5 h-2.5 rounded-[1px]" style={{ backgroundColor: e.color }} />
+                        <span className="font-medium truncate">{e.ticker}</span>
+                        <span className="ml-auto text-muted-foreground tabular-nums flex-shrink-0">
+                          {currentPct.toFixed(1)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )
         )}

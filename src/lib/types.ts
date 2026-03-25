@@ -5,10 +5,13 @@ export interface Transaction {
   price: string;
   commission: string;
   date: string;
+  source?: string | null;
 }
 
 export interface Holding {
   id: string;
+  allHoldingIds?: string[];
+  source?: string | null;
   ticker: string;
   name: string | null;
   currency: "USD" | "CAD";

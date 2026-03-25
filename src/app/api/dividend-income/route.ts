@@ -57,6 +57,22 @@ export async function GET(req: Request) {
   const year = parseInt(searchParams.get("year") ?? new Date().getFullYear().toString(), 10);
   const portfolioId = searchParams.get("portfolioId") ?? "all";
 
+  // Return years that have actual dividend data
+  if (mode === "years") {
+    const txns = await prisma.transaction.findMany({
+      where: {
+        action: "DIVIDEND",
+        holding: {
+          portfolio: { userId: session.user.id },
+          ...(portfolioId !== "all" ? { portfolioId } : {}),
+        },
+      },
+      select: { date: true },
+    });
+    const years = [...new Set(txns.map((t) => t.date.getFullYear()))].sort((a, b) => b - a);
+    return NextResponse.json({ years });
+  }
+
   const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
   const endOfYear = new Date(`${year + 1}-01-01T00:00:00.000Z`);
 

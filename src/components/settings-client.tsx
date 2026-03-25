@@ -63,6 +63,11 @@ const GOAL_OPTIONS = [
 export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false }: { portfolios: PortfolioItem[]; isAdmin?: boolean }) {
   const router = useRouter();
   const [portfolios, setPortfolios] = useState(initialPortfolios);
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    typeof document !== "undefined"
+      ? (document.documentElement.getAttribute("data-theme") as "dark" | "light") ?? "dark"
+      : "dark"
+  );
   const [cashEdits, setCashEdits] = useState<Record<string, { cad: string; usd: string }>>({});
   const [savingCash, setSavingCash] = useState<string | null>(null);
   const [status, setStatus] = useState<TokenStatus | null>(null);
@@ -118,6 +123,30 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   };
 
   useEffect(() => { loadStatus(); }, []);
+
+  useEffect(() => {
+    fetch("/api/settings/appearance")
+      .then(r => r.json())
+      .then(d => {
+        if (d.theme) {
+          setTheme(d.theme);
+          document.documentElement.setAttribute("data-theme", d.theme);
+          localStorage.setItem("dt-theme", d.theme);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleThemeChange = (next: "dark" | "light") => {
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("dt-theme", next);
+    fetch("/api/settings/appearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: next }),
+    });
+  };
 
   useEffect(() => {
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
@@ -270,7 +299,9 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   };
 
   return (
-    <div className="space-y-2">
+    <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
+      {/* Left column: Portfolio + Questrade */}
+      <div className="space-y-2">
       {/* Portfolio Management */}
       <Section title="PORTFOLIO MANAGEMENT" defaultOpen={true}>
         <div className="space-y-3">
@@ -445,9 +476,12 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         )}
         </div>
       </Section>
+      </div>
 
+      {/* Right column: Investor Profile + settings */}
+      <div className="space-y-2 mt-2 lg:mt-0">
       {/* Investor Profile */}
-      <Section title="INVESTOR PROFILE — AI PERSONALIZATION" defaultOpen={profileGoals.length === 0} badge={profileGoals.length > 0 ? "SET" : undefined}>
+      <Section title="INVESTOR PROFILE — AI PERSONALIZATION" defaultOpen={true} badge={profileGoals.length > 0 ? "SET" : undefined}>
         <div className="text-[10px] text-muted-foreground">Set your birth year and investment goals for personalized AI briefings.</div>
         <div>
           <div className="text-[10px] tracking-wide text-muted-foreground mb-2">BIRTH YEAR</div>
@@ -494,7 +528,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       </Section>
 
       {/* Contribution Plan */}
-      <Section title="CONTRIBUTION PLAN" defaultOpen={false}>
+      <Section title="CONTRIBUTION PLAN" defaultOpen={true}>
         <div className="space-y-4">
           <div>
             <div className="text-[10px] tracking-wide text-muted-foreground mb-2">FREQUENCY</div>
@@ -538,7 +572,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       </Section>
 
       {/* Income Goal */}
-      <Section title="INCOME GOAL" defaultOpen={false}>
+      <Section title="INCOME GOAL" defaultOpen={true}>
         <div className="space-y-4">
           <div className="text-[10px] text-muted-foreground">Annual dividend income target</div>
           <div className="flex items-center gap-2">
@@ -572,7 +606,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
 
       {/* Ticker Targets */}
       {tickers.length > 0 && (
-        <Section title="TICKER TARGETS" defaultOpen={false}>
+        <Section title="TICKER TARGETS" defaultOpen={true}>
           <div className="space-y-3">
             {(() => {
               const total = tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
@@ -630,7 +664,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       )}
 
       {/* Contribution Room */}
-      <Section title={`CONTRIBUTION ROOM — ${CURRENT_YEAR}`} defaultOpen={false}>
+      <Section title={`CONTRIBUTION ROOM — ${CURRENT_YEAR}`} defaultOpen={true}>
         <div className="space-y-5">
           <div className="text-[10px] text-muted-foreground">Track TFSA / RRSP / FHSA room. Enter your carryover to see remaining space.</div>
 
@@ -761,7 +795,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       </Section>
 
       {/* Cash Balances */}
-      <Section title="CASH BALANCES" defaultOpen={false}>
+      <Section title="CASH BALANCES" defaultOpen={true}>
         <div className="space-y-4">
           <div className="text-[10px] text-muted-foreground">Current cash per account (CAD + USD)</div>
           {portfolios.map((p) => {
@@ -824,7 +858,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
 
       {/* Admin */}
       {isAdmin && (
-        <Section title="ADMIN" defaultOpen={false} badge="ADMIN">
+        <Section title="ADMIN" defaultOpen={true} badge="ADMIN">
           <div className="space-y-3">
             <div className="text-[10px] text-muted-foreground">Admin-only tools. Not visible to regular users.</div>
             <a
@@ -837,8 +871,26 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         </Section>
       )}
 
+      {/* Appearance */}
+      <Section title="APPEARANCE" defaultOpen={true}>
+        <div className="space-y-3">
+          <div className="text-[10px] text-muted-foreground tracking-wide">THEME</div>
+          <div className="flex gap-2">
+            {(["DARK", "LIGHT"] as const).map((t) => (
+              <button
+                key={t}
+                className={`btn-retro flex-1 ${theme === t.toLowerCase() ? "btn-retro-primary" : ""}`}
+                onClick={() => handleThemeChange(t.toLowerCase() as "dark" | "light")}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Section>
+
       {/* App Info */}
-      <Section title="APP INFO" defaultOpen={false}>
+      <Section title="APP INFO" defaultOpen={true}>
         <div className="text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between"><span>VERSION</span><span>2.0.0</span></div>
           <div className="flex justify-between"><span>MARKET DATA</span><span>YAHOO FINANCE</span></div>
@@ -846,6 +898,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
           <div className="flex justify-between"><span>AI</span><span>CODEX CLI (OAUTH)</span></div>
         </div>
       </Section>
+      </div>
     </div>
   );
 }

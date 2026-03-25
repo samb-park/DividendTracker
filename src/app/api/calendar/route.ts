@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { yahooFinance } from "@/lib/price";
+import { yahooFinance, getPrice } from "@/lib/price";
 import { detectFrequency } from "@/lib/dividend-utils";
+import { getNasdaqDividend } from "@/lib/nasdaq-dividend";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
@@ -45,14 +46,13 @@ export async function GET() {
     tickerShares.set(h.ticker, (tickerShares.get(h.ticker) ?? 0) + qty);
   }
 
-  // 18 months back to capture at least 4 dividends for quarterly payers
+  // 18 months back for Yahoo fallback
   const period1 = new Date();
   period1.setMonth(period1.getMonth() - 18);
   const period1Str = period1.toISOString().split("T")[0];
 
   const tickers = Array.from(tickerMap.keys());
 
-  // Fetch all tickers in parallel (cache hits are instant, misses go to Yahoo Finance concurrently)
   const results = await Promise.allSettled(
     tickers.map(async (ticker) => {
       const cached = cache.get(ticker);
@@ -60,39 +60,77 @@ export async function GET() {
         return { ticker, data: cached.data };
       }
 
-      const chart = await yahooFinance.chart(ticker, {
-        period1: period1Str,
-        interval: "1mo",
-      });
+      // Always fetch price for yield calculation
+      const priceData = await getPrice(ticker);
+      const currentPrice = priceData?.price ?? null;
 
-      const dividendMap = chart.events?.dividends ?? {};
-      const dividends = Object.values(dividendMap)
-        .map((d) => { const item = d as { date: number | string; amount: number }; return { date: new Date(item.date).toISOString(), amount: item.amount }; })
-        .sort((a, b) => a.date.localeCompare(b.date));
+      // --- Primary: Nasdaq ---
+      const nasdaq = await getNasdaqDividend(ticker);
 
-      if (dividends.length === 0) return null;
+      let exDividendDate: string | null = null;
+      let paymentDate: string | null = null;
+      let amountPerShare: number | null = null;
+      let annualDividend: number | null = null;
+      let frequency: number | null = null;
+      let name: string = ticker;
+      let currency: string = "USD";
 
-      const frequency = detectFrequency(dividends);
-      const lastDiv = dividends[dividends.length - 1];
-      const amountPerShare = lastDiv.amount;
-      const exDividendDate = lastDiv.date;
-      const annualDividend = amountPerShare * frequency;
+      if (nasdaq && nasdaq.history.length > 0) {
+        exDividendDate = nasdaq.exDividendDate;
+        amountPerShare = nasdaq.amount;
+        frequency = detectFrequency(nasdaq.history);
+        annualDividend = amountPerShare != null && frequency != null ? amountPerShare * frequency : null;
 
-      const payDate = new Date(exDividendDate);
-      payDate.setDate(payDate.getDate() + 15);
-      const paymentDate = payDate.toISOString();
+        // Payment date from Nasdaq, else estimate +15 days
+        if (nasdaq.paymentDate) {
+          paymentDate = new Date(nasdaq.paymentDate).toISOString();
+        } else if (exDividendDate) {
+          const pd = new Date(exDividendDate);
+          pd.setDate(pd.getDate() + 15);
+          paymentDate = pd.toISOString();
+        }
 
-      const currentPrice = chart.meta?.regularMarketPrice ?? null;
-      const dividendYield = currentPrice && currentPrice > 0
+        // Still use Yahoo quote for name/currency/price
+        name = priceData?.name ?? ticker;
+        currency = priceData?.currency ?? "USD";
+      } else {
+        // --- Fallback: Yahoo Finance chart ---
+        const chart = await yahooFinance.chart(ticker, {
+          period1: period1Str,
+          interval: "1mo",
+        });
+
+        const dividendMap = chart.events?.dividends ?? {};
+        const dividends = Object.values(dividendMap)
+          .map((d) => { const item = d as { date: number | string; amount: number }; return { date: new Date(item.date).toISOString(), amount: item.amount }; })
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        if (dividends.length === 0) return null;
+
+        frequency = detectFrequency(dividends);
+        const lastDiv = dividends[dividends.length - 1];
+        amountPerShare = lastDiv.amount;
+        annualDividend = amountPerShare * frequency;
+
+        const quoteExDiv = priceData?.exDividendDate ?? null;
+        const today = new Date().toISOString().split("T")[0];
+        exDividendDate = quoteExDiv && quoteExDiv >= today ? quoteExDiv : lastDiv.date;
+
+        if (priceData?.dividendDate) {
+          paymentDate = priceData.dividendDate;
+        } else if (exDividendDate) {
+          const pd = new Date(exDividendDate);
+          pd.setDate(pd.getDate() + 15);
+          paymentDate = pd.toISOString();
+        }
+
+        name = (chart.meta as { longName?: string })?.longName || chart.meta?.shortName || ticker;
+        currency = chart.meta?.currency ?? "USD";
+      }
+
+      const dividendYield = currentPrice && currentPrice > 0 && annualDividend != null
         ? annualDividend / currentPrice
         : null;
-
-      const name =
-        (chart.meta as { longName?: string })?.longName ||
-        chart.meta?.shortName ||
-        ticker;
-
-      const currency = chart.meta?.currency ?? "USD";
 
       const data: Omit<DividendCalendarEvent, "portfolios" | "sharesHeld"> = {
         ticker,

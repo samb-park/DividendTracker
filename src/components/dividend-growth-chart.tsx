@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { fmt } from "@/lib/utils";
 import {
   LineChart,
   Line,
@@ -23,10 +24,6 @@ interface TickerData {
   streak: number;
   shares: number;
   currency: string;
-}
-
-function fmt(n: number, d = 2) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 export function DividendGrowthChart() {
@@ -204,7 +201,7 @@ export function DividendGrowthChart() {
           })()}
 
           {/* Chart */}
-          <div className="h-52">
+          <div className="h-52 lg:h-80 chart-touch-zone">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={currentHistory} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
@@ -214,13 +211,7 @@ export function DividendGrowthChart() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <YAxis
-                  width={36}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${v.toFixed(0)}%`}
-                />
+                <YAxis hide />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "inherit" }}
                   formatter={(value: number) => [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"]}

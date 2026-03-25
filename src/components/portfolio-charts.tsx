@@ -9,7 +9,10 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  type TooltipProps,
 } from "recharts";
+import { fmt } from "@/lib/utils";
+import { RETRO_TOOLTIP_STYLE } from "@/lib/chart-tokens";
 
 interface HoldingData {
   ticker: string;
@@ -40,20 +43,7 @@ interface HoldingWithTxn {
 }
 
 
-const RETRO_TOOLTIP_STYLE = {
-  backgroundColor: "#161616",
-  border: "1px solid #333",
-  borderRadius: "0",
-  fontFamily: "'IBM Plex Mono', monospace",
-  fontSize: "11px",
-  color: "#e8e6d9",
-};
-
 const RANGES = ["1M", "3M", "6M", "1Y", "ALL"] as const;
-
-function fmt(n: number) {
-  return n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 interface EquityPoint {
   date: string;
@@ -61,20 +51,23 @@ interface EquityPoint {
   cost: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label, currencySymbol }: any) {
+interface CustomTooltipProps extends TooltipProps<number, string> {
+  currencySymbol?: string;
+}
+
+function CustomTooltip({ active, payload, label, currencySymbol }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
-  const value = payload.find((p: any) => p.dataKey === "value")?.value ?? 0;
-  const cost = payload.find((p: any) => p.dataKey === "cost")?.value ?? 0;
+  const value = payload.find((p) => p.dataKey === "value")?.value ?? 0;
+  const cost = payload.find((p) => p.dataKey === "cost")?.value ?? 0;
   const sym = currencySymbol ?? "$";
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
   return (
     <div style={RETRO_TOOLTIP_STYLE} className="p-2">
-      <div style={{ color: "#888", marginBottom: 4 }}>{label}</div>
-      <div>Value: <span style={{ color: "hsl(142,69%,58%)" }}>{sym}{fmt(value)}</span></div>
-      <div>Cost: <span style={{ color: "#888" }}>{sym}{fmt(cost)}</span></div>
-      <div style={{ borderTop: "1px solid #333", marginTop: 4, paddingTop: 4, color: pnl >= 0 ? "hsl(142,69%,58%)" : "hsl(0,70%,60%)" }}>
+      <div style={{ color: "hsl(var(--muted-foreground))", marginBottom: 4 }}>{label}</div>
+      <div>Value: <span style={{ color: "hsl(var(--positive))" }}>{sym}{fmt(value)}</span></div>
+      <div>Cost: <span style={{ color: "hsl(var(--muted-foreground))" }}>{sym}{fmt(cost)}</span></div>
+      <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 4, paddingTop: 4, color: pnl >= 0 ? "hsl(var(--positive))" : "hsl(var(--negative))" }}>
         P&L: {pnl >= 0 ? "+" : ""}{sym}{fmt(Math.abs(pnl))} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
       </div>
     </div>
@@ -145,19 +138,29 @@ export function PortfolioCharts({
       queryParam = `range=${range.toLowerCase()}`;
     }
 
-    // Fetch historical prices for all tickers and cash transactions in parallel
+    // Fetch historical prices via single batch request + cash transactions in parallel
     const histories: Record<string, { date: string; close: number }[]> = {};
     let cashTxns: { date: string; action: "DEPOSIT" | "WITHDRAWAL"; amount: number; currency: "CAD" | "USD" }[] = [];
     let successCount = 0;
+    const tickers = holdingsWithTransactions.map((h) => h.ticker);
+
     await Promise.all([
-      ...holdingsWithTransactions.map(async (h) => {
-        try {
-          const res = await fetch(`/api/price/${h.ticker}/history?${queryParam}`);
-          if (res.ok) { histories[h.ticker] = await res.json(); successCount++; }
-        } catch {
-          // skip
-        }
-      }),
+      fetch("/api/price/history/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          queryParam.startsWith("range=")
+            ? { tickers, range: queryParam.slice(6) }
+            : { tickers, from: queryParam.slice(5) }
+        ),
+      })
+        .then((r) => r.ok ? r.json() : {})
+        .then((d: Record<string, { date: string; close: number }[]>) => {
+          for (const [ticker, hist] of Object.entries(d)) {
+            if (hist.length > 0) { histories[ticker] = hist; successCount++; }
+          }
+        })
+        .catch(() => {}),
       fetch("/api/cash-transactions?all=true")
         .then((r) => r.ok ? r.json() : { items: [] })
         .then((d) => { cashTxns = d.items ?? []; })
@@ -291,8 +294,9 @@ export function PortfolioCharts({
             </div>
           ) : equityData.length > 0 ? (
             <>
+            <div className="chart-touch-zone">
               <ResponsiveContainer width="100%" height={lineChartHeight}>
-                <LineChart data={equityData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <LineChart data={equityData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" hide />
                   <YAxis hide />
@@ -316,16 +320,17 @@ export function PortfolioCharts({
                   />
                 </LineChart>
               </ResponsiveContainer>
-              <div className="flex gap-4 mt-2 ml-1">
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px solid hsl(142,69%,58%)" }} />
-                  TOTAL VALUE
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px dashed #666" }} />
-                  COST BASIS
-                </div>
+            </div>
+            <div className="flex gap-4 mt-2 ml-1">
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px solid hsl(142,69%,58%)" }} />
+                TOTAL VALUE
               </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span style={{ display: "inline-block", width: 16, height: 0, borderTop: "2px dashed hsl(var(--border))" }} />
+                COST BASIS
+              </div>
+            </div>
             </>
           ) : (
             <div className="text-muted-foreground text-xs text-center py-8">NO DATA</div>

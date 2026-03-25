@@ -8,10 +8,13 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const holdingId = searchParams.get("holdingId");
+  const holdingIds = searchParams.get("holdingIds")?.split(",").filter(Boolean);
 
   const transactions = await prisma.transaction.findMany({
     where: {
-      ...(holdingId ? { holdingId } : {}),
+      ...(holdingIds && holdingIds.length > 0
+        ? { holdingId: { in: holdingIds } }
+        : holdingId ? { holdingId } : {}),
       holding: { portfolio: { userId: session.user.id } },
     },
     orderBy: { date: "desc" },
