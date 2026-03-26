@@ -74,27 +74,24 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   }>;
 
   // Fetch settings in parallel
-  const [contribRoomSetting, tfsaRoomSetting, rrspRoomSetting, investorProfileSetting, targetSettings, fxSetting] = await Promise.all([
-    prisma.setting.findUnique({ where: { key: `${userId}:investment_settings` } }),
-    prisma.setting.findUnique({ where: { key: `${userId}:tfsa_carryover` } }),
-    prisma.setting.findUnique({ where: { key: `${userId}:rrsp_limit` } }),
+  const [contribRoomSetting, investorProfileSetting, targetSettings, fxSetting] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: `${userId}:investment:contrib_room` } }),
     prisma.setting.findUnique({ where: { key: `${userId}:investment:investor_profile` } }),
     prisma.setting.findMany({ where: { key: { startsWith: `${userId}:investment:target:` } } }),
     prisma.setting.findUnique({ where: { key: "fx_rate_usd_cad" } }),
   ]);
 
   // Parse contrib room
-  let tfsaRoom = 0;
+  const TFSA_ANNUAL_2026 = 7000;
+  let tfsaCarryover = 0;
   let rrspRoom = 0;
   if (contribRoomSetting?.value) {
     try {
-      const parsed = JSON.parse(contribRoomSetting.value) as { contribRoom?: { tfsaCarryover?: string; rrspLimit?: string } };
-      tfsaRoom = parseFloat(parsed.contribRoom?.tfsaCarryover ?? "0") || 0;
-      rrspRoom = parseFloat(parsed.contribRoom?.rrspLimit ?? "0") || 0;
+      const parsed = JSON.parse(contribRoomSetting.value) as { tfsaCarryover?: string | number; rrspLimit?: string | number };
+      tfsaCarryover = parseFloat(String(parsed.tfsaCarryover ?? "0")) || 0;
+      rrspRoom = parseFloat(String(parsed.rrspLimit ?? "0")) || 0;
     } catch { /* ignore */ }
   }
-  if (tfsaRoomSetting?.value) tfsaRoom = parseFloat(tfsaRoomSetting.value) || tfsaRoom;
-  if (rrspRoomSetting?.value) rrspRoom = parseFloat(rrspRoomSetting.value) || rrspRoom;
 
   // Parse target allocations: { "AAPL": 10, "VFV.TO": 20, ... }
   const targetAlloc: Record<string, number> = {};
@@ -322,7 +319,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     monthlyDivCAD: Math.round(annualDivCAD / 12),
     accounts: accountSummaries,
     contributions: {
-      tfsa: { room: Math.round(tfsaRoom + 7000) },
+      tfsa: { carryover: Math.round(tfsaCarryover), annual: TFSA_ANNUAL_2026, totalRoom: Math.round(tfsaCarryover + TFSA_ANNUAL_2026) },
       rrsp: { room: Math.round(rrspRoom) },
     },
     recentTrades: recentTrades.slice(-20),
