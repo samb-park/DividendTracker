@@ -52,11 +52,13 @@ const TOPIC_MAP: Record<string, string[]> = {
 
 export interface NewsItem {
   id: string;
-  source: string;   // ticker or topic
+  source: string;
   title: string;
+  koreanTitle: string;
+  description: string;
   link: string;
   publishedAt: string | null;
-  topics: string[]; // expanded topics
+  topics: string[];
 }
 
 export interface InterestProfile {
@@ -64,8 +66,8 @@ export interface InterestProfile {
   tickers: Record<string, number>;
 }
 
-async function fetchNewsForTerms(terms: string[], perTerm = 2): Promise<NewsItem[]> {
-  const items: NewsItem[] = [];
+async function fetchNewsForTerms(terms: string[], perTerm = 2): Promise<Omit<NewsItem, "koreanTitle" | "description">[]> {
+  const items: Omit<NewsItem, "koreanTitle" | "description">[] = [];
   const seen = new Set<string>();
 
   await Promise.allSettled(terms.map(async (term) => {
@@ -87,6 +89,36 @@ async function fetchNewsForTerms(terms: string[], perTerm = 2): Promise<NewsItem
   }));
 
   return items;
+}
+
+async function translateAndDescribe(items: Omit<NewsItem, "koreanTitle" | "description">[]): Promise<NewsItem[]> {
+  if (items.length === 0) return [];
+
+  const numbered = items.map((n, i) => `${i + 1}. [${n.source}] ${n.title}`).join("\n");
+  const prompt = `다음 뉴스 헤드라인들을 투자자 관점으로 처리해주세요.
+각 항목에 대해 JSON 배열로 반환: [{"i":1,"k":"한글 제목","d":"투자 관점 1줄 설명 (30자 이내)"}]
+번호 순서 그대로, JSON만 반환하세요.
+
+${numbered}`;
+
+  try {
+    const raw = await callOpenAI("", [
+      { role: "system", content: "뉴스 번역 및 요약 전문가. JSON만 반환." },
+      { role: "user", content: prompt },
+    ], 800);
+
+    const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] ?? "[]";
+    const parsed = JSON.parse(jsonStr) as { i: number; k: string; d: string }[];
+    const map = new Map(parsed.map(p => [p.i, p]));
+
+    return items.map((item, i) => ({
+      ...item,
+      koreanTitle: map.get(i + 1)?.k ?? item.title,
+      description: map.get(i + 1)?.d ?? "",
+    }));
+  } catch {
+    return items.map(item => ({ ...item, koreanTitle: item.title, description: "" }));
+  }
 }
 
 export async function getInterestProfile(userId: string): Promise<InterestProfile> {
@@ -143,26 +175,12 @@ export async function GET() {
   const searchTerms = [...new Set([...holdingTickers, ...topInterestTopics])];
   const items = await fetchNewsForTerms(searchTerms, 2);
 
-  if (items.length === 0) return NextResponse.json({ items: [], summary: null, cached: false });
+  if (items.length === 0) return NextResponse.json({ items: [], cached: false });
 
-  // AI summary (personalized if interests exist)
-  const interestHint = topInterestTopics.length > 0
-    ? `사용자 관심 토픽: ${topInterestTopics.join(", ")}. 관련 뉴스를 우선시하세요.`
-    : "";
-  const headlines = items.map(n => `[${n.source}] ${n.title}`).join("\n");
-  const prompt = `다음 뉴스 헤드라인을 투자자 관점에서 중요도 순으로 3-5개 핵심 항목만 한국어로 요약해주세요. ${interestHint}\n\n${headlines}`;
+  const topItems = items.slice(0, 10);
+  const translatedItems = await translateAndDescribe(topItems);
 
-  let summary = "";
-  try {
-    summary = await callOpenAI("", [
-      { role: "system", content: "캐나다 배당 투자 전문 어시스턴트. 뉴스를 간결하고 실용적으로 요약." },
-      { role: "user", content: prompt },
-    ], 400);
-  } catch {
-    summary = items.slice(0, 5).map(n => `• [${n.source}] ${n.title}`).join("\n");
-  }
-
-  const result = { items: items.slice(0, 12), summary, generatedAt: new Date().toISOString() };
+  const result = { items: translatedItems, generatedAt: new Date().toISOString() };
 
   await Promise.all([
     prisma.setting.upsert({ where: { key: cacheKey }, update: { value: JSON.stringify(result) }, create: { key: cacheKey, value: JSON.stringify(result) } }),

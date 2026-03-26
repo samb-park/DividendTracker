@@ -6,6 +6,8 @@ interface NewsItem {
   id: string;
   source: string;
   title: string;
+  koreanTitle: string;
+  description: string;
   link: string;
   publishedAt: string | null;
   topics: string[];
@@ -18,7 +20,6 @@ interface RelatedData {
 }
 
 interface NewsData {
-  summary: string | null;
   items: NewsItem[];
   generatedAt: string;
   cached: boolean;
@@ -26,9 +27,25 @@ interface NewsData {
 
 // Suggested interest keywords to offer users
 const SUGGESTED_KEYWORDS = [
-  "Nasdaq 100", "S&P 500", "US dividend", "Canadian dividend",
-  "Canadian banks", "real estate", "tech stocks", "leveraged ETF",
-  "fixed income", "TSX dividend", "dividend growth ETF", "US market",
+  // Markets
+  "Nasdaq 100", "S&P 500", "US market", "Canadian market", "TSX",
+  "emerging markets", "global stocks",
+  // Sectors
+  "tech stocks", "AI stocks", "semiconductor", "energy stocks",
+  "Canadian banks", "US banks", "healthcare stocks", "utilities",
+  "real estate", "consumer staples", "industrials",
+  // Dividend
+  "US dividend", "Canadian dividend", "dividend growth ETF",
+  "TSX dividend", "high yield dividend", "DRIP investing",
+  // Fixed income
+  "fixed income", "Canadian bonds", "US bonds", "interest rates",
+  // ETFs
+  "leveraged ETF", "covered call ETF", "Canadian ETF",
+  // Macro
+  "inflation", "Bank of Canada", "Federal Reserve", "CAD USD",
+  "recession", "earnings season", "IPO",
+  // Crypto
+  "Bitcoin", "crypto",
 ];
 
 export function NewsCard() {
@@ -184,34 +201,32 @@ export function NewsCard() {
         </div>
       )}
 
-      {/* AI Summary */}
-      {!loading && data?.summary && (
-        <div className="px-4 pt-3 pb-2 text-xs whitespace-pre-wrap leading-relaxed text-foreground border-b border-border">
-          {data.summary}
-        </div>
-      )}
-
       {/* Individual news items */}
       <div className="divide-y divide-border">
         {loading && (
-          <div className="px-4 py-4 text-xs text-muted-foreground">LOADING NEWS...</div>
+          <div className="px-4 py-4 text-xs text-muted-foreground">뉴스 불러오는 중...</div>
         )}
         {!loading && data?.items.map(item => (
           <div key={item.id}>
             {/* News row */}
             <div
-              className="flex items-start gap-2 px-4 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors"
+              className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
               onClick={() => handleClick(item)}
             >
-              <span className="text-[10px] text-accent font-mono mt-0.5 shrink-0 w-16 truncate">
+              <span className="text-[10px] text-accent font-mono mt-0.5 shrink-0 w-14 truncate">
                 [{item.source}]
               </span>
-              <div className="flex-1 min-w-0">
-                <div className={`text-xs leading-snug ${expanded === item.id ? "text-accent" : "text-foreground"}`}>
-                  {item.title}
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className={`text-xs font-medium leading-snug ${expanded === item.id ? "text-accent" : "text-foreground"}`}>
+                  {item.koreanTitle || item.title}
                 </div>
+                {item.description && (
+                  <div className="text-[11px] text-muted-foreground leading-snug">
+                    {item.description}
+                  </div>
+                )}
                 {(item.topics?.length ?? 0) > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-wrap gap-1">
                     {item.topics.slice(0, 3).map(t => (
                       <span key={t} className="text-[9px] text-muted-foreground border border-border px-1">
                         {t}
