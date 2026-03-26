@@ -210,7 +210,7 @@ export function NewsCard() {
                 <div className={`text-xs leading-snug ${expanded === item.id ? "text-accent" : "text-foreground"}`}>
                   {item.title}
                 </div>
-                {item.topics.length > 0 && (
+                {(item.topics?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {item.topics.slice(0, 3).map(t => (
                       <span key={t} className="text-[9px] text-muted-foreground border border-border px-1">
@@ -238,7 +238,7 @@ export function NewsCard() {
                         {relatedMap[item.id].relatedSummary}
                       </div>
                     )}
-                    {relatedMap[item.id].related.length > 0 && (
+                    {(relatedMap[item.id].related?.length ?? 0) > 0 && (
                       <div className="space-y-1 mt-2">
                         <div className="text-[10px] text-muted-foreground tracking-wide">관련 뉴스</div>
                         {relatedMap[item.id].related.map(r => (
