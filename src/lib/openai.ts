@@ -50,7 +50,8 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
           currency: true,
           quantity: true,
           transactions: {
-            select: { action: true, quantity: true, price: true, commission: true },
+            select: { action: true, quantity: true, price: true, commission: true, date: true },
+            orderBy: { date: "desc" },
           },
         },
       },
@@ -66,6 +67,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
         action: string;
         quantity: { toString(): string };
         price: { toString(): string };
+        date: Date;
         commission: { toString(): string };
       }>;
     }>;
@@ -274,6 +276,40 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     } catch { /* ignore */ }
   }
 
+  // Recent activity: last 90 days of BUY/SELL + all-time dividends by month
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const recentTrades: { date: string; action: string; ticker: string; qty: number; price: number; currency: string }[] = [];
+  const divByMonth: Record<string, number> = {};
+
+  for (const portfolio of portfolios) {
+    for (const holding of portfolio.holdings) {
+      const fx = holding.currency === "USD" ? fxRate : 1;
+      for (const tx of holding.transactions) {
+        const d = new Date(tx.date);
+        if (tx.action === "DIVIDEND") {
+          const mo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const amt = parseFloat(tx.quantity.toString()) * parseFloat(tx.price.toString()) * fx;
+          divByMonth[mo] = (divByMonth[mo] ?? 0) + amt;
+        } else if ((tx.action === "BUY" || tx.action === "SELL") && d >= ninetyDaysAgo) {
+          recentTrades.push({
+            date: d.toISOString().split("T")[0],
+            action: tx.action,
+            ticker: holding.ticker,
+            qty: Math.round(parseFloat(tx.quantity.toString()) * 100) / 100,
+            price: Math.round(parseFloat(tx.price.toString()) * 100) / 100,
+            currency: holding.currency,
+          });
+        }
+      }
+    }
+  }
+
+  // Last 12 months of dividends
+  const recentDivMonths = Object.entries(divByMonth)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-12)
+    .map(([month, amt]) => ({ month, amtCAD: Math.round(amt) }));
+
   const context = {
     date: new Date().toISOString().split("T")[0],
     currency: "CAD",
@@ -289,6 +325,8 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
       tfsa: { room: Math.round(tfsaRoom + 7000) },
       rrsp: { room: Math.round(rrspRoom) },
     },
+    recentTrades: recentTrades.slice(-20),
+    dividendHistory: recentDivMonths,
     ...(investorProfile ? { investorProfile } : {}),
   };
 

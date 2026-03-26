@@ -190,61 +190,55 @@ export async function GET() {
   return NextResponse.json({ ...result, cached: false });
 }
 
-// POST: record click + return related news
+// POST: click on a news item — deep analysis + refetch all news around this topic
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
-  const { source, title } = await req.json() as { source: string; title: string };
+  const { source, title, koreanTitle } = await req.json() as { source: string; title: string; koreanTitle?: string };
 
   // Update interest profile
   const profile = await getInterestProfile(userId);
-
-  // Record ticker click
   profile.tickers[source] = (profile.tickers[source] ?? 0) + 1;
-
-  // Record expanded topic clicks
   const expandedTopics = TOPIC_MAP[source] ?? [];
-  if (expandedTopics.length === 0) {
-    // Use AI to extract topics for unknown tickers
-    try {
-      const aiTopics = await callOpenAI("", [
-        { role: "system", content: "Extract 2-3 broad investment topics/categories for this news. Reply with comma-separated terms only, no explanation." },
-        { role: "user", content: `Ticker: ${source}\nNews: ${title}` },
-      ], 50);
-      aiTopics.split(",").map(t => t.trim()).filter(Boolean).forEach(t => {
-        profile.topics[t] = (profile.topics[t] ?? 0) + 1;
-      });
-    } catch { /* ignore */ }
-  } else {
-    expandedTopics.forEach(t => {
-      profile.topics[t] = (profile.topics[t] ?? 0) + 1;
-    });
-  }
-
+  expandedTopics.forEach(t => { profile.topics[t] = (profile.topics[t] ?? 0) + 1; });
   await saveInterestProfile(userId, profile);
 
-  // Fetch related news on expanded topics
-  const relatedTerms = expandedTopics.length > 0 ? expandedTopics : [source];
-  const related = await fetchNewsForTerms(relatedTerms, 3);
+  // Build specific search queries from ticker + title keywords
+  // e.g. "SCHD reconstitution" instead of broad "dividend ETF"
+  const titleWords = title
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !["this", "that", "with", "from", "your", "have", "will", "they", "what", "when", "here"].includes(w.toLowerCase()))
+    .slice(0, 3);
 
-  // Filter out the clicked item and deduplicate
-  const relatedFiltered = related.filter(r => r.title !== title).slice(0, 8);
+  const specificQueries = [
+    source,                              // ticker itself
+    `${source} ${titleWords[0] ?? ""}`.trim(),  // ticker + first keyword
+    ...expandedTopics.slice(0, 2),       // broader topics
+  ].filter(Boolean);
 
-  // AI summary of related
-  let relatedSummary = "";
-  if (relatedFiltered.length > 0) {
-    try {
-      const headlines = relatedFiltered.map(n => `[${n.source}] ${n.title}`).join("\n");
-      relatedSummary = await callOpenAI("", [
-        { role: "system", content: "캐나다 배당 투자 전문 어시스턴트." },
-        { role: "user", content: `"${title}" 관련 뉴스들을 2-3줄로 한국어 요약:\n${headlines}` },
-      ], 200);
-    } catch { /* ignore */ }
-  }
+  // Fetch more news with specific queries
+  const rawRelated = await fetchNewsForTerms(specificQueries, 4);
+  const relatedFiltered = rawRelated.filter(r => r.title !== title).slice(0, 10);
+  const translatedRelated = await translateAndDescribe(relatedFiltered);
 
-  return NextResponse.json({ related: relatedFiltered, relatedSummary, topics: expandedTopics });
+  // Deep AI analysis of the clicked article + related context
+  const relatedHeadlines = translatedRelated.map(n => `- ${n.title}`).join("\n");
+  let analysis = "";
+  try {
+    analysis = await callOpenAI("", [
+      { role: "system", content: "캐나다 배당 투자 전문 어시스턴트. 투자자가 실제로 알아야 할 핵심을 분석." },
+      { role: "user", content: `뉴스: "${title}"\n종목: ${source}\n\n관련 추가 뉴스:\n${relatedHeadlines}\n\n이 뉴스가 투자자에게 의미하는 바를 분석해주세요:\n1. 핵심 내용 (무슨 일이 일어났나)\n2. 투자 영향 (내 포트폴리오에 어떤 영향인가)\n3. 참고할 점\n각 항목을 1-2줄로 한국어로 설명하세요.` },
+    ], 400);
+  } catch { /* ignore */ }
+
+  return NextResponse.json({
+    analysis,
+    related: translatedRelated,
+    topics: expandedTopics,
+  });
 }
 
 export async function DELETE() {

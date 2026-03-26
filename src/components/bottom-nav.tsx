@@ -2,14 +2,14 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Briefcase, CalendarDays, Receipt, SlidersHorizontal } from "lucide-react";
+import { BarChart3, Briefcase, CalendarDays, Receipt, Newspaper } from "lucide-react";
 
 export const tabs = [
   { href: "/",          label: "OVERVIEW",  icon: BarChart3 },
   { href: "/portfolio", label: "HOLDINGS",  icon: Briefcase },
   { href: "/calendar",  label: "CALENDAR",  icon: CalendarDays },
   { href: "/more",      label: "HISTORY",   icon: Receipt },
-  { href: "/settings",  label: "SETTINGS",  icon: SlidersHorizontal },
+  { href: "/news",      label: "NEWS",      icon: Newspaper },
 ];
 
 export function BottomNav() {
