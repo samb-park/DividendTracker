@@ -188,6 +188,7 @@ export function HoldingDetailPanel({
   const [dateTo, setDateTo] = useState(today);
 
   const sym = displayCur === "CAD" ? "C$" : "$";
+  const nativeSym = row.holding.currency === "CAD" ? "C$" : "$";
   const toDisp = (amount: number) => convertCurrency(amount, row.holding.currency, displayCur, fxRate);
 
   const buysSells = useMemo(() =>
@@ -502,17 +503,17 @@ export function HoldingDetailPanel({
           {p ? (
             <>
               <div className="flex flex-wrap items-baseline gap-3 mb-3">
-                <span className="text-2xl font-medium tabular-nums">{sym}{fmt(toDisp(p.price))}</span>
+                <span className="text-2xl font-medium tabular-nums">{nativeSym}{fmt(p.price)}</span>
                 <span className={`text-sm tabular-nums ${p.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
-                  {p.changePercent >= 0 ? "+" : ""}{sym}{fmt(toDisp(Math.abs(p.change)))} ({fmtPct(p.changePercent)})
+                  {p.changePercent >= 0 ? "+" : ""}{nativeSym}{fmt(Math.abs(p.change))} ({fmtPct(p.changePercent)})
                 </span>
               </div>
               {/* 52W range bar */}
               {p.week52High > 0 && p.week52Low > 0 && range52WPct != null && (
                 <div className="mb-1">
                   <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                    <span>52W L: {sym}{fmt(toDisp(p.week52Low))}</span>
-                    <span>52W H: {sym}{fmt(toDisp(p.week52High))}</span>
+                    <span>52W L: {nativeSym}{fmt(p.week52Low)}</span>
+                    <span>52W H: {nativeSym}{fmt(p.week52High)}</span>
                   </div>
                   <div className="relative h-1.5 bg-border rounded-full">
                     <div
