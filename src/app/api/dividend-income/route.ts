@@ -180,6 +180,7 @@ export async function GET(req: Request) {
       let currency = txn.holding.currency;
       const accountType = txn.holding.portfolio.accountType ?? "NON_REG";
       const ticker = txn.holding.ticker;
+      const factor = netFactor(accountType, currency, ticker);
 
       if (!dividendHistoryByTicker.has(ticker)) {
         try {
@@ -198,6 +199,11 @@ export async function GET(req: Request) {
           currency = dividendHistory?.currency ?? currency;
         }
       }
+
+      // Gross should never be below the actual cash received.
+      // If the event match underestimates the payout, fall back to reversing withholding.
+      const estimatedGrossFromWithholding = factor > 0 && factor < 1 ? netAmount / factor : netAmount;
+      grossAmount = Math.max(grossAmount, estimatedGrossFromWithholding, netAmount);
 
       monthMap.get(monthKey)!.items.push({
         ticker,
