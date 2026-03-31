@@ -11,7 +11,7 @@ import {
   Cell,
 } from "recharts";
 import { fmt } from "@/lib/utils";
-import { RETRO_TOOLTIP_STYLE, COLOR_ACTUAL, COLOR_PROJECTED, COLOR_SELECTED } from "@/lib/chart-tokens";
+import { RETRO_TOOLTIP_STYLE, COLOR_ACTUAL, COLOR_SELECTED } from "@/lib/chart-tokens";
 
 interface DividendItem {
   ticker: string;
@@ -25,7 +25,7 @@ interface DividendItem {
 interface MonthData {
   month: string; // "YYYY-MM"
   items: DividendItem[];
-  source: "actual" | "projected" | "empty";
+  source: "actual" | "empty";
 }
 
 interface DividendIncomeData {
@@ -84,10 +84,9 @@ export function DividendIncomeChart({
   // Computed once via lazy initializer — stable across SSR/hydration
   const [today] = useState(() => {
     const d = new Date();
-    return { year: d.getFullYear(), month: d.toISOString().slice(0, 7) };
+    return { year: d.getFullYear() };
   });
   const CURRENT_YEAR = today.year;
-  const CURRENT_MONTH = today.month;
 
   const [showNet, setShowNet] = useState(false);
   const [netDropdownOpen, setNetDropdownOpen] = useState(false);
@@ -112,7 +111,6 @@ export function DividendIncomeChart({
   const [availableYears, setAvailableYears] = useState<number[]>([CURRENT_YEAR]);
   const [retryKey, setRetryKey] = useState(0);
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
-  const [futureData, setFutureData] = useState<DividendIncomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -121,13 +119,24 @@ export function DividendIncomeChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  const setAdjacentYear = (deltaIndex: -1 | 1) => {
+    setYear((currentYear) => {
+      const currentIndex = availableYears.indexOf(currentYear);
+      if (currentIndex === -1) return availableYears[0] ?? currentYear;
+      const nextIndex = currentIndex + deltaIndex;
+      return availableYears[nextIndex] ?? currentYear;
+    });
+  };
+
   useEffect(() => {
     fetch(`/api/dividend-income?mode=years&portfolioId=${selectedPortfolioId}`)
       .then((r) => r.json())
       .then((d) => {
         const years: number[] = d.years ?? [];
-        if (!years.includes(CURRENT_YEAR)) years.unshift(CURRENT_YEAR);
-        setAvailableYears(years.sort((a, b) => b - a));
+        const sortedYears = years.sort((a, b) => b - a);
+        const nextYears = sortedYears.length > 0 ? sortedYears : [CURRENT_YEAR];
+        setAvailableYears(nextYears);
+        setYear((currentYear) => (nextYears.includes(currentYear) ? currentYear : nextYears[0]));
       })
       .catch(() => {});
   }, [selectedPortfolioId, CURRENT_YEAR]);
@@ -136,24 +145,17 @@ export function DividendIncomeChart({
     setLoading(true);
     setSelectedMonth(null);
     setPastData(null);
-    setFutureData(null);
 
     const base = `/api/dividend-income?year=${year}&portfolioId=${selectedPortfolioId}`;
-    const needsPast = year <= CURRENT_YEAR;
-    const needsFuture = year >= CURRENT_YEAR;
-
-    Promise.all([
-      needsPast ? fetch(`${base}&mode=past`).then((r) => r.json()) : Promise.resolve(null),
-      needsFuture ? fetch(`${base}&mode=future`).then((r) => r.json()) : Promise.resolve(null),
-    ])
-      .then(([past, future]) => {
+    fetch(`${base}&mode=past`)
+      .then((r) => r.json())
+      .then((past) => {
         setPastData(past);
-        setFutureData(future);
         setFetchError(false);
         setLoading(false);
       })
       .catch(() => { setFetchError(true); setLoading(false); });
-  }, [year, selectedPortfolioId, CURRENT_YEAR, retryKey]);
+  }, [year, selectedPortfolioId, retryKey]);
 
   // Swipe left/right to navigate years
   useEffect(() => {
@@ -171,7 +173,7 @@ export function DividendIncomeChart({
       const dy = t.clientY - touchStartRef.current.y;
       touchStartRef.current = null;
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      setYear((y) => (dx < 0 ? y + 1 : y - 1));
+      setAdjacentYear(dx < 0 ? -1 : 1);
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -180,51 +182,20 @@ export function DividendIncomeChart({
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchend", onTouchEnd);
     };
-  }, []);
+  }, [availableYears]);
 
-  // Merge months: current year prefers actual data for past+current months, projected for future
+  // Show only recorded dividend transactions for the selected year.
   const mergedMonths = useMemo((): MonthData[] => {
     const months: MonthData[] = [];
     for (let m = 1; m <= 12; m++) {
       const monthKey = `${year}-${String(m).padStart(2, "0")}`;
-      let items: DividendItem[] = [];
-      let source: "actual" | "projected" | "empty" = "empty";
-
-      if (year < CURRENT_YEAR) {
-        // Past year — all actual
-        items = pastData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-        source = items.length > 0 ? "actual" : "empty";
-      } else if (year > CURRENT_YEAR) {
-        // Future year — all projected
-        items = futureData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-        source = items.length > 0 ? "projected" : "empty";
-      } else {
-        // Current year
-        if (monthKey < CURRENT_MONTH) {
-          // Past months — use actual only
-          items = pastData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-          source = items.length > 0 ? "actual" : "empty";
-        } else if (monthKey === CURRENT_MONTH) {
-          // Current month — prefer actual if recorded, else projected
-          const actualItems = pastData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-          if (actualItems.length > 0) {
-            items = actualItems;
-            source = "actual";
-          } else {
-            items = futureData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-            source = items.length > 0 ? "projected" : "empty";
-          }
-        } else {
-          // Future months this year — projected
-          items = futureData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-          source = items.length > 0 ? "projected" : "empty";
-        }
-      }
+      const items = pastData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
+      const source: "actual" | "empty" = items.length > 0 ? "actual" : "empty";
 
       months.push({ month: monthKey, items, source });
     }
     return months;
-  }, [pastData, futureData, year, CURRENT_YEAR, CURRENT_MONTH]);
+  }, [pastData, year]);
 
   const accountTypes = useMemo(() => {
     const types = new Set<string>();
@@ -265,7 +236,6 @@ export function DividendIncomeChart({
         monthStr: m.month,
         value: monthValue,
         isActual: m.source === "actual",
-        isCurrentMonth: m.month === CURRENT_MONTH && year === CURRENT_YEAR,
       };
     });
   }, [mergedMonths, showNet, displayCurrency, fxRate, selectedAccount]);
@@ -396,11 +366,8 @@ export function DividendIncomeChart({
                     fill={
                       entry.monthStr === selectedMonth
                         ? COLOR_SELECTED
-                        : entry.isActual
-                        ? COLOR_ACTUAL
-                        : COLOR_PROJECTED
+                        : COLOR_ACTUAL
                     }
-                    opacity={!entry.isActual && entry.monthStr !== selectedMonth ? 0.65 : 1}
                     cursor="pointer"
                   />
                 ))}
@@ -409,16 +376,10 @@ export function DividendIncomeChart({
           </ResponsiveContainer>
         </div>
 
-          {/* Legend: actual vs projected */}
-
           <div className="flex gap-4 mt-2 ml-1">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: COLOR_ACTUAL }} />
-              ACTUAL
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: COLOR_PROJECTED, opacity: 0.65 }} />
-              PROJECTED
+              RECEIVED
             </div>
           </div>
 
@@ -451,9 +412,6 @@ export function DividendIncomeChart({
             <div className="text-accent text-[10px] tracking-wide">
               {MONTH_LABELS[parseInt(selectedMonth.slice(5, 7)) - 1]} {selectedMonth.slice(0, 4)}
             </div>
-            {selectedData.source === "projected" && (
-              <span className="text-[10px] text-muted-foreground border border-border/50 px-1">PROJECTED</span>
-            )}
           </div>
           {(() => {
             const displayItems = selectedData.items.filter(item =>
