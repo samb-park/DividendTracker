@@ -76,18 +76,33 @@ export async function GET() {
 
   const holdings = await prisma.holding.findMany({
     where: { quantity: { gt: 0 }, portfolio: { userId: session.user.id } },
-    select: { ticker: true, quantity: true, currency: true },
+    select: {
+      ticker: true,
+      quantity: true,
+      currency: true,
+      transactions: {
+        where: { action: "BUY" },
+        select: { date: true },
+        orderBy: { date: "asc" },
+      },
+    },
   });
 
   // Aggregate shares per ticker (multiple accounts may hold the same ticker)
   // Currency: use the first seen value per ticker (prefer CAD for .TO tickers, USD otherwise)
-  const sharesMap = new Map<string, { shares: number; currency: string }>();
+  const sharesMap = new Map<string, { shares: number; currency: string; firstBuyYear: number | null }>();
   for (const h of holdings) {
     const qty = parseFloat(h.quantity?.toString() ?? "0") || 0;
     const existing = sharesMap.get(h.ticker);
+    const holdingFirstBuyYear = h.transactions[0]?.date?.getFullYear() ?? null;
     sharesMap.set(h.ticker, {
       shares: (existing?.shares ?? 0) + qty,
       currency: existing?.currency ?? h.currency,
+      firstBuyYear: existing?.firstBuyYear == null
+        ? holdingFirstBuyYear
+        : holdingFirstBuyYear == null
+          ? existing.firstBuyYear
+          : Math.min(existing.firstBuyYear, holdingFirstBuyYear),
     });
   }
 
@@ -100,7 +115,11 @@ export async function GET() {
     const batch = tickers.slice(i, i + BATCH);
     const batchResults = await Promise.all(
       batch.map(async (ticker) => {
-        const history = await getDividendHistory(ticker);
+        const info = sharesMap.get(ticker)!;
+        const fullHistory = await getDividendHistory(ticker);
+        const history = info.firstBuyYear == null
+          ? fullHistory
+          : fullHistory.filter((row) => row.year >= info.firstBuyYear!);
         const withGrowth = history.map((row, idx) => {
           const prev = history[idx - 1];
           const growthPct = prev && prev.annualDPS > 0
@@ -108,7 +127,6 @@ export async function GET() {
             : null;
           return { ...row, growthPct };
         });
-        const info = sharesMap.get(ticker)!;
         return { ticker, history: withGrowth, streak: computeStreak(history), shares: info.shares, currency: info.currency };
       })
     );
