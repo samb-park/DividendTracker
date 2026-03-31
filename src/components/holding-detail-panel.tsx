@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AddTransactionDialog } from "./add-transaction-dialog";
 import { X } from "lucide-react";
 import { fmt, fmtPct } from "@/lib/utils";
-import { COLOR_ACTUAL, COLOR_PROJECTED } from "@/lib/chart-tokens";
+import { COLOR_ACTUAL } from "@/lib/chart-tokens";
 import {
   BarChart,
   Bar,
@@ -245,28 +245,50 @@ export function HoldingDetailPanel({
     ? (totalReturn / row.costBasis) * 100
     : null;
 
-  // Dividend CAGR from actual transactions
+  // Dividend CAGR from actual received dividends, normalized by shares held on each pay date.
   const divCAGR = useMemo(() => {
     if (dividendTxns.length < 2) return null;
-    const byYear: Record<number, number> = {};
-    for (const t of dividendTxns) {
-      const yr = parseInt(t.date?.slice(0, 4) ?? "0");
-      if (yr > 2000) byYear[yr] = (byYear[yr] ?? 0) + parseFloat(t.price) * parseFloat(t.quantity);
+
+    const shareTxns = panelTxns
+      .filter((t) => t.action === "BUY" || t.action === "SELL")
+      .map((t) => ({
+        date: t.date?.slice(0, 10) ?? "",
+        signedQty: t.action === "BUY" ? parseFloat(t.quantity) : -parseFloat(t.quantity),
+      }))
+      .filter((t) => t.date && Number.isFinite(t.signedQty))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const annualDpsByYear: Record<number, number> = {};
+    for (const t of [...dividendTxns].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))) {
+      const date = t.date?.slice(0, 10) ?? "";
+      const yr = parseInt(date.slice(0, 4) ?? "0", 10);
+      if (!date || yr <= 2000) continue;
+
+      const sharesHeld = shareTxns.reduce((sum, tx) => (
+        tx.date <= date ? sum + tx.signedQty : sum
+      ), 0);
+      if (sharesHeld <= 0) continue;
+
+      const amountReceived = parseFloat(t.price) * parseFloat(t.quantity);
+      if (!Number.isFinite(amountReceived) || amountReceived <= 0) continue;
+
+      annualDpsByYear[yr] = (annualDpsByYear[yr] ?? 0) + (amountReceived / sharesHeld);
     }
-    const years = Object.keys(byYear).map(Number).sort();
+
+    const years = Object.keys(annualDpsByYear).map(Number).sort();
     if (years.length < 2) return null;
     const n = years[years.length - 1] - years[0];
     if (n < 1) return null;
-    const first = byYear[years[0]], last = byYear[years[years.length - 1]];
+
+    const first = annualDpsByYear[years[0]];
+    const last = annualDpsByYear[years[years.length - 1]];
     if (first <= 0 || last <= 0) return null;
+
     return { cagr: (Math.pow(last / first, 1 / n) - 1) * 100, years: n };
-  }, [dividendTxns]);
+  }, [dividendTxns, panelTxns]);
 
-  // Dividend history chart data: group actual by month, project future months
+  // Dividend history chart data: actual received dividends only
   const divChartData = useMemo(() => {
-    const p = row.price;
-    const annualRate = p?.trailingAnnualDividendRate ?? p?.dividendRate ?? 0;
-
     // Group actual dividends by YYYY-MM
     const actualByMonth: Record<string, number> = {};
     for (const t of dividendTxns) {
@@ -281,21 +303,17 @@ export function HoldingDetailPanel({
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleString("en", { month: "short" });
-      const isCurrentOrFuture = mo >= today.slice(0, 7);
       if (actualByMonth[mo] != null) {
         months.push({ month: mo, label, amount: actualByMonth[mo], source: "actual" });
-      } else if (isCurrentOrFuture && annualRate > 0) {
-        months.push({ month: mo, label, amount: Math.round((annualRate / 12) * row.shares * 100) / 100, source: "projected" });
-      } else if (actualByMonth[mo] == null) {
+      } else {
         months.push({ month: mo, label, amount: 0, source: "actual" });
       }
     }
 
     return months;
-  }, [dividendTxns, row.price, row.shares, today]);
+  }, [dividendTxns]);
 
   const hasActualDivChart = divChartData.some((d) => d.source === "actual" && d.amount > 0);
-  const hasProjectedDivChart = divChartData.some((d) => d.source === "projected" && d.amount > 0);
 
   // Estimated annual dividend income
   const p = row.price;
@@ -931,23 +949,15 @@ export function HoldingDetailPanel({
         {activeTab === "dividends" && (
           <>
             {/* Dividend history bar chart */}
-            {(hasActualDivChart || hasProjectedDivChart) && (
+            {hasActualDivChart && (
               <div className="border border-border bg-card p-4 mb-3">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-[10px] text-muted-foreground tracking-wide">12-MONTH HISTORY</div>
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                    {hasActualDivChart && (
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-[1px]" style={{ backgroundColor: COLOR_ACTUAL }} />
-                        ACTUAL
-                      </span>
-                    )}
-                    {hasProjectedDivChart && (
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-[1px]" style={{ backgroundColor: COLOR_PROJECTED }} />
-                        EST.
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-[1px]" style={{ backgroundColor: COLOR_ACTUAL }} />
+                      RECEIVED
+                    </span>
                   </div>
                 </div>
                 <div className="chart-touch-zone">
@@ -968,8 +978,8 @@ export function HoldingDetailPanel({
                         fontSize: 11,
                         fontFamily: "var(--font-mono)",
                       }}
-                      formatter={(value: number, _name: string, props: any) => [
-                        `${sym}${fmt(toDisp(value))} ${props.payload.source === "projected" ? "(EST)" : ""}`,
+                      formatter={(value: number) => [
+                        `${sym}${fmt(toDisp(value))}`,
                         "DIVIDEND",
                       ]}
                       labelStyle={{ color: "hsl(var(--muted-foreground))" }}
@@ -979,8 +989,7 @@ export function HoldingDetailPanel({
                       {divChartData.map((entry, i) => (
                         <Cell
                           key={i}
-                          fill={entry.source === "projected" ? COLOR_PROJECTED : COLOR_ACTUAL}
-                          opacity={entry.source === "projected" ? 0.7 : 1}
+                          fill={COLOR_ACTUAL}
                         />
                       ))}
                     </Bar>
