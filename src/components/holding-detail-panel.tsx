@@ -755,7 +755,10 @@ export function HoldingDetailPanel({
                     <div className="col-span-2">
                       <div className="text-[10px] text-muted-foreground">TO FILL GAP</div>
                       <div className="tabular-nums text-primary">
-                        {periods} {fl} ({sym}{fmt(contribDisplay)}/{fl})
+                        {sym}{fmt(gapDisplay)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        AT CURRENT PLAN: {periods} {fl} ({sym}{fmt(contribDisplay)}/{fl})
                       </div>
                     </div>
                   )}
