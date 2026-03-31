@@ -241,11 +241,12 @@ export function DividendIncomeChart({
   }, [mergedMonths, showNet, displayCurrency, fxRate, selectedAccount]);
 
   const { annualTotal, monthlyAvg } = useMemo(() => {
-    const activeMonths = chartData.filter((d) => d.value > 0);
-    const total = activeMonths.reduce((s, d) => s + d.value, 0);
-    const avg = activeMonths.length > 0 ? total / activeMonths.length : 0;
+    const total = chartData.reduce((sum, d) => sum + d.value, 0);
+    const monthsElapsed = new Date().getMonth() + 1;
+    const divisor = year === CURRENT_YEAR ? monthsElapsed : 12;
+    const avg = divisor > 0 ? total / divisor : 0;
     return { annualTotal: total, monthlyAvg: avg };
-  }, [chartData]);
+  }, [chartData, year, CURRENT_YEAR]);
 
   // Report current-year stats to parent (for summary bar)
   useEffect(() => {

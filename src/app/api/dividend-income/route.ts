@@ -6,16 +6,22 @@ import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
-// 1-hour in-memory cache
-const cache = new Map<string, { data: DivData; fetchedAt: number }>();
-const TTL = 60 * 60 * 1000;
-
 interface DivData {
   exDivDate: string;
   amountPerShare: number;
   frequency: number;
   currency: string;
 }
+
+interface DividendEvent {
+  date: string;
+  amount: number;
+}
+
+// 1-hour in-memory cache
+const cache = new Map<string, { data: DivData; fetchedAt: number }>();
+const historyCache = new Map<string, { data: { currency: string; events: DividendEvent[] }; fetchedAt: number }>();
+const TTL = 60 * 60 * 1000;
 
 interface DividendItem {
   ticker: string;
@@ -46,6 +52,63 @@ function netFactor(accountType: string, currency: string, ticker: string): numbe
   if (accountType === "FHSA") return applyUSWithholding ? 0.85 : 1.0; // FHSA not treaty-exempt
   if (accountType === "RESP") return applyUSWithholding ? 0.85 : 1.0; // RESP not treaty-exempt
   return 1.0; // Margin/Cash — return gross (personal tax handled separately)
+}
+
+function computeSharesHeldAtDate(
+  transactions: Array<{ action: "BUY" | "SELL" | "DIVIDEND"; quantity: unknown; date: Date }>,
+  cutoff: Date
+): number {
+  return transactions.reduce((sum, txn) => {
+    if (txn.date > cutoff) return sum;
+    const qty = parseFloat(String(txn.quantity ?? "0")) || 0;
+    if (txn.action === "BUY") return sum + qty;
+    if (txn.action === "SELL") return sum - qty;
+    return sum;
+  }, 0);
+}
+
+async function getDividendEvents(ticker: string, year: number): Promise<{ currency: string; events: DividendEvent[] }> {
+  const cacheKey = `${ticker}:${year}`;
+  const cached = historyCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < TTL) return cached.data;
+
+  const chart = await yahooFinance.chart(ticker, {
+    period1: `${year - 1}-10-01`,
+    period2: `${year + 1}-03-31`,
+    interval: "1mo",
+  });
+
+  const dividendMap = chart.events?.dividends ?? {};
+  const events = Object.values(dividendMap)
+    .map((d) => {
+      const item = d as { date: Date | number | string; amount: number };
+      return { date: new Date(item.date).toISOString().slice(0, 10), amount: item.amount };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const data = { currency: chart.meta?.currency ?? "USD", events };
+  historyCache.set(cacheKey, { data, fetchedAt: Date.now() });
+  return data;
+}
+
+function findMatchingDividendEvent(events: DividendEvent[], paymentDate: Date): DividendEvent | null {
+  const paymentTs = paymentDate.getTime();
+  const maxLagMs = 120 * 86400000;
+
+  let best: DividendEvent | null = null;
+  let bestLag = Number.POSITIVE_INFINITY;
+
+  for (const event of events) {
+    const eventTs = new Date(event.date).getTime();
+    const lag = paymentTs - eventTs;
+    if (lag < 0 || lag > maxLagMs) continue;
+    if (lag < bestLag) {
+      best = event;
+      bestLag = lag;
+    }
+  }
+
+  return best;
 }
 
 export async function GET(req: Request) {
@@ -92,22 +155,54 @@ export async function GET(req: Request) {
           ...(portfolioId !== "all" ? { portfolioId } : {}),
         },
       },
-      include: { holding: { include: { portfolio: true } } },
+      include: {
+        holding: {
+          include: {
+            portfolio: true,
+            transactions: {
+              select: { action: true, quantity: true, date: true },
+              orderBy: { date: "asc" },
+            },
+          },
+        },
+      },
     });
+
+    const dividendHistoryByTicker = new Map<string, { currency: string; events: DividendEvent[] } | null>();
 
     for (const txn of txns) {
       const monthKey = txn.date.toISOString().slice(0, 7);
       if (!monthMap.has(monthKey)) continue;
 
       // For DIVIDEND transactions: quantity=1, price=netAmount (actual received)
-      const amount = parseFloat(txn.price.toString()) * parseFloat(txn.quantity.toString());
-      const currency = txn.holding.currency;
+      const netAmount = parseFloat(txn.price.toString()) * parseFloat(txn.quantity.toString());
+      let grossAmount = netAmount;
+      let currency = txn.holding.currency;
       const accountType = txn.holding.portfolio.accountType ?? "NON_REG";
+      const ticker = txn.holding.ticker;
+
+      if (!dividendHistoryByTicker.has(ticker)) {
+        try {
+          dividendHistoryByTicker.set(ticker, await getDividendEvents(ticker, year));
+        } catch {
+          dividendHistoryByTicker.set(ticker, null);
+        }
+      }
+
+      const dividendHistory = dividendHistoryByTicker.get(ticker);
+      const matchedEvent = dividendHistory ? findMatchingDividendEvent(dividendHistory.events, txn.date) : null;
+      if (matchedEvent) {
+        const sharesHeld = computeSharesHeldAtDate(txn.holding.transactions, new Date(matchedEvent.date));
+        if (sharesHeld > 0) {
+          grossAmount = matchedEvent.amount * sharesHeld;
+          currency = dividendHistory?.currency ?? currency;
+        }
+      }
 
       monthMap.get(monthKey)!.items.push({
-        ticker: txn.holding.ticker,
-        amount,
-        net: amount, // actual received — already post-withholding from broker
+        ticker,
+        amount: grossAmount,
+        net: netAmount, // actual received — already post-withholding from broker
         currency,
         accountType,
         isCanadianEligible: currency === "CAD" && accountType === "NON_REG",
