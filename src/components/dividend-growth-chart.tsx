@@ -26,12 +26,15 @@ interface TickerData {
   currency: string;
 }
 
+type ViewMode = "growth" | "rate";
+
 export function DividendGrowthChart() {
   const [data, setData] = useState<TickerData[]>([]);
   const [cuts, setCuts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("growth");
   const [fxRate, setFxRate] = useState(1.35);
   const [dropOpen, setDropOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -129,40 +132,56 @@ export function DividendGrowthChart() {
       )}
 
       {/* Ticker selector dropdown */}
-      <div className="relative mb-6" ref={dropRef}>
-        <button
-          className="btn-retro btn-retro-primary text-xs flex items-center gap-2 min-w-[8rem]"
-          onClick={() => setDropOpen(v => !v)}
-        >
-          <span className="flex-1 text-left">
-            {isPortfolio ? "PORTFOLIO" : selected ?? "—"}
-            {!isPortfolio && selected && cuts.includes(selected) && <span className="ml-1 text-negative text-[9px]">▼</span>}
-          </span>
-          <span className="text-muted-foreground">▾</span>
-        </button>
-        {dropOpen && (
-          <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full max-h-60 overflow-y-auto">
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="relative" ref={dropRef}>
+          <button
+            className="btn-retro btn-retro-primary text-xs flex items-center gap-2 min-w-[8rem]"
+            onClick={() => setDropOpen(v => !v)}
+          >
+            <span className="flex-1 text-left">
+              {isPortfolio ? "PORTFOLIO" : selected ?? "—"}
+              {!isPortfolio && selected && cuts.includes(selected) && <span className="ml-1 text-negative text-[9px]">▼</span>}
+            </span>
+            <span className="text-muted-foreground">▾</span>
+          </button>
+          {dropOpen && (
+            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full max-h-60 overflow-y-auto">
+              <button
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${isPortfolio ? "text-accent" : ""}`}
+                onClick={() => { setSelected("__portfolio__"); setDropOpen(false); }}
+              >
+                PORTFOLIO
+              </button>
+              <div className="border-t border-border/50" />
+              {data.map((d) => {
+                const hasCut = cuts.includes(d.ticker);
+                return (
+                  <button
+                    key={d.ticker}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selected === d.ticker ? "text-accent" : ""} ${hasCut ? "text-negative/80" : ""}`}
+                    onClick={() => { setSelected(d.ticker); setDropOpen(false); }}
+                  >
+                    {d.ticker}{hasCut && <span className="ml-1 text-[9px]">▼ CUT</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {([
+            ["growth", "GROWTH"],
+            ["rate", isPortfolio ? "DIV" : "RATE"],
+          ] as const).map(([mode, label]) => (
             <button
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${isPortfolio ? "text-accent" : ""}`}
-              onClick={() => { setSelected("__portfolio__"); setDropOpen(false); }}
+              key={mode}
+              className={`btn-retro text-[10px] px-2 py-1 ${viewMode === mode ? "btn-retro-primary" : ""}`}
+              onClick={() => setViewMode(mode)}
             >
-              PORTFOLIO
+              {label}
             </button>
-            <div className="border-t border-border/50" />
-            {data.map((d) => {
-              const hasCut = cuts.includes(d.ticker);
-              return (
-                <button
-                  key={d.ticker}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selected === d.ticker ? "text-accent" : ""} ${hasCut ? "text-negative/80" : ""}`}
-                  onClick={() => { setSelected(d.ticker); setDropOpen(false); }}
-                >
-                  {d.ticker}{hasCut && <span className="ml-1 text-[9px]">▼ CUT</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       {currentHistory.length > 0 && (
@@ -214,10 +233,12 @@ export function DividendGrowthChart() {
                 <YAxis hide />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "inherit" }}
-                  formatter={(value: number) => [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"]}
+                  formatter={(value: number) => viewMode === "growth"
+                    ? [`${value >= 0 ? "+" : ""}${fmt(value)}%`, "YoY Growth"]
+                    : [`${isPortfolio ? "C$" : "$"}${fmt(value)}`, isPortfolio ? "Annual Div" : "Annual DPS"]}
                 />
                 <Line
-                  dataKey="growthPct"
+                  dataKey={viewMode === "growth" ? "growthPct" : "annualDPS"}
                   type="monotone"
                   stroke="hsl(var(--accent))"
                   strokeWidth={1.5}
@@ -240,17 +261,25 @@ export function DividendGrowthChart() {
               <thead>
                 <tr>
                   <th>YEAR</th>
-                  <th className="text-right">YoY GROWTH</th>
+                  <th className="text-right">{viewMode === "growth" ? "YoY GROWTH" : (isPortfolio ? "ANNUAL DIV" : "ANNUAL DPS")}</th>
                 </tr>
               </thead>
               <tbody>
                 {[...currentHistory].reverse().map((row) => (
                   <tr key={row.year}>
                     <td className="text-muted-foreground text-xs">{row.year}</td>
-                    <td className={`text-right tabular-nums text-xs ${row.growthPct === null ? "text-muted-foreground" : row.growthPct >= 0 ? "text-positive" : "text-negative"}`}>
-                      {row.growthPct === null
-                        ? "—"
-                        : `${row.growthPct >= 0 ? "+" : ""}${fmt(row.growthPct)}%`}
+                    <td className={`text-right tabular-nums text-xs ${
+                      viewMode === "growth"
+                        ? row.growthPct === null
+                          ? "text-muted-foreground"
+                          : row.growthPct >= 0 ? "text-positive" : "text-negative"
+                        : "text-primary"
+                    }`}>
+                      {viewMode === "growth"
+                        ? row.growthPct === null
+                          ? "—"
+                          : `${row.growthPct >= 0 ? "+" : ""}${fmt(row.growthPct)}%`
+                        : `${isPortfolio ? "C$" : "$"}${fmt(row.annualDPS)}`}
                     </td>
                   </tr>
                 ))}
