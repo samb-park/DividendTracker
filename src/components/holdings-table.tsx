@@ -335,24 +335,43 @@ export function HoldingsTable({
   const contribCAD = investContrib
     ? (investContrib.currency === "CAD" ? investContrib.amount : investContrib.amount * fxRate)
     : 0;
+  const toCADValue = (amount: number, currency: "USD" | "CAD") =>
+    currency === "USD" ? amount * fxRate : amount;
+  const fromCADValue = (amountCAD: number, currency: "USD" | "CAD") =>
+    currency === "USD" ? amountCAD / fxRate : amountCAD;
 
-  const totalPositiveGapPct = rows.reduce((sum, r) => {
-    const w = totalMarketValue > 0 ? (r.marketValue / totalMarketValue) * 100 : 0;
+  const totalMarketValueCAD = rows.reduce(
+    (sum, r) => sum + toCADValue(r.marketValue, r.holding.currency),
+    0
+  );
+  const postTotalValueCAD = totalMarketValueCAD + contribCAD;
+
+  const shortfallCADMap: Record<string, number> = {};
+  let totalShortfallCAD = 0;
+  for (const r of rows) {
     const targetPct = investTargets[r.holding.ticker] ?? 0;
-    return sum + Math.max(0, targetPct - w);
-  }, 0);
+    const currentValueCAD = toCADValue(r.marketValue, r.holding.currency);
+    const shortfallCAD = Math.max(0, postTotalValueCAD * (targetPct / 100) - currentValueCAD);
+    shortfallCADMap[r.holding.ticker] = shortfallCAD;
+    totalShortfallCAD += shortfallCAD;
+  }
 
-  // Map ticker → alloc amount in stock's native currency
+  // Map ticker → alloc amount in stock's native currency / post-allocation weight
   const allocMap: Record<string, number> = {};
-  if (contribCAD > 0 && totalPositiveGapPct > 0) {
-    for (const r of rows) {
-      const w = totalMarketValue > 0 ? (r.marketValue / totalMarketValue) * 100 : 0;
-      const targetPct = investTargets[r.holding.ticker] ?? 0;
-      const gap = Math.max(0, targetPct - w);
-      const allocCAD = (gap / totalPositiveGapPct) * contribCAD;
-      // Convert to stock's native currency
-      allocMap[r.holding.ticker] = r.holding.currency === "USD" ? allocCAD / fxRate : allocCAD;
-    }
+  const gapAmountMap: Record<string, number> = {};
+  const postPctMap: Record<string, number> = {};
+  for (const r of rows) {
+    const shortfallCAD = shortfallCADMap[r.holding.ticker] ?? 0;
+    const allocCAD = contribCAD > 0 && totalShortfallCAD > 0
+      ? (shortfallCAD / totalShortfallCAD) * contribCAD
+      : 0;
+    const currentValueCAD = toCADValue(r.marketValue, r.holding.currency);
+
+    allocMap[r.holding.ticker] = fromCADValue(allocCAD, r.holding.currency);
+    gapAmountMap[r.holding.ticker] = fromCADValue(shortfallCAD, r.holding.currency);
+    postPctMap[r.holding.ticker] = postTotalValueCAD > 0
+      ? ((currentValueCAD + allocCAD) / postTotalValueCAD) * 100
+      : 0;
   }
 
   useEffect(() => {
@@ -685,6 +704,8 @@ export function HoldingsTable({
           totalMarketValue={totalMarketValue}
           displayCurrency={displayCurrency}
           allocAmount={allocMap[selectedRow.holding.ticker] ?? 0}
+          gapAmount={gapAmountMap[selectedRow.holding.ticker] ?? 0}
+          postAllocationPct={postPctMap[selectedRow.holding.ticker]}
           contribCAD={contribCAD}
           fxRateForAlloc={fxRate}
           allPortfolios={allPortfolios}

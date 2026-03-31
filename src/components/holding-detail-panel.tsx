@@ -84,6 +84,8 @@ export function HoldingDetailPanel({
   totalMarketValue = 0,
   displayCurrency,
   allocAmount = 0,
+  gapAmount = 0,
+  postAllocationPct,
   contribCAD = 0,
   fxRateForAlloc = 1.35,
   allPortfolios,
@@ -97,6 +99,8 @@ export function HoldingDetailPanel({
   totalMarketValue?: number;
   displayCurrency?: "USD" | "CAD";
   allocAmount?: number;
+  gapAmount?: number;
+  postAllocationPct?: number;
   contribCAD?: number;
   fxRateForAlloc?: number;
   allPortfolios?: { id: string; name: string }[];
@@ -683,14 +687,16 @@ export function HoldingDetailPanel({
               const currentPct = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
               const targetPct = investPlan.target!.pct;
               const gapPct = Math.max(0, targetPct - currentPct);
-              const reached = gapPct < 0.01;
-              const gapNative = totalMarketValue > 0 ? (gapPct / 100) * totalMarketValue : 0;
+              const gapNative = gapAmount > 0 ? gapAmount : 0;
+              const reached = gapNative < 0.01;
               const gapDisplay = convertCurrency(gapNative, row.holding.currency, displayCur, fxRate);
               const FREQ_LABEL = { weekly: "WK", biweekly: "BW", monthly: "MO" } as const;
               const allocDisplay = convertCurrency(allocAmount, row.holding.currency, displayCur, fxRate);
-              const postMktValue = row.marketValue + allocAmount;
-              const postTotal = totalMarketValue + contribCAD / fxRateForAlloc;
-              const postPct = postTotal > 0 ? (postMktValue / postTotal) * 100 : 0;
+              const postPct = postAllocationPct ?? (() => {
+                const postMktValue = row.marketValue + allocAmount;
+                const postTotal = totalMarketValue + contribCAD / fxRateForAlloc;
+                return postTotal > 0 ? (postMktValue / postTotal) * 100 : 0;
+              })();
               const contribDisplay = investPlan.contribution
                 ? convertCurrency(investPlan.contribution.amount, investPlan.contribution.currency, displayCur, fxRate)
                 : 0;
