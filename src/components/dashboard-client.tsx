@@ -7,10 +7,16 @@ import { AllocationBars } from "./allocation-bars";
 import { DividendIncomeChart } from "./dividend-income-chart";
 import { PerformanceChart } from "./performance-chart";
 import { AiPanel } from "./ai-panel";
+import { ProjectionCard } from "./projection-card";
 import { UpcomingDividends } from "./upcoming-dividends";
 import { SkeletonBlock } from "./skeleton";
 import { fmt, mergeHoldings } from "@/lib/utils";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
+import {
+  getNdxTierAction,
+  getUpperTriggerStatus,
+  type NdxTier,
+} from "@/lib/investment-triggers";
 
 function ChartTabs({
   tabs,
@@ -89,17 +95,23 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
   const [divPortfolioCagr, setDivPortfolioCagr] = useState<number | null>(null);
   const [growthTickers, setGrowthTickers] = useState<Array<{ ticker: string; history: Array<{ year: number; annualDPS: number }> }>>([]);
+  const [ndxTier, setNdxTier] = useState<NdxTier>(0);
+  const [upperTriggerPct, setUpperTriggerPct] = useState(33);
+  const [dismissedAlerts, setDismissedAlerts] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/settings/investment").then(r => r.json()).catch(() => ({})),
       fetch("/api/fx").then(r => r.json()).catch(() => ({ fallback: true })),
       fetch("/api/dividend-growth").then(r => r.json()).catch(() => ({ tickers: [] })),
-    ]).then(([inv, fx, growth]) => {
+      fetch("/api/market/ndx").then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([inv, fx, growth, ndx]) => {
       if (inv.incomeGoal) setIncomeGoal(inv.incomeGoal);
+      if (inv.triggerParams?.upperTriggerPct) setUpperTriggerPct(inv.triggerParams.upperTriggerPct);
       if (fx.rate) setFxRate(fx.rate);
       if (fx.fallback) setFxFallback(true);
       setGrowthTickers(growth.tickers ?? []);
+      if (ndx && typeof ndx.tier === "number") setNdxTier(ndx.tier as NdxTier);
     }).catch(() => {});
   }, []);
 
@@ -188,8 +200,69 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
     setLoadingData(false);
   }, []);
 
+  // Compute QLD current weight (CAD-based) for trigger alerts
+  const qldPct = useMemo(() => {
+    const totalCAD = holdingSummaries.reduce(
+      (s, h) => s + (h.currency === "USD" ? h.marketValue * fxRate : h.marketValue),
+      0
+    );
+    if (totalCAD <= 0) return 0;
+    const qld = holdingSummaries.find((h) => h.ticker === "QLD");
+    if (!qld) return 0;
+    const qldCAD = qld.currency === "USD" ? qld.marketValue * fxRate : qld.marketValue;
+    return (qldCAD / totalCAD) * 100;
+  }, [holdingSummaries, fxRate]);
+
+  const triggerAlerts = useMemo(() => {
+    const alerts: Array<{ level: "warn" | "danger"; msg: string }> = [];
+    if (ndxTier >= 1) {
+      alerts.push({
+        level: ndxTier >= 2 ? "danger" : "warn",
+        msg: `NDX Tier ${ndxTier} 활성: ${getNdxTierAction(ndxTier)}`,
+      });
+    }
+    // QLD 상단 트리거 — target 30% 가정
+    const qldStatus = getUpperTriggerStatus(qldPct, 30, upperTriggerPct);
+    if (qldStatus === "TRIGGER" && qldPct > 0) {
+      alerts.push({
+        level: "danger",
+        msg: "QLD 상단 트리거 도달: QLD 매도 → SCHD 매수로 30% 복귀 권장",
+      });
+    }
+    return alerts;
+  }, [ndxTier, qldPct, upperTriggerPct]);
+
   return (
     <div>
+      {/* Trigger alerts banner */}
+      {!dismissedAlerts && triggerAlerts.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {triggerAlerts.map((a, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2 border px-3 py-2 text-xs rounded ${
+                a.level === "danger"
+                  ? "border-red-500/40 bg-red-900/20 text-red-300"
+                  : "border-yellow-600/40 bg-yellow-900/20 text-yellow-300"
+              }`}
+            >
+              <span className="font-bold mt-0.5" aria-hidden>!</span>
+              <span className="flex-1">{a.msg}</span>
+              {i === 0 && (
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground px-1 -mt-0.5"
+                  onClick={() => setDismissedAlerts(true)}
+                  aria-label="Dismiss alerts"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Account selector + currency toggle — full width above grid */}
       <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
         <div className="relative" ref={acctDropdownRef}>
@@ -434,6 +507,9 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
 
           {/* AI Assistant Panel */}
           <AiPanel />
+
+          {/* AI Projection */}
+          <ProjectionCard />
         </div>
       </div>
 

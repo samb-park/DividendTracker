@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AddHoldingDialog } from "./add-holding-dialog";
 import { HoldingDetailPanel } from "./holding-detail-panel";
+import { StrategyStatusPanel } from "./strategy-status-panel";
 import { mergeHoldings } from "@/lib/utils";
+import { buildAllocationPlan } from "@/lib/investment-allocation";
+import { getOverrideTargets, type NdxTier } from "@/lib/investment-triggers";
 
 interface Transaction {
   id: string;
@@ -110,18 +113,23 @@ export function HoldingsTable({
   const [colMode, setColMode] = useState<"usd" | "pct">("usd");
   const [priceMode, setPriceMode] = useState<"price" | "avg">("price");
   const [mktMode, setMktMode] = useState<"mkt" | "cost">("mkt");
-  const [wgtMode, setWgtMode] = useState<"pct" | "alloc">("pct");
+  const [wgtMode, setWgtMode] = useState<"total" | "eligible" | "alloc">("total");
   const [w52Mode, setW52Mode] = useState<"high" | "low">("high");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [dayMode, setDayMode] = useState<"day" | "yld" | "yoc">("day");
+  const [mobileSortKey, setMobileSortKey] = useState<string>("mkt");
   const [streaks, setStreaks] = useState<Record<string, number>>({});
   const [dividendCuts, setDividendCuts] = useState<Set<string>>(new Set());
   const [dividendCutPcts, setDividendCutPcts] = useState<Record<string, number>>({});
   const [dividendHistory, setDividendHistory] = useState<Set<string>>(new Set());
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
+  const [excludedTickers, setExcludedTickers] = useState<Set<string>>(new Set());
   const [investContrib, setInvestContrib] = useState<{ amount: number; currency: "USD" | "CAD"; frequency?: string } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
+  const [accountMapping, setAccountMapping] = useState<Record<string, string>>({});
+  const [upperTriggerPct, setUpperTriggerPct] = useState(33);
+  const [ndxTier, setNdxTier] = useState<NdxTier>(0);
   const [longPressInfo, setLongPressInfo] = useState<{ ticker: string; currency: "USD" | "CAD"; marketValue: number; shares: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -135,13 +143,22 @@ export function HoldingsTable({
   useEffect(() => {
     fetch("/api/settings/investment").then(r => r.json()).then(d => {
       const targets: Record<string, number> = {};
+      const excluded = new Set<string>();
       for (const [ticker, val] of Object.entries(d.targets ?? {})) {
-        targets[ticker] = (val as { pct: number }).pct;
+        const v = val as { pct: number; excluded?: boolean };
+        if (v.excluded) { excluded.add(ticker); continue; }
+        targets[ticker] = v.pct;
       }
       setInvestTargets(targets);
+      setExcludedTickers(excluded);
       if (d.contribution) setInvestContrib({ amount: d.contribution.amount, currency: d.contribution.currency, frequency: d.contribution.frequency });
+      if (d.accountMapping) setAccountMapping(d.accountMapping);
+      if (d.triggerParams?.upperTriggerPct) setUpperTriggerPct(d.triggerParams.upperTriggerPct);
     }).catch(() => {});
     fetch("/api/fx").then(r => r.json()).then(d => { if (d.rate) setFxRate(d.rate); }).catch(() => {});
+    fetch("/api/market/ndx").then(r => r.ok ? r.json() : null).then(d => {
+      if (d && typeof d.tier === "number") setNdxTier(d.tier as NdxTier);
+    }).catch(() => {});
     fetch("/api/dividend-growth").then(r => r.json()).then(d => {
       const map: Record<string, number> = {};
       const cutPcts: Record<string, number> = {};
@@ -340,38 +357,61 @@ export function HoldingsTable({
   const fromCADValue = (amountCAD: number, currency: "USD" | "CAD") =>
     currency === "USD" ? amountCAD / fxRate : amountCAD;
 
+  // Only explicitly excluded tickers (excl=true) are excluded from weight denominator
+  const isWeightExcluded = (ticker: string) =>
+    excludedTickers.has(ticker);
+
   const totalMarketValueCAD = rows.reduce(
+    (sum, r) => isWeightExcluded(r.holding.ticker) ? sum : sum + toCADValue(r.marketValue, r.holding.currency),
+    0
+  );
+  // All tickers (excl 포함) — for "total" weight mode
+  const totalAllMarketValueCAD = rows.reduce(
     (sum, r) => sum + toCADValue(r.marketValue, r.holding.currency),
     0
   );
-  const postTotalValueCAD = totalMarketValueCAD + contribCAD;
+  // Normalize targets: if excluded tickers cause the sum to be < 100%, scale up the rest
+  const totalEligibleTargetPct = Object.entries(investTargets)
+    .filter(([ticker]) => !excludedTickers.has(ticker))
+    .reduce((sum, [, pct]) => sum + pct, 0);
+  const normalizeTargetPct = (ticker: string): number => {
+    const raw = investTargets[ticker] ?? 0;
+    if (excludedTickers.has(ticker) || totalEligibleTargetPct <= 0 || Math.abs(totalEligibleTargetPct - 100) < 0.01) return raw;
+    return (raw / totalEligibleTargetPct) * 100;
+  };
 
-  const shortfallCADMap: Record<string, number> = {};
-  let totalShortfallCAD = 0;
-  for (const r of rows) {
-    const targetPct = investTargets[r.holding.ticker] ?? 0;
-    const currentValueCAD = toCADValue(r.marketValue, r.holding.currency);
-    const shortfallCAD = Math.max(0, postTotalValueCAD * (targetPct / 100) - currentValueCAD);
-    shortfallCADMap[r.holding.ticker] = shortfallCAD;
-    totalShortfallCAD += shortfallCAD;
-  }
+  // Hybrid allocation plan (Tier 1: gap>5%, Tier 2: 2~5%, Tier 3: <2%)
+  const allExcludedForAlloc = [
+    ...excludedTickers,
+    ...Object.entries(investTargets).filter(([, pct]) => pct === 0).map(([t]) => t),
+  ];
+  // NDX 티어 기반 override (tier 1+ 시 QLD 100% 집중)
+  const effectiveTargets = getOverrideTargets(ndxTier, investTargets);
+  const allocPlan = buildAllocationPlan({
+    holdings: rows.map(r => ({ ticker: r.holding.ticker, currency: r.holding.currency, marketValue: r.marketValue })),
+    investTargets: effectiveTargets,
+    contributionCAD: contribCAD,
+    fxRate,
+    excludeCashEquivalents: false,
+    excludedTickers: allExcludedForAlloc,
+  });
+
+  // QLD/SGOV 비중 계산 (전체 자산 기준)
+  const qldRow = rows.find(r => r.holding.ticker === "QLD");
+  const sgovRow = rows.find(r => r.holding.ticker === "SGOV");
+  const qldValueCAD = qldRow ? toCADValue(qldRow.marketValue, qldRow.holding.currency) : 0;
+  const sgovValueCAD = sgovRow ? toCADValue(sgovRow.marketValue, sgovRow.holding.currency) : 0;
+  const qldPct = totalAllMarketValueCAD > 0 ? (qldValueCAD / totalAllMarketValueCAD) * 100 : 0;
+  const sgovPct = totalAllMarketValueCAD > 0 ? (sgovValueCAD / totalAllMarketValueCAD) * 100 : 0;
 
   // Map ticker → alloc amount in stock's native currency / post-allocation weight
   const allocMap: Record<string, number> = {};
   const gapAmountMap: Record<string, number> = {};
   const postPctMap: Record<string, number> = {};
   for (const r of rows) {
-    const shortfallCAD = shortfallCADMap[r.holding.ticker] ?? 0;
-    const allocCAD = contribCAD > 0 && totalShortfallCAD > 0
-      ? (shortfallCAD / totalShortfallCAD) * contribCAD
-      : 0;
-    const currentValueCAD = toCADValue(r.marketValue, r.holding.currency);
-
-    allocMap[r.holding.ticker] = fromCADValue(allocCAD, r.holding.currency);
-    gapAmountMap[r.holding.ticker] = fromCADValue(shortfallCAD, r.holding.currency);
-    postPctMap[r.holding.ticker] = postTotalValueCAD > 0
-      ? ((currentValueCAD + allocCAD) / postTotalValueCAD) * 100
-      : 0;
+    allocMap[r.holding.ticker] = fromCADValue(allocPlan.allocCADByTicker[r.holding.ticker] ?? 0, r.holding.currency);
+    gapAmountMap[r.holding.ticker] = fromCADValue(allocPlan.gapCADByTicker[r.holding.ticker] ?? 0, r.holding.currency);
+    postPctMap[r.holding.ticker] = allocPlan.postPctByTicker[r.holding.ticker] ?? 0;
   }
 
   useEffect(() => {
@@ -398,6 +438,14 @@ export function HoldingsTable({
   return (
     <div>
       <div>
+        {!readOnly && investTargets && Object.keys(investTargets).length > 0 && rows.length > 0 && (
+          <StrategyStatusPanel
+            qldPct={qldPct}
+            sgovPct={sgovPct}
+            upperTriggerPct={upperTriggerPct}
+            qldTargetPct={investTargets["QLD"] ?? 30}
+          />
+        )}
         <div className="flex items-center justify-between mb-3">
           {rows.length > 0 ? (
             <span className="text-[10px] text-muted-foreground">
@@ -412,217 +460,324 @@ export function HoldingsTable({
           </div>
         ) : (
           <>
-          {/* Mobile card list (< sm) */}
-          <div className="sm:hidden space-y-2">
-            {sortedRows.map((row) => {
-              const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
-              const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
-              const priceUnavailable = !loadingPrices && !row.price;
-              const priceReason = priceReasons[row.holding.ticker];
-              return (
-                <div
-                  key={row.holding.id}
-                  className={`border border-border p-3 cursor-pointer select-none active:bg-border/20 ${selectedRowId === row.holding.id ? "bg-border/30 border-accent" : "bg-card"}`}
-                  onClick={() => { if (!longPressTriggeredRef.current) selectRow(row.holding.id); }}
-                  onPointerDown={() => startRowLongPress({ ticker: row.holding.ticker, currency: row.holding.currency, marketValue: row.marketValue, shares: row.shares })}
-                  onPointerUp={cancelRowLongPress}
-                  onPointerLeave={cancelRowLongPress}
-                  onContextMenu={e => e.preventDefault()}
+          {/* Mobile sort pills + wgtMode toggle */}
+          {(() => {
+            const mobileSortOptions = [
+              { key: "mkt", label: "MKT" },
+              { key: "pnl", label: "P&L" },
+              { key: "day", label: "DAY" },
+              { key: "wgt", label: "WGT" },
+              { key: "ticker", label: "A-Z" },
+            ] as const;
+            return (
+              <div className="sm:hidden flex items-center justify-between gap-1 mb-2">
+                <button
+                  className={`btn-retro text-[9px] px-1.5 py-0.5 ${wgtMode === "eligible" ? "btn-retro-primary" : ""}`}
+                  onClick={() => setWgtMode(m => m === "total" ? "eligible" : "total")}
+                  title="Weight: excl 포함 / excl 제외"
                 >
+                  {wgtMode === "eligible" ? "ELG" : "ALL"}
+                </button>
+                <div className="flex items-center gap-1">
+                  {mobileSortOptions.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      className={`btn-retro text-[9px] px-1.5 py-0.5 ${mobileSortKey === key ? "btn-retro-primary" : ""}`}
+                      onClick={() => {
+                        if (mobileSortKey === key) {
+                          setSortDir(d => d === "desc" ? "asc" : "desc");
+                        } else {
+                          setMobileSortKey(key);
+                          setSortCol(key);
+                          setSortDir("desc");
+                        }
+                      }}
+                    >
+                      {label}{mobileSortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          <div className="sm:hidden space-y-2">
+            {loadingPrices ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="border border-border p-3 bg-card animate-pulse">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0">
-                      <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
-                      <div className="text-muted-foreground/60 text-[10px] mt-0.5 tabular-nums">
-                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}sh
-                      </div>
-                      {row.holding.name && row.holding.name !== row.holding.ticker && (
-                        <div className="text-muted-foreground text-[10px] mt-0.5 truncate" title={row.holding.name}>{row.holding.name}</div>
-                      )}
+                    <div className="space-y-1.5">
+                      <div className="h-3.5 bg-border/40 rounded-none w-14" />
+                      <div className="h-2.5 bg-border/40 rounded-none w-24" />
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      {loadingPrices ? (
-                        <span className="text-muted-foreground text-xs">...</span>
-                      ) : priceUnavailable ? (
-                        <span className="text-negative text-xs font-medium" title={priceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>
-                          {priceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}
-                        </span>
-                      ) : (
-                        <span className="text-sm tabular-nums font-medium">{cur}{fmt(toDisp(row.price!.price, row.holding.currency))}</span>
-                      )}
-                      {row.price && (
-                        <div className={`text-[10px] tabular-nums ${row.price.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
-                          {fmtPct(row.price.changePercent)}
-                        </div>
-                      )}
+                    <div className="space-y-1.5">
+                      <div className="h-3.5 bg-border/40 rounded-none w-24 ml-auto" />
+                      <div className="h-2.5 bg-border/40 rounded-none w-20 ml-auto" />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] gap-2">
-                    <span className="text-muted-foreground tabular-nums">
-                      {row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—"}
-                    </span>
-                    <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
-                      {row.marketValue > 0
-                        ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))} (${fmtPct(row.unrealizedPnLPct)})`
-                        : "—"}
-                    </span>
-                    <span className="text-muted-foreground tabular-nums flex-shrink-0">
-                      {totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—"}
-                    </span>
+                  <div className="flex justify-between mt-2 pt-2 border-t border-border/30">
+                    <div className="h-2.5 bg-border/40 rounded-none w-32" />
+                    <div className="flex gap-3">
+                      <div className="h-2.5 bg-border/40 rounded-none w-10" />
+                      <div className="h-2.5 bg-border/40 rounded-none w-14" />
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              sortedRows.map((row) => {
+                const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
+                const holdingCAD = toCADValue(row.marketValue, row.holding.currency);
+                const weight = wgtMode === "total"
+                  ? (totalAllMarketValueCAD > 0 ? (holdingCAD / totalAllMarketValueCAD) * 100 : 0)
+                  : (totalMarketValueCAD > 0 && !isWeightExcluded(row.holding.ticker) ? (holdingCAD / totalMarketValueCAD) * 100 : 0);
+                const priceUnavailable = !loadingPrices && !row.price;
+                const priceReason = priceReasons[row.holding.ticker];
+                const todayChange = row.price ? row.price.change * row.shares : null;
+                const annualDivRate = row.price?.trailingAnnualDividendRate ?? row.price?.dividendRate ?? 0;
+                const divYield = row.price?.trailingAnnualDividendYield ?? row.price?.dividendYield ?? null;
+                const annualDivIncome = annualDivRate > 0 ? annualDivRate * row.shares : null;
+                const sharesStr = Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2);
+                return (
+                  <div
+                    key={row.holding.id}
+                    className={`border border-border p-3 cursor-pointer select-none active:bg-border/20 ${selectedRowId === row.holding.id ? "border-l-4 border-l-accent bg-accent/10" : "bg-card"}`}
+                    onClick={() => { if (!longPressTriggeredRef.current) selectRow(row.holding.id); }}
+                    onPointerDown={() => startRowLongPress({ ticker: row.holding.ticker, currency: row.holding.currency, marketValue: row.marketValue, shares: row.shares })}
+                    onPointerUp={cancelRowLongPress}
+                    onPointerLeave={cancelRowLongPress}
+                    onContextMenu={e => e.preventDefault()}
+                  >
+                    {/* Row 1: ticker + market value */}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-accent font-medium text-sm">{row.holding.ticker}</span>
+                      <span className="tabular-nums text-sm font-medium flex-shrink-0">
+                        {priceUnavailable
+                          ? <span className="text-negative text-xs" title={priceReason === "not_found" ? "Ticker not found" : "Price unavailable"}>{priceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>
+                          : row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—"}
+                      </span>
+                    </div>
+                    {/* Row 2: shares·weight + today's change */}
+                    <div className="flex items-baseline justify-between gap-2 mt-0.5">
+                      <span className="text-muted-foreground/60 text-[10px] tabular-nums">
+                        {sharesStr}sh{totalMarketValue > 0 ? ` · ${weight.toFixed(1)}%` : ""}
+                      </span>
+                      {todayChange !== null && (
+                        <span className={`text-[10px] tabular-nums flex-shrink-0 ${todayChange >= 0 ? "text-positive" : "text-negative"}`}>
+                          {todayChange >= 0 ? "+" : ""}{cur}{fmt(Math.abs(toDisp(todayChange, row.holding.currency)))} ({fmtPct(row.price!.changePercent)})
+                        </span>
+                      )}
+                    </div>
+                    {/* Footer: P&L + dividend info */}
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30 text-[10px]">
+                      <span className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
+                        {row.marketValue > 0
+                          ? `P&L ${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))} (${fmtPct(row.unrealizedPnLPct)})`
+                          : <span className="text-muted-foreground">P&L —</span>}
+                      </span>
+                      <div className="flex items-center gap-3 flex-shrink-0 text-right">
+                        <div>
+                          <div className="text-muted-foreground/50 text-[9px]">YLD</div>
+                          <div className="tabular-nums text-muted-foreground">{divYield != null ? `${divYield.toFixed(1)}%` : "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground/50 text-[9px]">DIV/YR</div>
+                          <div className="tabular-nums text-primary">{annualDivIncome != null ? `${cur}${fmt(toDisp(annualDivIncome, row.holding.currency), 0)}` : "—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Desktop table (sm+) */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-max">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr>
                   <th className="w-20 cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("ticker")}>TICKER{si("ticker")}</th>
+                  <th className="text-left w-16 hidden md:table-cell">ACCT</th>
                   <th className="text-left w-32 hidden lg:table-cell cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("ticker")}>NAME{si("ticker")}</th>
-                  <th className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("shares")}>SHARES{si("shares")}</th>
                   <th
                     className="text-right w-24 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setPriceMode(m => m === "price" ? "avg" : "price"); cycleSort("price"); }}
-                    title="Click to sort / toggle PRICE / AVG COST"
+                    onClick={() => cycleSort("price")}
                   >
                     {priceMode === "price" ? "PRICE" : "AVG"}{si("price") || " ▾"}
+                    <span className="ml-1 text-muted-foreground/50 hover:text-accent text-[10px] cursor-pointer" onClick={e => { e.stopPropagation(); setPriceMode(m => m === "price" ? "avg" : "price"); }}>⟳</span>
+                  </th>
+                  <th
+                    className="text-right w-20 hidden sm:table-cell select-none"
+                  >
+                    <span className="cursor-pointer hover:text-accent transition-colors" onClick={() => cycleSort("wgt")}>
+                      {wgtMode === "total" ? "WGT" : wgtMode === "eligible" ? "WGT·ELG" : "ALLOC"}{si("wgt") || ""}
+                    </span>
+                    <button
+                      className={`ml-1 btn-retro text-[8px] px-1 py-0 align-middle ${wgtMode !== "total" ? "btn-retro-primary" : ""}`}
+                      onClick={() => setWgtMode(m => m === "total" ? "eligible" : m === "eligible" ? "alloc" : "total")}
+                      title="ALL: excl 포함 / ELG: excl 제외 / ALLOC: 배분금액"
+                    >
+                      {wgtMode === "total" ? "ALL" : wgtMode === "eligible" ? "ELG" : "ALC"}
+                    </button>
+                  </th>
+                  <th
+                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
+                    onClick={() => cycleSort("mkt")}
+                  >
+                    {mktMode === "mkt" ? "MKT" : "COST"}{si("mkt") || " ▾"}
+                    <span className="ml-1 text-muted-foreground/50 hover:text-accent text-[10px] cursor-pointer" onClick={e => { e.stopPropagation(); setMktMode(m => m === "mkt" ? "cost" : "mkt"); }}>⟳</span>
+                  </th>
+                  <th
+                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
+                    onClick={() => cycleSort("pnl")}
+                  >
+                    {colMode === "usd" ? "P&L $" : "P&L %"}{si("pnl") || " ▾"}
+                    <span className="ml-1 text-muted-foreground/50 hover:text-accent text-[10px] cursor-pointer" onClick={e => { e.stopPropagation(); cycleColMode(); }}>⟳</span>
                   </th>
                   <th
                     className="text-right w-20 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setDayMode(m => m === "day" ? "yld" : m === "yld" ? "yoc" : "day"); cycleSort("day"); }}
-                    title="Click to sort / toggle DAY % / YLD % / YOC"
+                    onClick={() => cycleSort("day")}
+                    title="YOC = Yield on Cost (annual dividend ÷ your cost basis)"
                   >
                     {dayMode === "day" ? "DAY" : dayMode === "yld" ? "YLD" : "YOC"}{si("day") || " ▾"}
+                    <span className="ml-1 text-muted-foreground/50 hover:text-accent text-[10px] cursor-pointer" onClick={e => { e.stopPropagation(); setDayMode(m => m === "day" ? "yld" : m === "yld" ? "yoc" : "day"); }}>⟳</span>
                   </th>
-                  <th
-                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setMktMode(m => m === "mkt" ? "cost" : "mkt"); cycleSort("mkt"); }}
-                    title="Click to sort / toggle MKT VALUE / COST BASIS"
-                  >
-                    {mktMode === "mkt" ? "MKT" : "COST"}{si("mkt") || " ▾"}
-                  </th>
-                  <th
-                    className="text-right w-16 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setWgtMode(m => m === "pct" ? "alloc" : "pct"); cycleSort("wgt"); }}
-                    title="Click to sort / toggle WEIGHT / ALLOCATION"
-                  >
-                    {wgtMode === "pct" ? "WGT" : "ALLOC"}{si("wgt") || " ▾"}
-                  </th>
-                  <th
-                    className="text-right w-28 cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { cycleColMode(); cycleSort("pnl"); }}
-                    title="Click to sort / toggle P&L $ / P&L %"
-                  >
-                    {colMode === "usd" ? "P&L $" : "P&L %"}{si("pnl") || " ▾"}
-                  </th>
+                  <th className="text-right w-24 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors" onClick={() => cycleSort("shares")}>SHARES{si("shares")}</th>
                   <th
                     className="text-right w-24 hidden sm:table-cell cursor-pointer select-none hover:text-accent transition-colors"
-                    onClick={() => { setW52Mode(m => m === "high" ? "low" : "high"); cycleSort("w52"); }}
-                    title="Click to sort / toggle 52W HIGH / LOW"
+                    onClick={() => cycleSort("w52")}
                   >
                     {w52Mode === "high" ? "52W H" : "52W L"}{si("w52") || " ▾"}
+                    <span className="ml-1 text-muted-foreground/50 hover:text-accent text-[10px] cursor-pointer" onClick={e => { e.stopPropagation(); setW52Mode(m => m === "high" ? "low" : "high"); }}>⟳</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedRows.map((row) => {
-                  const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
-                  const weight = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
-                  const deskPriceReason = priceReasons[row.holding.ticker];
-                  return (
-                    <tr
-                      key={row.holding.id}
-                      className={`cursor-pointer ${selectedRowId === row.holding.id ? "bg-border/30" : ""}`}
-                      onClick={() => selectRow(row.holding.id)}
-                    >
-                      <td className="font-medium text-accent">
-                        <span>{row.holding.ticker}</span>
-                      </td>
-                      <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
-                        {row.holding.name || "—"}
-                      </td>
-                      <td className="text-right tabular-nums">
-                        {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}
-                      </td>
-                      <td className="text-right tabular-nums">
-                        {loadingPrices ? (
-                          <span className="text-muted-foreground">...</span>
-                        ) : priceMode === "price"
-                          ? (row.price ? `${cur}${fmt(toDisp(row.price.price, row.holding.currency))}` : <span className="text-negative text-[10px]" title={deskPriceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>{deskPriceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>)
-                          : (row.avgCost > 0 ? `${cur}${fmt(toDisp(row.avgCost, row.holding.currency))}` : "—")}
-                      </td>
-                      <td className={`text-right tabular-nums hidden sm:table-cell ${
-                        dayMode === "day"
-                          ? (row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : "")
-                          : "text-primary"
-                      }`}>
-                        {dayMode === "day"
-                          ? (row.price ? fmtPct(row.price.changePercent) : "—")
-                          : dayMode === "yld"
-                          ? (() => {
-                              const yld = row.price?.trailingAnnualDividendYield ?? row.price?.dividendYield ?? null;
-                              return yld != null ? `${yld.toFixed(2)}%` : "—";
-                            })()
-                          : (() => {
-                              const annualDivRate = row.price?.trailingAnnualDividendRate ?? row.price?.dividendRate ?? 0;
-                              const yoc = (annualDivRate > 0 && row.costBasis > 0)
-                                ? (annualDivRate * row.shares / row.costBasis) * 100
-                                : null;
-                              return yoc != null ? `${yoc.toFixed(2)}%` : "—";
-                            })()
-                        }
-                      </td>
-                      <td className="text-right tabular-nums">
-                        {mktMode === "mkt"
-                          ? (row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—")
-                          : (row.costBasis > 0 ? `${cur}${fmt(toDisp(row.costBasis, row.holding.currency))}` : "—")}
-                      </td>
-                      <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">
-                        {wgtMode === "pct"
-                          ? (totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—")
-                          : (() => {
-                              if (!(row.holding.ticker in investTargets)) return "—";
-                              const alloc = allocMap[row.holding.ticker] ?? 0;
-                              return `${cur}${fmt(toDisp(alloc, row.holding.currency))}`;
-                            })()}
-                      </td>
-                      <td className={`text-right tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
-                        {row.marketValue > 0 ? (
-                          colMode === "usd"
-                            ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))}`
-                            : fmtPct(row.unrealizedPnLPct)
-                        ) : "—"}
-                      </td>
-                      <td className={`hidden sm:table-cell text-right tabular-nums ${
-                        w52Mode === "high"
-                          ? (row.price && row.price.fromHighPct < -10 ? "text-negative" : "text-muted-foreground")
-                          : (row.price && row.price.fromLowPct > 30 ? "text-positive" : "text-muted-foreground")
-                      }`}>
-                        {w52Mode === "high"
-                          ? (row.price?.week52High ? `${cur}${fmt(toDisp(row.price.week52High, row.holding.currency))} (${fmtPct(row.price.fromHighPct)})` : "—")
-                          : (row.price?.week52Low ? `${cur}${fmt(toDisp(row.price.week52Low, row.holding.currency))} (${fmtPct(row.price.fromLowPct)})` : "—")}
-                      </td>
+                {loadingPrices ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td><div className="h-3 bg-border/40 rounded-none w-12" /></td>
+                      <td className="hidden md:table-cell"><div className="h-3 bg-border/40 rounded-none w-10" /></td>
+                      <td className="hidden lg:table-cell"><div className="h-3 bg-border/40 rounded-none w-24" /></td>
+                      <td className="text-right"><div className="h-3 bg-border/40 rounded-none w-16 ml-auto" /></td>
+                      <td className="text-right hidden sm:table-cell"><div className="h-3 bg-border/40 rounded-none w-12 ml-auto" /></td>
+                      <td className="text-right"><div className="h-3 bg-border/40 rounded-none w-20 ml-auto" /></td>
+                      <td className="text-right"><div className="h-3 bg-border/40 rounded-none w-20 ml-auto" /></td>
+                      <td className="text-right hidden sm:table-cell"><div className="h-3 bg-border/40 rounded-none w-16 ml-auto" /></td>
+                      <td className="text-right hidden sm:table-cell"><div className="h-3 bg-border/40 rounded-none w-16 ml-auto" /></td>
+                      <td className="text-right hidden sm:table-cell"><div className="h-3 bg-border/40 rounded-none w-20 ml-auto" /></td>
                     </tr>
-                  );
-                })}
+                  ))
+                ) : (
+                  sortedRows.map((row) => {
+                    const cur = dispSym ?? (row.holding.currency === "CAD" ? "C$" : "$");
+                    const holdingCAD = toCADValue(row.marketValue, row.holding.currency);
+                    const weight = wgtMode === "total"
+                      ? (totalAllMarketValueCAD > 0 ? (holdingCAD / totalAllMarketValueCAD) * 100 : 0)
+                      : wgtMode === "eligible"
+                      ? (totalMarketValueCAD > 0 && !isWeightExcluded(row.holding.ticker) ? (holdingCAD / totalMarketValueCAD) * 100 : 0)
+                      : 0;
+                    const deskPriceReason = priceReasons[row.holding.ticker];
+                    return (
+                      <tr
+                        key={row.holding.id}
+                        className={`cursor-pointer ${selectedRowId === row.holding.id ? "bg-border/30" : ""}`}
+                        onClick={() => selectRow(row.holding.id)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setLongPressInfo({ ticker: row.holding.ticker, currency: row.holding.currency, marketValue: row.marketValue, shares: row.shares });
+                        }}
+                      >
+                        <td className="font-medium text-accent">
+                          <span>{row.holding.ticker}</span>
+                        </td>
+                        <td className="text-muted-foreground text-[10px] hidden md:table-cell">
+                          {accountMapping[row.holding.ticker] ?? "—"}
+                        </td>
+                        <td className="text-muted-foreground text-xs truncate max-w-[8rem] hidden lg:table-cell">
+                          {row.holding.name || "—"}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {priceMode === "price"
+                            ? (row.price ? `${cur}${fmt(toDisp(row.price.price, row.holding.currency))}` : <span className="text-negative text-[10px]" title={deskPriceReason === "not_found" ? "Ticker not found — may be delisted or invalid" : "Price data unavailable"}>{deskPriceReason === "not_found" ? "DELISTED?" : "PRICE N/A"}</span>)
+                            : (row.avgCost > 0 ? `${cur}${fmt(toDisp(row.avgCost, row.holding.currency))}` : "—")}
+                        </td>
+                        <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">
+                          {wgtMode === "alloc"
+                            ? (() => {
+                                if (!(row.holding.ticker in investTargets)) return "—";
+                                const alloc = allocMap[row.holding.ticker] ?? 0;
+                                return `${cur}${fmt(toDisp(alloc, row.holding.currency))}`;
+                              })()
+                            : (totalMarketValue > 0 ? `${weight.toFixed(1)}%` : "—")}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {mktMode === "mkt"
+                            ? (row.marketValue > 0 ? `${cur}${fmt(toDisp(row.marketValue, row.holding.currency))}` : "—")
+                            : (row.costBasis > 0 ? `${cur}${fmt(toDisp(row.costBasis, row.holding.currency))}` : "—")}
+                        </td>
+                        <td className={`text-right tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
+                          {row.marketValue > 0 ? (
+                            colMode === "usd"
+                              ? `${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(Math.abs(toDisp(row.unrealizedPnL, row.holding.currency)))}`
+                              : fmtPct(row.unrealizedPnLPct)
+                          ) : "—"}
+                        </td>
+                        <td className={`text-right tabular-nums hidden sm:table-cell ${
+                          dayMode === "day"
+                            ? (row.price ? (row.price.changePercent >= 0 ? "text-positive" : "text-negative") : "")
+                            : "text-primary"
+                        }`}>
+                          {dayMode === "day"
+                            ? (row.price ? fmtPct(row.price.changePercent) : "—")
+                            : dayMode === "yld"
+                            ? (() => {
+                                const yld = row.price?.trailingAnnualDividendYield ?? row.price?.dividendYield ?? null;
+                                return yld != null ? `${yld.toFixed(2)}%` : "—";
+                              })()
+                            : (() => {
+                                const annualDivRate = row.price?.trailingAnnualDividendRate ?? row.price?.dividendRate ?? 0;
+                                const yoc = (annualDivRate > 0 && row.costBasis > 0)
+                                  ? (annualDivRate * row.shares / row.costBasis) * 100
+                                  : null;
+                                return yoc != null ? `${yoc.toFixed(2)}%` : "—";
+                              })()
+                          }
+                        </td>
+                        <td className="text-right tabular-nums hidden sm:table-cell">
+                          {Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}
+                        </td>
+                        <td className={`hidden sm:table-cell text-right tabular-nums ${
+                          w52Mode === "high"
+                            ? (row.price && row.price.fromHighPct < -10 ? "text-negative" : "text-muted-foreground")
+                            : (row.price && row.price.fromLowPct > 30 ? "text-positive" : "text-muted-foreground")
+                        }`}>
+                          {w52Mode === "high"
+                            ? (row.price?.week52High ? `${cur}${fmt(toDisp(row.price.week52High, row.holding.currency))} (${fmtPct(row.price.fromHighPct)})` : "—")
+                            : (row.price?.week52Low ? `${cur}${fmt(toDisp(row.price.week52Low, row.holding.currency))} (${fmtPct(row.price.fromLowPct)})` : "—")}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
               {rows.length > 1 && totalCurrencies.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-border">
                     <td className="text-xs text-muted-foreground font-medium">TOTAL</td>
+                    <td className="hidden md:table-cell" />
                     <td className="hidden lg:table-cell" />
-                    <td />
                     <td />
                     <td className="hidden sm:table-cell" />
                     <td className="text-right tabular-nums font-medium text-xs">
                       {fmtTotal(mktMode)}
                     </td>
-                    <td className="hidden sm:table-cell" />
                     <td className={`text-right tabular-nums font-medium text-xs ${totalPnLPositive ? "text-positive" : "text-negative"}`}>
-                      {colMode === "usd" ? fmtTotalPnL() : fmtTotalPnLPct()}
+                      <div>{fmtTotalPnL()}</div>
+                      <div className="text-[10px] opacity-70">{fmtTotalPnLPct()}</div>
                     </td>
+                    <td className="hidden sm:table-cell" />
+                    <td className="hidden sm:table-cell" />
                     <td className="hidden sm:table-cell" />
                   </tr>
                 </tfoot>
@@ -637,8 +792,12 @@ export function HoldingsTable({
       {longPressInfo && (() => {
         const lp = longPressInfo;
         const cur = dispSym ?? (lp.currency === "CAD" ? "C$" : "$");
-        const weight = totalMarketValue > 0 ? (lp.marketValue / totalMarketValue) * 100 : 0;
-        const target = investTargets[lp.ticker];
+        const lpValueCAD = lp.currency === "USD" ? lp.marketValue * fxRate : lp.marketValue;
+        const weight = wgtMode === "total"
+          ? (totalAllMarketValueCAD > 0 ? (lpValueCAD / totalAllMarketValueCAD) * 100 : 0)
+          : (totalMarketValueCAD > 0 && !isWeightExcluded(lp.ticker) ? (lpValueCAD / totalMarketValueCAD) * 100 : 0);
+        const rawTarget = isWeightExcluded(lp.ticker) ? undefined : investTargets[lp.ticker];
+        const target = rawTarget != null ? normalizeTargetPct(lp.ticker) : undefined;
         const alloc = allocMap[lp.ticker];
         const gap = target != null ? target - weight : null;
         const freqLabel: Record<string, string> = { weekly: "WEEKLY", biweekly: "BI-WEEKLY", monthly: "MONTHLY" };
@@ -702,6 +861,7 @@ export function HoldingsTable({
           onClose={() => selectRow(null)}
           onRefresh={refresh}
           totalMarketValue={totalMarketValue}
+          eligibleTotalCAD={totalMarketValueCAD}
           displayCurrency={displayCurrency}
           allocAmount={allocMap[selectedRow.holding.ticker] ?? 0}
           gapAmount={gapAmountMap[selectedRow.holding.ticker] ?? 0}
