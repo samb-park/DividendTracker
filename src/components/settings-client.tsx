@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
 import { AddPortfolioDialog } from "./add-portfolio-dialog";
+import { getGlidePath, getNextGlideStep } from "@/lib/glide-path";
 
 interface TokenStatus {
   hasToken: boolean;
@@ -82,7 +83,8 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   const [contribFreq, setContribFreq] = useState<"weekly" | "biweekly" | "monthly">("monthly");
   const [contribAmount, setContribAmount] = useState("");
   const [contribCurrency, setContribCurrency] = useState<"USD" | "CAD">("CAD");
-  const [targets, setTargets] = useState<Record<string, { pct: string }>>({});
+  const [cashAvailable, setCashAvailable] = useState("");
+  const [targets, setTargets] = useState<Record<string, { pct: string; excluded?: boolean }>>({});
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTargets, setSavingTargets] = useState(false);
   const [goalAmount, setGoalAmount] = useState("");
@@ -113,8 +115,15 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   const [savedProfile, setSavedProfile] = useState(false);
   const [fxRate, setFxRate] = useState(1.35);
 
+  // Advanced strategy
+  const [accountMapping, setAccountMapping] = useState<Record<string, string>>({});
+  const [upperTriggerPct, setUpperTriggerPct] = useState("33");
+  const [glidepathAuto, setGlidepathAuto] = useState(true);
+  const [savingStrategy, setSavingStrategy] = useState(false);
+  const [savedStrategy, setSavedStrategy] = useState(false);
+
   const targetTotal = useMemo(
-    () => tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
+    () => tickers.reduce((s, t) => targets[t]?.excluded ? s : s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
     [tickers, targets]
   );
 
@@ -161,6 +170,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         setContribFreq(data.contribution.frequency);
         setContribAmount(String(data.contribution.amount));
         setContribCurrency(data.contribution.currency);
+        setCashAvailable(data.contribution.cashAvailableCAD != null ? String(data.contribution.cashAvailableCAD) : "");
       }
       if (data.incomeGoal) {
         setGoalAmount(String(data.incomeGoal.annualTarget));
@@ -175,9 +185,14 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         setProfileIncome(String(data.investorProfile.annualIncome ?? ""));
         setProfileGoals(data.investorProfile.goals ?? []);
       }
-      const t: Record<string, { pct: string }> = {};
+      if (data.accountMapping) setAccountMapping(data.accountMapping);
+      if (data.triggerParams) {
+        setUpperTriggerPct(String(data.triggerParams.upperTriggerPct));
+        setGlidepathAuto(data.triggerParams.glidepathAuto ?? true);
+      }
+      const t: Record<string, { pct: string; excluded?: boolean }> = {};
       for (const [tk, v] of Object.entries(data.targets ?? {})) {
-        t[tk] = { pct: String((v as any).pct) };
+        t[tk] = { pct: String((v as any).pct), excluded: (v as any).excluded ?? false };
       }
       setTargets(t);
     });
@@ -551,6 +566,161 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         </button>
       </Section>
 
+      {/* Advanced Strategy */}
+      <Section title="ADVANCED STRATEGY" defaultOpen={false}>
+        {(() => {
+          const currentAge = new Date().getFullYear() - Number(profileAge || new Date().getFullYear());
+          const currentStep = getGlidePath(currentAge);
+          const nextStep = getNextGlideStep(currentAge);
+          return (
+            <div className="space-y-5">
+              <div className="text-[10px] text-muted-foreground">
+                Glide path, trigger bands, and account mapping for mechanical investing.
+              </div>
+
+              {/* Glide Path */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium text-primary tracking-wide">GLIDE PATH</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Auto-update allocation targets based on age
+                    </div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={glidepathAuto}
+                    onClick={() => setGlidepathAuto(v => !v)}
+                    className={`btn-retro text-xs px-3 py-1 ${glidepathAuto ? "btn-retro-primary" : ""}`}
+                  >
+                    {glidepathAuto ? "[ ON ]" : "[ OFF ]"}
+                  </button>
+                </div>
+
+                {profileAge ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="border border-border bg-card p-3">
+                      <div className="text-[10px] tracking-wide text-muted-foreground mb-1">
+                        CURRENT STEP (AGE {currentAge})
+                      </div>
+                      <div className="text-xs tabular-nums space-y-0.5">
+                        <div className="flex justify-between"><span>SCHD</span><span>{currentStep.SCHD}%</span></div>
+                        <div className="flex justify-between"><span>QLD</span><span>{currentStep.QLD}%</span></div>
+                        <div className="flex justify-between"><span>SGOV</span><span>{currentStep.SGOV}%</span></div>
+                      </div>
+                    </div>
+                    <div className="border border-border bg-card p-3">
+                      <div className="text-[10px] tracking-wide text-muted-foreground mb-1">
+                        NEXT STEP
+                      </div>
+                      {nextStep ? (
+                        <div className="text-xs tabular-nums space-y-0.5">
+                          <div className="text-[10px] text-muted-foreground mb-1">AT AGE {nextStep.fromAge}</div>
+                          <div className="flex justify-between"><span>SCHD</span><span>{nextStep.SCHD}%</span></div>
+                          <div className="flex justify-between"><span>QLD</span><span>{nextStep.QLD}%</span></div>
+                          <div className="flex justify-between"><span>SGOV</span><span>{nextStep.SGOV}%</span></div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">최종 단계</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground border border-border bg-card p-3">
+                    Set your birth year in INVESTOR PROFILE to see glide path steps.
+                  </div>
+                )}
+              </div>
+
+              {/* Upper Trigger */}
+              <div className="space-y-2">
+                <div className="text-[10px] tracking-wide text-muted-foreground">QLD 상단 트리거 (%)</div>
+                <input
+                  type="number"
+                  min={30}
+                  max={50}
+                  step="any"
+                  value={upperTriggerPct}
+                  onChange={e => setUpperTriggerPct(e.target.value)}
+                  className="w-32 !py-1 text-xs"
+                />
+                <div className="text-[10px] text-muted-foreground">
+                  QLD 비중이 이 임계값을 넘으면 리밸런스 신호 (30–50%).
+                </div>
+              </div>
+
+              {/* Account Mapping */}
+              {tickers.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] tracking-wide text-muted-foreground">계정 매핑</div>
+                  <div className="space-y-2">
+                    {tickers.map(ticker => (
+                      <div key={ticker} className="flex items-center gap-2">
+                        <span className="text-xs font-medium w-16 shrink-0">{ticker}</span>
+                        <select
+                          value={accountMapping[ticker] ?? ""}
+                          onChange={e =>
+                            setAccountMapping(prev => {
+                              const next = { ...prev };
+                              if (e.target.value) {
+                                next[ticker] = e.target.value;
+                              } else {
+                                delete next[ticker];
+                              }
+                              return next;
+                            })
+                          }
+                          className="flex-1 !py-1 text-xs bg-card border border-border"
+                        >
+                          <option value="">— SELECT —</option>
+                          <option value="RRSP">RRSP</option>
+                          <option value="TFSA">TFSA</option>
+                          <option value="FHSA">FHSA</option>
+                          <option value="NON_REG">NON_REG</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                disabled={savingStrategy}
+                onClick={async () => {
+                  setSavingStrategy(true);
+                  try {
+                    await fetch("/api/settings/investment", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "trigger_params",
+                        upperTriggerPct: Number(upperTriggerPct),
+                        glidepathAuto,
+                      }),
+                    });
+                    await fetch("/api/settings/investment", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "account_mapping",
+                        mapping: accountMapping,
+                      }),
+                    });
+                    setSavedStrategy(true);
+                    setTimeout(() => setSavedStrategy(false), 2000);
+                  } finally {
+                    setSavingStrategy(false);
+                  }
+                }}
+                className="btn-retro btn-retro-primary w-full py-2 disabled:opacity-40"
+              >
+                {savingStrategy ? "SAVING..." : savedStrategy ? "SAVED ✓" : "[ SAVE STRATEGY ]"}
+              </button>
+            </div>
+          );
+        })()}
+      </Section>
+
       {/* Contribution Plan */}
       <Section title="CONTRIBUTION PLAN" defaultOpen={true}>
         <div className="space-y-4">
@@ -576,6 +746,12 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
                 onClick={() => setContribCurrency(c)}>[{c}]</button>
             ))}
           </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-muted-foreground mb-2">AVAILABLE CASH (CAD)</div>
+            <input type="number" min="0" step="any"
+              value={cashAvailable} onChange={e => setCashAvailable(e.target.value)}
+              placeholder="e.g. 2500" className="w-full" />
+          </div>
           <button
             disabled={savingPlan || !contribAmount}
             onClick={async () => {
@@ -583,7 +759,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
               await fetch("/api/settings/investment", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ type: "contribution", frequency: contribFreq, amount: parseFloat(contribAmount), currency: contribCurrency }),
+                body: JSON.stringify({ type: "contribution", frequency: contribFreq, amount: parseFloat(contribAmount), currency: contribCurrency, cashAvailableCAD: cashAvailable ? parseFloat(cashAvailable) : undefined }),
               });
               setSavingPlan(false);
               setSavedPlan(true);
@@ -633,7 +809,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         <Section title="TICKER TARGETS" defaultOpen={true}>
           <div className="space-y-3">
             {(() => {
-              const total = tickers.reduce((s, t) => s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
+              const total = tickers.reduce((s, t) => targets[t]?.excluded ? s : s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
               const ok = Math.abs(total - 100) < 0.01;
               return (
                 <div className={`flex items-center justify-between text-[10px] mb-2 ${ok ? "text-positive" : total > 100 ? "text-negative" : "text-muted-foreground"}`}>
@@ -644,14 +820,21 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
             })()}
             {tickers.map(ticker => {
               const t = targets[ticker] ?? { pct: "" };
+              const isExcluded = t.excluded ?? false;
               return (
-                <div key={ticker} className="flex items-center gap-2">
+                <div key={ticker} className={`flex items-center gap-2 ${isExcluded ? "opacity-40" : ""}`}>
                   <span className="text-xs font-medium w-16 shrink-0">{ticker}</span>
                   <input type="number" min="0" max="100" step="any" placeholder="0"
                     value={t.pct}
-                    onChange={e => setTargets(prev => ({ ...prev, [ticker]: { pct: e.target.value } }))}
-                    className="flex-1 !py-1" />
+                    disabled={isExcluded}
+                    onChange={e => setTargets(prev => ({ ...prev, [ticker]: { ...prev[ticker], pct: e.target.value } }))}
+                    className="flex-1 !py-1 disabled:cursor-not-allowed" />
                   <span className="text-xs text-muted-foreground">%</span>
+                  <button
+                    title={isExcluded ? "타겟에서 제외됨 (클릭하여 복원)" : "타겟에서 제외"}
+                    onClick={() => setTargets(prev => ({ ...prev, [ticker]: { ...prev[ticker], excluded: !isExcluded } }))}
+                    className={`btn-retro text-[10px] px-1.5 py-0.5 shrink-0 ${isExcluded ? "btn-retro-primary" : ""}`}
+                  >EXCL</button>
                 </div>
               );
             })}
@@ -668,12 +851,12 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
                 setSavingTargets(true);
                 await Promise.all(
                   tickers
-                    .filter(ticker => targets[ticker]?.pct)
+                    .filter(ticker => targets[ticker]?.pct || targets[ticker]?.excluded)
                     .map(ticker =>
                       fetch("/api/settings/investment", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(targets[ticker].pct) }),
+                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(targets[ticker].pct) || 0, excluded: targets[ticker].excluded ?? false }),
                       })
                     )
                 );
