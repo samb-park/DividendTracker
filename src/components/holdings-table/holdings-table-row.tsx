@@ -142,34 +142,6 @@ export function HoldingsTableRow({
             </span>
           )}
         </div>
-        {/* Footer: P&L + dividend info */}
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30 text-[10px]">
-          <span
-            className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}
-          >
-            {row.marketValue > 0
-              ? `P&L ${row.unrealizedPnL >= 0 ? "+" : ""}${cur}${fmt(
-                  Math.abs(toDisp(row.unrealizedPnL, row.holding.currency))
-                )} (${fmtPct(row.unrealizedPnLPct)})`
-              : <span className="text-muted-foreground">P&L —</span>}
-          </span>
-          <div className="flex items-center gap-3 flex-shrink-0 text-right">
-            <div>
-              <div className="text-muted-foreground/50 text-[9px]">YLD</div>
-              <div className="tabular-nums text-muted-foreground">
-                {divYield != null ? `${divYield.toFixed(1)}%` : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground/50 text-[9px]">DIV/YR</div>
-              <div className="tabular-nums text-primary">
-                {annualDivIncome != null
-                  ? `${cur}${fmt(toDisp(annualDivIncome, row.holding.currency), 0)}`
-                  : "—"}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     );
   }

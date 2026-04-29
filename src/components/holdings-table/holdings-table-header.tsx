@@ -13,6 +13,13 @@ interface HoldingsTableHeaderProps {
   showTableHead?: boolean;
 }
 
+const mobileSortOptions = [
+  { key: "mkt", label: "MKT" },
+  { key: "pnl", label: "P&L" },
+  { key: "day", label: "DAY" },
+  { key: "wgt", label: "WGT" },
+  { key: "ticker", label: "A-Z" },
+] as const;
 
 function SortIndicator({ col }: { col: string }) {
   const sortCol = useHoldingsStore((s) => s.sortCol);
@@ -37,12 +44,17 @@ export function HoldingsTableHeader({
   const togglePriceMode = useHoldingsStore((s) => s.togglePriceMode);
   const toggleMktMode = useHoldingsStore((s) => s.toggleMktMode);
   const toggleW52Mode = useHoldingsStore((s) => s.toggleW52Mode);
+  const setSortDir = useHoldingsStore((s) => s.setSortDir);
+  const setSortCol = useHoldingsStore((s) => s.setSortCol);
+  const setMobileSortKey = useHoldingsStore((s) => s.setMobileSortKey);
   const colMode = useHoldingsStore((s) => s.colMode);
   const priceMode = useHoldingsStore((s) => s.priceMode);
   const mktMode = useHoldingsStore((s) => s.mktMode);
   const wgtMode = useHoldingsStore((s) => s.wgtMode);
   const w52Mode = useHoldingsStore((s) => s.w52Mode);
   const dayMode = useHoldingsStore((s) => s.dayMode);
+  const sortDir = useHoldingsStore((s) => s.sortDir);
+  const mobileSortKey = useHoldingsStore((s) => s.mobileSortKey);
 
   return (
     <>
@@ -63,7 +75,7 @@ export function HoldingsTableHeader({
 
       {/* Mobile sort pills + wgtMode toggle */}
       {showMobilePills && (
-        <div className="sm:hidden flex items-center gap-1 mb-2">
+        <div className="sm:hidden flex items-center justify-between gap-1 mb-2">
           <button
             className={`btn-retro text-[9px] px-1.5 py-0.5 ${wgtMode === "eligible" ? "btn-retro-primary" : ""}`}
             onClick={() => cycleWgtMode()}
@@ -71,6 +83,30 @@ export function HoldingsTableHeader({
           >
             {wgtMode === "eligible" ? "ELG" : wgtMode === "alloc" ? "ALC" : "ALL"}
           </button>
+          <div className="flex items-center gap-1">
+            {mobileSortOptions.map(({ key, label }) => (
+              <button
+                key={key}
+                className={`btn-retro text-[9px] px-1.5 py-0.5 ${mobileSortKey === key ? "btn-retro-primary" : ""}`}
+                onClick={() => {
+                  if (mobileSortKey === key) {
+                    setSortDir(sortDir === "desc" ? "asc" : "desc");
+                  } else {
+                    setMobileSortKey(key);
+                    setSortCol(key);
+                    setSortDir("desc");
+                  }
+                }}
+              >
+                {label}
+                {mobileSortKey === key
+                  ? sortDir === "desc"
+                    ? " ▼"
+                    : " ▲"
+                  : ""}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
