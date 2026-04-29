@@ -514,6 +514,7 @@ export function HoldingsTable({
           readOnly={readOnly}
           portfolioId={portfolioId}
           onRefresh={refresh}
+          showTableHead={false}
         />
 
         {rows.length === 0 ? (
