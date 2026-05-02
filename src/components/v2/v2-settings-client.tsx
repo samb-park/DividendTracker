@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { V2SettingsData } from "@/lib/v2-data";
 
@@ -165,6 +165,8 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   return (
     <div className="space-y-6">
       <Help />
+
+      <ThemeSection />
 
       {/* Contribution */}
       <Section
@@ -432,13 +434,58 @@ function Section({
     <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          {description ? <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p> : null}
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em]">{title}</h2>
+          {description ? (
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
         </div>
         {subRight}
       </div>
       {children}
     </section>
+  );
+}
+
+function ThemeSection() {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const t = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    setTheme(t);
+  }, []);
+
+  const setAndApply = (next: "dark" | "light") => {
+    setTheme(next);
+    if (next === "light") document.documentElement.setAttribute("data-theme", "light");
+    else document.documentElement.removeAttribute("data-theme");
+    try {
+      localStorage.setItem("dt-theme", next);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <Section title="THEME" description="SWITCH BETWEEN DARK AND LIGHT APPEARANCE.">
+      <div className="inline-flex rounded-full bg-muted/50 p-0.5 text-[11px]">
+        {(["dark", "light"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setAndApply(t)}
+            className={`rounded-full px-3 py-1 font-medium uppercase tracking-[0.18em] transition-colors ${
+              theme === t
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </Section>
   );
 }
 

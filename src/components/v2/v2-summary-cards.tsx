@@ -10,73 +10,87 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
   );
   const avgDrift = data.normalRows.length > 0 ? totalDriftAbs / data.normalRows.length : 0;
 
+  const reserveActive = data.excludedRows.filter((r) => r.active && r.reserveTargetPct > 0);
   const reserveProgress =
-    data.excludedRows.length === 0
+    reserveActive.length === 0
       ? null
-      : data.excludedRows.reduce((s, r) => {
-          if (!r.active || r.reserveTargetPct <= 0) return s;
-          const ratio = Math.min(1, r.currentReservePct / r.reserveTargetPct);
-          return s + ratio;
-        }, 0) / Math.max(1, data.excludedRows.filter((r) => r.active && r.reserveTargetPct > 0).length);
+      : reserveActive.reduce(
+          (s, r) => s + Math.min(1, r.currentReservePct / r.reserveTargetPct),
+          0,
+        ) / reserveActive.length;
+  const reserveOnTarget = data.excludedRows.filter(
+    (r) => r.status === "at_target" || r.status === "above_target",
+  ).length;
+
+  const items = [
+    {
+      label: "TOTAL",
+      value: fmtCAD(data.totalValueCAD),
+      hint: "PORTFOLIO VALUE (CAD)",
+      title: "Sum of all holdings × latest price, USD converted to CAD via FX rate.",
+    },
+    {
+      label: "WEEKLY",
+      value: fmtCAD(data.contributionCAD),
+      hint:
+        data.contributionCurrency === "USD"
+          ? `${data.contributionAmount.toFixed(2)} USD · ${data.contributionFrequency.toUpperCase()}`
+          : data.contributionFrequency.toUpperCase(),
+      title: "This period's contribution amount, in CAD.",
+    },
+    {
+      label: "USD/CAD",
+      value: data.fxRate.toFixed(4),
+      hint: data.fxFallback ? "FALLBACK RATE" : "LIVE",
+      warn: data.fxFallback,
+      title: "USD→CAD exchange rate from Yahoo Finance.",
+    },
+    {
+      label: "RESERVE",
+      value: reserveProgress == null ? "—" : fmtPct(reserveProgress * 100, 0),
+      hint:
+        data.excludedRows.length === 0
+          ? "NO EXCLUDED TICKERS"
+          : `${reserveOnTarget}/${data.excludedRows.length} ON TARGET`,
+      title:
+        "Average progress of excluded (reserve) tickers toward their reserve target % of total portfolio. 100% = all reserve tickers at target.",
+    },
+    {
+      label: "AVG DRIFT",
+      value: fmtSignedPct(avgDrift, 1),
+      hint: "NORMAL TARGETS",
+      title:
+        "Average absolute deviation between current % and target % across all normal tickers. Lower is closer to your target allocation.",
+    },
+  ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <Card label="Total" value={fmtCAD(data.totalValueCAD, { compact: true })} hint="portfolio value" />
-      <Card
-        label="Weekly"
-        value={fmtCAD(data.contributionCAD, { compact: true })}
-        hint={
-          data.contributionCurrency === "USD"
-            ? `${data.contributionAmount.toFixed(2)} USD`
-            : data.contributionFrequency
-        }
-      />
-      <Card
-        label="USD/CAD"
-        value={data.fxRate.toFixed(4)}
-        hint={data.fxFallback ? "fallback" : "live"}
-        warn={data.fxFallback}
-      />
-      <Card
-        label="Reserve"
-        value={reserveProgress == null ? "—" : fmtPct(reserveProgress * 100, 0)}
-        hint={
-          data.excludedRows.length === 0
-            ? "no excluded"
-            : `${data.excludedRows.filter((r) => r.status === "at_target" || r.status === "above_target").length}/${data.excludedRows.length} on target`
-        }
-      />
-      <Card
-        label="Avg Drift"
-        value={fmtSignedPct(avgDrift, 1)}
-        hint="normal targets"
-      />
-    </div>
-  );
-}
-
-function Card({
-  label,
-  value,
-  hint,
-  warn,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  warn?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-xl border bg-card px-4 py-3 ${
-        warn ? "border-accent/40" : "border-border"
-      }`}
-    >
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
+        {items.map((it, i) => (
+          <div
+            key={it.label}
+            title={it.title}
+            className={`px-4 py-3 ${
+              i % 2 === 1 ? "border-l border-border sm:border-l-0" : ""
+            } ${i >= 3 ? "sm:border-t sm:border-border lg:border-t-0" : ""} ${
+              it.warn ? "bg-accent/5" : ""
+            }`}
+          >
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {it.label}
+            </div>
+            <div className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight">
+              {it.value}
+            </div>
+            {it.hint ? (
+              <div className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                {it.hint}
+              </div>
+            ) : null}
+          </div>
+        ))}
       </div>
-      <div className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{value}</div>
-      {hint ? <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }

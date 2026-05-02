@@ -1,20 +1,11 @@
-export const fmtCAD = (n: number, opts?: { compact?: boolean }) => {
+export const fmtCAD = (n: number, _opts?: { compact?: boolean }) => {
   if (!isFinite(n)) return "—";
-  const v = n;
-  if (opts?.compact && Math.abs(v) >= 10000) {
-    return new Intl.NumberFormat("en-CA", {
-      style: "currency",
-      currency: "CAD",
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(v);
-  }
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-  }).format(v);
+  }).format(n);
 };
 
 export const fmtUSD = (n: number) => {
