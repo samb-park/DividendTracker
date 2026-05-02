@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async redirects() {
+    return [
+      { source: "/", destination: "/v1", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

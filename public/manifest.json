@@ -6,7 +6,7 @@
   "orientation": "portrait-primary",
   "theme_color": "#0d0d0d",
   "background_color": "#0d0d0d",
-  "start_url": "/",
+  "start_url": "/v1",
   "scope": "/",
   "lang": "en",
   "categories": ["finance", "productivity"],

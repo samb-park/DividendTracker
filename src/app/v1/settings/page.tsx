@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { SettingsClient } from "@/components/settings-client";
 import { ErrorBoundary } from "@/components/error-boundary";
 
+
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {

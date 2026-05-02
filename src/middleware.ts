@@ -47,7 +47,7 @@ export default auth((req) => {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      return NextResponse.redirect(new URL("/", req.nextUrl));
+      return NextResponse.redirect(new URL("/v1", req.nextUrl));
     }
   }
 

@@ -5,6 +5,7 @@ import { getFxRate } from "@/lib/price";
 import { MoreClient, type Txn } from "@/components/more-client";
 import { ErrorBoundary } from "@/components/error-boundary";
 
+
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
