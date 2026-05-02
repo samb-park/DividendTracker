@@ -32,7 +32,7 @@ const RANGES: { id: RangeId; label: string }[] = [
   { id: "3m", label: "3M" },
   { id: "6m", label: "6M" },
   { id: "1y", label: "1Y" },
-  { id: "all", label: "ALL" },
+  { id: "all", label: "All" },
 ];
 
 export function V2GraphClient({ initialRange, initialSeries }: V2GraphProps) {
@@ -70,124 +70,177 @@ export function V2GraphClient({ initialRange, initialSeries }: V2GraphProps) {
   }, [series]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-7">
+      <header className="space-y-1">
+        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
+          Trend
+        </h1>
+        <p className="v2-caption">Daily portfolio value over time. Source: PortfolioSnapshot.</p>
+      </header>
+
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Portfolio</div>
-          <div className="mt-0.5 text-2xl font-semibold tabular-nums sm:text-3xl">
+          <div className="v2-fineprint">Portfolio</div>
+          <div
+            className="v2-tnum mt-0.5"
+            style={{
+              fontFamily:
+                "'SF Pro Display', system-ui, -apple-system, Inter, sans-serif",
+              fontSize: 32,
+              fontWeight: 600,
+              lineHeight: 1.1,
+              letterSpacing: "-0.4px",
+              color: "hsl(var(--v2-ink-strong))",
+            }}
+          >
             {stats ? fmtCAD(stats.last.totalCAD) : "—"}
           </div>
           {stats ? (
             <div
-              className={`mt-1 text-xs tabular-nums ${
-                stats.change >= 0 ? "text-primary" : "text-destructive"
-              }`}
+              className="v2-tnum mt-1"
+              style={{
+                fontSize: 13,
+                letterSpacing: "-0.18px",
+                color:
+                  stats.change >= 0
+                    ? "hsl(var(--positive))"
+                    : "hsl(var(--negative))",
+              }}
             >
               {stats.change >= 0 ? "+" : ""}
               {fmtCAD(stats.change)} ({stats.change >= 0 ? "+" : ""}
-              {stats.pct.toFixed(2)}%) over {RANGES.find((r) => r.id === range)?.label}
+              {stats.pct.toFixed(2)}%) · {RANGES.find((r) => r.id === range)?.label}
             </div>
           ) : null}
         </div>
-        <RangePicker value={range} onChange={onRangeChange} disabled={loading} />
+
+        <div className="v2-segmented">
+          {RANGES.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              data-active={range === r.id}
+              onClick={() => onRangeChange(r.id)}
+              disabled={loading}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4">
-        {empty && !loading ? (
+      <div className="v2-card p-4 sm:p-6">
+        {empty && !loading && !error ? (
           <EmptyState />
+        ) : error ? (
+          <StateBlock
+            title="Couldn't load history"
+            sub={error}
+            tone="error"
+          />
         ) : (
-          <div className="h-72 sm:h-96 w-full">
+          <div className="h-72 w-full sm:h-96">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={series}
-                margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
-              >
+              <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                 <defs>
-                  <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  <linearGradient id="v2TotalGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--v2-action-blue))" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="hsl(var(--v2-action-blue))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" vertical={false} />
+                <CartesianGrid
+                  stroke="hsl(var(--v2-divider-soft))"
+                  strokeDasharray="0"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                  tick={{
+                    fill: "hsl(var(--v2-ink-muted-48))",
+                    fontSize: 11,
+                    letterSpacing: -0.12,
+                  }}
                   tickLine={false}
-                  axisLine={false}
+                  axisLine={{ stroke: "hsl(var(--v2-divider-soft))" }}
                   minTickGap={32}
                 />
                 <YAxis
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                  tick={{
+                    fill: "hsl(var(--v2-ink-muted-48))",
+                    fontSize: 11,
+                    letterSpacing: -0.12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                   width={64}
-                  tickFormatter={(v: number) => fmtCAD(v, { compact: true })}
+                  tickFormatter={(v: number) =>
+                    new Intl.NumberFormat("en-CA", {
+                      style: "currency",
+                      currency: "CAD",
+                      notation: "compact",
+                      maximumFractionDigits: 1,
+                    }).format(v)
+                  }
                 />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "hsl(var(--v2-hairline))" }} />
                 <Area
                   type="monotone"
                   dataKey="totalCAD"
-                  stroke="hsl(var(--primary))"
+                  stroke="hsl(var(--v2-action-blue))"
                   strokeWidth={2}
                   strokeLinecap="round"
-                  fill="url(#totalGrad)"
+                  fill="url(#v2TotalGrad)"
                   isAnimationActive={false}
+                  dot={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
         {loading ? (
-          <div className="mt-2 text-center text-[11px] text-muted-foreground">Loading…</div>
-        ) : null}
-        {error ? (
-          <div className="mt-2 text-center text-[11px] text-destructive">{error}</div>
+          <div className="v2-fineprint mt-3 text-center">Loading…</div>
         ) : null}
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        Source: daily PortfolioSnapshot. Per-ticker / normal-vs-excluded split chart will land in a follow-up
-        when split-history reconstruction is enabled.
+      <p className="v2-fineprint">
+        Per-ticker and normal-vs-excluded split charts will land in a follow-up release.
       </p>
-    </div>
-  );
-}
-
-function RangePicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: RangeId;
-  onChange: (r: RangeId) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="inline-flex rounded-full bg-muted/50 p-0.5 text-[11px]">
-      {RANGES.map((r) => (
-        <button
-          key={r.id}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(r.id)}
-          className={`rounded-full px-2.5 py-1 transition-colors disabled:opacity-50 ${
-            value === r.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {r.label}
-        </button>
-      ))}
     </div>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-2 text-center sm:h-96">
-      <div className="text-sm text-muted-foreground">No portfolio history yet.</div>
-      <div className="text-[11px] text-muted-foreground">
-        A daily snapshot is recorded by cron — once a few days accumulate, the trend will appear here.
+    <StateBlock
+      title="No portfolio history yet"
+      sub="A daily snapshot is recorded automatically. Once a few days accumulate, the trend will appear here."
+    />
+  );
+}
+
+function StateBlock({
+  title,
+  sub,
+  tone,
+}: {
+  title: string;
+  sub?: string;
+  tone?: "error";
+}) {
+  return (
+    <div className="flex h-72 flex-col items-center justify-center gap-2 px-6 text-center sm:h-96">
+      <div
+        className="v2-display"
+        style={{
+          fontSize: 17,
+          fontWeight: 600,
+          color:
+            tone === "error" ? "hsl(var(--negative))" : "hsl(var(--v2-ink-strong))",
+        }}
+      >
+        {title}
       </div>
+      {sub ? <div className="v2-caption max-w-md">{sub}</div> : null}
     </div>
   );
 }
@@ -195,7 +248,6 @@ function EmptyState() {
 interface RechartsTooltipProps {
   active?: boolean;
   payload?: Array<{ value: number; payload?: V2GraphPoint }>;
-  label?: string | number;
 }
 
 function ChartTooltip(props: RechartsTooltipProps) {
@@ -204,11 +256,28 @@ function ChartTooltip(props: RechartsTooltipProps) {
   const p = payload[0].payload;
   if (!p) return null;
   return (
-    <div className="rounded-lg border border-border bg-card/95 px-3 py-2 shadow-md backdrop-blur">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{p.date}</div>
-      <div className="mt-0.5 text-sm font-medium tabular-nums">{fmtCAD(p.totalCAD)}</div>
-      <div className="text-[10px] text-muted-foreground tabular-nums">
-        cash {fmtCAD(p.cashCAD, { compact: true })} · cost {fmtCAD(p.costBasisCAD, { compact: true })}
+    <div
+      style={{
+        background: "hsla(var(--v2-canvas) / 0.95)",
+        border: "1px solid hsl(var(--v2-hairline))",
+        borderRadius: 11,
+        padding: "10px 14px",
+        backdropFilter: "saturate(180%) blur(20px)",
+        WebkitBackdropFilter: "saturate(180%) blur(20px)",
+        color: "hsl(var(--v2-ink-strong))",
+      }}
+    >
+      <div className="v2-fineprint" style={{ marginBottom: 4 }}>
+        {p.date}
+      </div>
+      <div
+        className="v2-tnum"
+        style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.374px" }}
+      >
+        {fmtCAD(p.totalCAD)}
+      </div>
+      <div className="v2-fineprint v2-tnum mt-1">
+        cash {fmtCAD(p.cashCAD)} · cost {fmtCAD(p.costBasisCAD)}
       </div>
     </div>
   );

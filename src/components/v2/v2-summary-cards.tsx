@@ -24,73 +24,104 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
 
   const items = [
     {
-      label: "TOTAL",
+      label: "Total",
       value: fmtCAD(data.totalValueCAD),
-      hint: "PORTFOLIO VALUE (CAD)",
+      hint: "Portfolio value (CAD)",
       title: "Sum of all holdings × latest price, USD converted to CAD via FX rate.",
     },
     {
-      label: "WEEKLY",
+      label: "Weekly",
       value: fmtCAD(data.contributionCAD),
       hint:
         data.contributionCurrency === "USD"
-          ? `${data.contributionAmount.toFixed(2)} USD · ${data.contributionFrequency.toUpperCase()}`
-          : data.contributionFrequency.toUpperCase(),
+          ? `${data.contributionAmount.toFixed(2)} USD · ${data.contributionFrequency}`
+          : data.contributionFrequency,
       title: "This period's contribution amount, in CAD.",
     },
     {
       label: "USD/CAD",
       value: data.fxRate.toFixed(4),
-      hint: data.fxFallback ? "FALLBACK RATE" : "LIVE",
+      hint: data.fxFallback ? "Fallback rate" : "Live",
       warn: data.fxFallback,
       title: "USD→CAD exchange rate from Yahoo Finance.",
     },
     {
-      label: "RESERVE",
+      label: "Reserve",
       value: reserveProgress == null ? "—" : fmtPct(reserveProgress * 100, 0),
       hint:
         data.excludedRows.length === 0
-          ? "NO EXCLUDED TICKERS"
-          : `${reserveOnTarget}/${data.excludedRows.length} ON TARGET`,
+          ? "No excluded tickers"
+          : `${reserveOnTarget}/${data.excludedRows.length} on target`,
       title:
         "Average progress of excluded (reserve) tickers toward their reserve target % of total portfolio. 100% = all reserve tickers at target.",
     },
     {
-      label: "AVG DRIFT",
+      label: "Avg Drift",
       value: fmtSignedPct(avgDrift, 1),
-      hint: "NORMAL TARGETS",
+      hint: "Normal targets",
       title:
         "Average absolute deviation between current % and target % across all normal tickers. Lower is closer to your target allocation.",
     },
   ];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
+    <div className="v2-card overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((it, i) => (
           <div
             key={it.label}
             title={it.title}
-            className={`px-4 py-3 ${
-              i % 2 === 1 ? "border-l border-border sm:border-l-0" : ""
-            } ${i >= 3 ? "sm:border-t sm:border-border lg:border-t-0" : ""} ${
-              it.warn ? "bg-accent/5" : ""
-            }`}
+            className="px-5 py-4"
+            style={{
+              borderLeft:
+                i === 0 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
+              borderTop:
+                i < 3 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
+            }}
           >
-            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="v2-fineprint" style={{ fontSize: 11, marginBottom: 6 }}>
               {it.label}
             </div>
-            <div className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight">
+            <div
+              className="v2-tnum"
+              style={{
+                fontFamily:
+                  "'SF Pro Display', system-ui, -apple-system, Inter, sans-serif",
+                fontSize: 22,
+                fontWeight: 600,
+                lineHeight: 1.15,
+                letterSpacing: "-0.32px",
+                color: "hsl(var(--v2-ink-strong))",
+              }}
+            >
               {it.value}
             </div>
             {it.hint ? (
-              <div className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <div
+                className="v2-fineprint mt-1"
+                style={{ color: it.warn ? "hsl(36 90% 38%)" : undefined }}
+              >
                 {it.hint}
               </div>
             ) : null}
           </div>
         ))}
       </div>
+
+      {/* Stack into 2-row layout on smaller screens with hairlines visible */}
+      <style>{`
+        @media (max-width: 639px) {
+          .v2-root .v2-card .grid > div:nth-child(2n) {
+            border-left: 1px solid hsl(var(--v2-divider-soft)) !important;
+          }
+          .v2-root .v2-card .grid > div:nth-child(odd):not(:first-child) {
+            border-top: 1px solid hsl(var(--v2-divider-soft)) !important;
+          }
+          .v2-root .v2-card .grid > div:nth-child(even) {
+            border-top: 1px solid hsl(var(--v2-divider-soft)) !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

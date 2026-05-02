@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const tabs = [
   { href: "/v2", label: "Summary" },
@@ -11,24 +11,28 @@ const tabs = [
 
 export function V2TabNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
   return (
-    <nav className="flex gap-1 rounded-full bg-muted/40 p-1 backdrop-blur">
+    <div className="v2-segmented" role="tablist" aria-label="v2 sections">
       {tabs.map(({ href, label }) => {
         const active = pathname === href;
         return (
           <Link
             key={href}
             href={href}
-            className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors ${
-              active
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            data-active={active}
+            role="tab"
+            aria-selected={active}
+            onClick={(e) => {
+              if (active) e.preventDefault();
+              else router.prefetch(href);
+            }}
           >
             {label}
           </Link>
         );
       })}
-    </nav>
+    </div>
   );
 }

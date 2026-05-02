@@ -11,52 +11,62 @@ export function V2SummaryClient({ data }: { data: V2AllocationData }) {
   const [tab, setTab] = useState<"normal" | "reserve">("normal");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
+      <header className="space-y-1">
+        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
+          Allocation
+        </h1>
+        <p className="v2-caption">A calm view of where your weekly contribution lands.</p>
+      </header>
+
       <V2SummaryCards data={data} />
 
       {data.warnings.length > 0 ? (
-        <div className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-[11px]">
-          <div className="mb-1 text-[10px] uppercase tracking-[0.18em] opacity-70">NOTICES</div>
-          <ul className="space-y-0.5 text-foreground/90">
+        <aside
+          className="v2-card-soft p-4"
+          style={{ background: "hsl(36 95% 96%)", borderColor: "hsl(36 80% 85%)" }}
+        >
+          <div className="v2-tagline" style={{ marginBottom: 4 }}>
+            Notices
+          </div>
+          <ul className="space-y-1 text-[14px]" style={{ color: "hsl(36 90% 28%)" }}>
             {data.warnings.map((w, i) => (
-              <li key={i}>• {w}</li>
+              <li key={i}>· {w}</li>
             ))}
           </ul>
-        </div>
+        </aside>
       ) : null}
 
       {/* Desktop / tablet: stacked full-width */}
-      <div className="hidden space-y-6 lg:block">
-        <section>
-          <SectionHeader
-            title="NORMAL TARGETS"
-            sub={`${data.normalRows.length} TICKERS · ${fmtCAD(data.normalGroupValueCAD)}`}
-          />
+      <div className="hidden space-y-7 lg:block">
+        <Section
+          title="Normal Targets"
+          sub={`${data.normalRows.length} tickers · ${fmtCAD(data.normalGroupValueCAD)}`}
+        >
           <V2NormalTable rows={data.normalRows} />
-        </section>
-        <section>
-          <SectionHeader
-            title="RESERVE / EXCLUDED"
-            sub={`${data.excludedRows.length} TICKERS · ${fmtCAD(data.excludedGroupValueCAD)}`}
-          />
+        </Section>
+        <Section
+          title="Reserve / Excluded"
+          sub={`${data.excludedRows.length} tickers · ${fmtCAD(data.excludedGroupValueCAD)}`}
+        >
           <V2ExcludedTable rows={data.excludedRows} />
-        </section>
+        </Section>
       </div>
 
-      {/* Mobile: segmented switch */}
-      <div className="lg:hidden">
-        <div className="mb-3 flex items-center justify-between">
-          <SegmentedSwitch
-            value={tab}
-            onChange={setTab}
-            options={[
-              { id: "normal", label: `NORMAL (${data.normalRows.length})` },
-              { id: "reserve", label: `RESERVE (${data.excludedRows.length})` },
-            ]}
-          />
-          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground tabular-nums">
-            {tab === "normal" ? fmtCAD(data.normalGroupValueCAD) : fmtCAD(data.excludedGroupValueCAD)}
+      {/* Mobile / tablet portrait: segmented switch */}
+      <div className="space-y-3 lg:hidden">
+        <div className="flex items-center justify-between">
+          <div className="v2-segmented">
+            <button type="button" data-active={tab === "normal"} onClick={() => setTab("normal")}>
+              Normal · {data.normalRows.length}
+            </button>
+            <button type="button" data-active={tab === "reserve"} onClick={() => setTab("reserve")}>
+              Reserve · {data.excludedRows.length}
+            </button>
           </div>
+          <span className="v2-fineprint v2-tnum">
+            {tab === "normal" ? fmtCAD(data.normalGroupValueCAD) : fmtCAD(data.excludedGroupValueCAD)}
+          </span>
         </div>
         {tab === "normal" ? (
           <V2NormalTable rows={data.normalRows} />
@@ -68,44 +78,24 @@ export function V2SummaryClient({ data }: { data: V2AllocationData }) {
   );
 }
 
-function SectionHeader({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <div className="mb-2 flex items-baseline justify-between">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.2em]">{title}</h2>
-      {sub ? (
-        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground tabular-nums">
-          {sub}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function SegmentedSwitch<T extends string>({
-  value,
-  onChange,
-  options,
+function Section({
+  title,
+  sub,
+  children,
 }: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { id: T; label: string }[];
+  title: string;
+  sub?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="inline-flex rounded-full bg-muted/50 p-0.5 text-[11px]">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className={`rounded-full px-3 py-1 font-medium uppercase tracking-[0.15em] transition-colors ${
-            value === o.id
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <section>
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="v2-display v2-display-md" style={{ color: "hsl(var(--v2-ink-strong))" }}>
+          {title}
+        </h2>
+        {sub ? <span className="v2-fineprint v2-tnum">{sub}</span> : null}
+      </div>
+      {children}
+    </section>
   );
 }

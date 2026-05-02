@@ -6,59 +6,67 @@ import { fmtCAD, fmtPct, fmtShares } from "./format";
 export function V2ExcludedTable({ rows }: { rows: V2ExcludedRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-        No reserve / excluded tickers. Add them via Settings → Targets.
+      <div className="v2-card-soft px-6 py-8 text-center">
+        <p className="v2-caption">
+          No reserve / excluded tickers. Toggle &ldquo;excluded&rdquo; in Settings → Targets.
+        </p>
       </div>
     );
   }
   const sorted = [...rows].sort((a, b) => b.valueCAD - a.valueCAD);
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <div className="v2-card overflow-hidden">
       {/* Desktop table */}
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <table className="v2-table">
+          <thead>
             <tr>
-              <Th align="left">Ticker</Th>
-              <Th>Shares</Th>
-              <Th>Price</Th>
-              <Th>Value</Th>
-              <Th>Cur R%</Th>
-              <Th>Tgt R%</Th>
-              <Th>Planned</Th>
-              <Th>Actual</Th>
-              <Th align="left">Flow</Th>
-              <Th>Post R%</Th>
-              <Th align="left">Status</Th>
+              <th>Ticker</th>
+              <th className="num">Shares</th>
+              <th className="num">Price</th>
+              <th className="num">Value</th>
+              <th className="num">Current R%</th>
+              <th className="num">Target R%</th>
+              <th className="num">Planned</th>
+              <th className="num">Actual</th>
+              <th>Flow</th>
+              <th className="num">Post R%</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((r) => (
-              <tr key={r.ticker} className="border-t border-border last:border-b-0 hover:bg-muted/20">
-                <Td align="left" className="font-medium">
-                  {r.ticker}
-                  {r.missingPrice ? (
-                    <span className="ml-1 rounded bg-destructive/15 px-1 py-0.5 text-[9px] text-destructive">
-                      no price
+              <tr key={r.ticker}>
+                <td>
+                  <div className="v2-body-strong">
+                    {r.ticker}
+                    {r.missingPrice ? <NoPrice /> : null}
+                  </div>
+                </td>
+                <td className="num v2-tnum">{fmtShares(r.shares)}</td>
+                <td className="num v2-tnum">
+                  {r.priceLocal == null ? "—" : `${r.priceLocal.toFixed(2)} ${r.currency}`}
+                </td>
+                <td className="num v2-tnum">{fmtCAD(r.valueCAD)}</td>
+                <td className="num v2-tnum">{fmtPct(r.currentReservePct)}</td>
+                <td className="num v2-tnum">{fmtPct(r.reserveTargetPct)}</td>
+                <td className="num v2-tnum">{fmtCAD(r.plannedWeeklyCAD)}</td>
+                <td className="num v2-tnum">
+                  {r.actualSuggestedCAD > 0 ? (
+                    <span style={{ color: "hsl(var(--v2-action-blue))", fontWeight: 600 }}>
+                      {fmtCAD(r.actualSuggestedCAD)}
                     </span>
-                  ) : null}
-                </Td>
-                <Td>{fmtShares(r.shares)}</Td>
-                <Td>{r.priceLocal == null ? "—" : `${r.priceLocal.toFixed(2)} ${r.currency}`}</Td>
-                <Td>{fmtCAD(r.valueCAD)}</Td>
-                <Td>{fmtPct(r.currentReservePct)}</Td>
-                <Td>{fmtPct(r.reserveTargetPct)}</Td>
-                <Td>{fmtCAD(r.plannedWeeklyCAD)}</Td>
-                <Td className={r.actualSuggestedCAD > 0 ? "text-primary" : ""}>
-                  {fmtCAD(r.actualSuggestedCAD)}
-                </Td>
-                <Td align="left">
-                  <FlowDescriptor row={r} />
-                </Td>
-                <Td>{fmtPct(r.postReservePct)}</Td>
-                <Td align="left">
+                  ) : (
+                    <span style={{ color: "hsl(var(--v2-ink-muted-48))" }}>{fmtCAD(0)}</span>
+                  )}
+                </td>
+                <td>
+                  <FlowChips row={r} />
+                </td>
+                <td className="num v2-tnum">{fmtPct(r.postReservePct)}</td>
+                <td>
                   <StatusBadge status={r.status} />
-                </Td>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -66,102 +74,110 @@ export function V2ExcludedTable({ rows }: { rows: V2ExcludedRow[] }) {
       </div>
 
       {/* Mobile cards */}
-      <div className="divide-y divide-border md:hidden">
-        {sorted.map((r) => (
-          <div key={r.ticker} className="px-4 py-3">
+      <ul className="md:hidden">
+        {sorted.map((r, i) => (
+          <li
+            key={r.ticker}
+            className="px-5 py-4"
+            style={{
+              borderTop:
+                i === 0 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
+            }}
+          >
             <div className="flex items-baseline justify-between">
-              <div className="font-medium flex items-center gap-2">
-                {r.ticker}
+              <div className="flex items-center gap-2">
+                <span className="v2-body-strong">{r.ticker}</span>
                 <StatusBadge status={r.status} />
               </div>
-              <div className="tabular-nums text-sm">{fmtCAD(r.valueCAD, { compact: true })}</div>
+              <div className="v2-tnum" style={{ fontSize: 17, fontWeight: 600 }}>
+                {fmtCAD(r.valueCAD)}
+              </div>
             </div>
-            <div className="mt-1 grid grid-cols-3 gap-2 text-[11px]">
-              <Cell label="Cur R%" value={fmtPct(r.currentReservePct)} />
-              <Cell label="Tgt R%" value={fmtPct(r.reserveTargetPct)} />
-              <Cell label="Planned" value={fmtCAD(r.plannedWeeklyCAD, { compact: true })} />
+            <div className="mt-2 grid grid-cols-3 gap-3">
+              <Metric label="Current R%" value={fmtPct(r.currentReservePct)} />
+              <Metric label="Target R%" value={fmtPct(r.reserveTargetPct)} />
+              <Metric label="Planned" value={fmtCAD(r.plannedWeeklyCAD)} />
             </div>
-            <div className="mt-2 flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-[11px]">
-              <span className="text-muted-foreground">Actual</span>
-              <span
-                className={`tabular-nums ${r.actualSuggestedCAD > 0 ? "text-primary" : "text-muted-foreground"}`}
-              >
+            <div
+              className="mt-3 flex items-center justify-between"
+              style={{
+                background:
+                  r.actualSuggestedCAD > 0
+                    ? "hsla(var(--v2-action-blue) / 0.08)"
+                    : "hsl(var(--v2-canvas-parchment))",
+                color:
+                  r.actualSuggestedCAD > 0
+                    ? "hsl(var(--v2-action-blue))"
+                    : "hsl(var(--v2-ink-muted-48))",
+                borderRadius: 11,
+                padding: "8px 12px",
+                fontSize: 13,
+                letterSpacing: "-0.18px",
+              }}
+            >
+              <span>Actual</span>
+              <span className="v2-tnum" style={{ fontWeight: 600 }}>
                 {fmtCAD(r.actualSuggestedCAD)} → post {fmtPct(r.postReservePct)}
               </span>
             </div>
             {(r.reservedFromTickers.length > 0 || r.reallocatedToTickers.length > 0) && (
-              <div className="mt-1 text-[11px]">
-                <FlowDescriptor row={r} />
+              <div className="mt-2">
+                <FlowChips row={r} />
               </div>
             )}
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
 
-function Th({ children, align = "right" }: { children: React.ReactNode; align?: "left" | "right" }) {
+function NoPrice() {
   return (
-    <th className={`px-3 py-2 ${align === "left" ? "text-left" : "text-right"} font-medium`}>
-      {children}
-    </th>
+    <span
+      className="v2-badge v2-badge-warn"
+      style={{ marginLeft: 8, fontSize: 11, padding: "1px 8px" }}
+    >
+      no price
+    </span>
   );
 }
 
-function Td({
-  children,
-  align = "right",
-  className = "",
-}: {
-  children: React.ReactNode;
-  align?: "left" | "right";
-  className?: string;
-}) {
-  return (
-    <td className={`px-3 py-2 ${align === "left" ? "text-left" : "text-right"} tabular-nums ${className}`}>
-      {children}
-    </td>
-  );
-}
-
-function Cell({ label, value }: { label: string; value: React.ReactNode }) {
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="tabular-nums">{value}</div>
+      <div className="v2-fineprint">{label}</div>
+      <div className="v2-tnum" style={{ fontSize: 15, fontWeight: 500 }}>
+        {value}
+      </div>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: V2ExcludedRow["status"] }) {
   const map: Record<V2ExcludedRow["status"], { label: string; cls: string }> = {
-    below_target: { label: "Below", cls: "bg-accent/15 text-accent" },
-    at_target: { label: "On target", cls: "bg-primary/15 text-primary" },
-    above_target: { label: "Above", cls: "bg-muted text-muted-foreground" },
-    inactive: { label: "Inactive", cls: "bg-muted text-muted-foreground" },
+    below_target: { label: "Below", cls: "v2-badge-warn" },
+    at_target: { label: "On target", cls: "v2-badge-blue" },
+    above_target: { label: "Above", cls: "v2-badge-neutral" },
+    inactive: { label: "Inactive", cls: "v2-badge-neutral" },
   };
   const s = map[status];
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>
-      {s.label}
-    </span>
-  );
+  return <span className={`v2-badge ${s.cls}`}>{s.label}</span>;
 }
 
-function FlowDescriptor({ row }: { row: V2ExcludedRow }) {
+function FlowChips({ row }: { row: V2ExcludedRow }) {
   if (row.reservedFromTickers.length === 0 && row.reallocatedToTickers.length === 0) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="v2-fineprint">—</span>;
   }
   return (
-    <div className="flex flex-wrap gap-1 text-[10px]">
+    <div className="flex flex-wrap gap-1">
       {row.reservedFromTickers.map((t) => (
-        <span key={`from-${t}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+        <span key={`from-${t}`} className="v2-badge v2-badge-blue">
           ← {t}
         </span>
       ))}
       {row.reallocatedToTickers.map((t) => (
-        <span key={`to-${t}`} className="rounded-full bg-accent/10 px-2 py-0.5 text-accent">
+        <span key={`to-${t}`} className="v2-badge v2-badge-neutral">
           → {t}
         </span>
       ))}

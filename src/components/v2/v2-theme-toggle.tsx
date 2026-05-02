@@ -2,46 +2,57 @@
 
 import { useEffect, useState } from "react";
 
-type Theme = "dark" | "light";
+type Mode = "light" | "dark";
+const KEY = "dt-v2-theme";
 
-function readTheme(): Theme {
-  if (typeof document === "undefined") return "dark";
-  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+function readMode(): Mode {
+  if (typeof document === "undefined") return "light";
+  const root = document.querySelector<HTMLElement>(".v2-root");
+  return root?.getAttribute("data-v2-mode") === "dark" ? "dark" : "light";
 }
 
-function applyTheme(theme: Theme) {
+function applyMode(m: Mode) {
   if (typeof document === "undefined") return;
-  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
-  else document.documentElement.removeAttribute("data-theme");
+  const root = document.querySelector<HTMLElement>(".v2-root");
+  if (root) root.setAttribute("data-v2-mode", m);
   try {
-    localStorage.setItem("dt-theme", theme);
+    localStorage.setItem(KEY, m);
   } catch {
     /* ignore */
   }
 }
 
 export function V2ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [mode, setMode] = useState<Mode>("light");
 
   useEffect(() => {
-    setTheme(readTheme());
+    setMode(readMode());
   }, []);
 
   const toggle = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    applyTheme(next);
+    const next: Mode = mode === "dark" ? "light" : "dark";
+    setMode(next);
+    applyMode(next);
   };
 
   return (
     <button
       type="button"
       onClick={toggle}
-      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      title={`Switch to ${mode === "dark" ? "light" : "dark"} mode`}
       aria-label="Toggle theme"
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="v2-btn-ghost"
+      style={{
+        height: 32,
+        width: 32,
+        padding: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 14,
+      }}
     >
-      {theme === "dark" ? "☀" : "☾"}
+      <span aria-hidden>{mode === "dark" ? "☀" : "☾"}</span>
     </button>
   );
 }

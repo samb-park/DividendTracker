@@ -9,7 +9,6 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   const router = useRouter();
 
-  // Contribution
   const [amount, setAmount] = useState<string>(
     initial.contribution?.amount?.toString() ?? "",
   );
@@ -19,15 +18,12 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   );
   const [contribStatus, setContribStatus] = useState<SaveStatus>("idle");
 
-  // Targets — local edit map
   const [targets, setTargets] = useState(initial.targets);
   const [targetsStatus, setTargetsStatus] = useState<Record<string, SaveStatus>>({});
 
-  // Reserves
   const [reserves, setReserves] = useState(initial.reserves);
   const [reserveStatus, setReserveStatus] = useState<Record<string, SaveStatus>>({});
 
-  // Redistribution
   const [rule, setRule] = useState<"shortfall_proportional" | "even" | "priority">(
     initial.redistribution.rule,
   );
@@ -59,8 +55,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   );
 
   const reservePctSum = useMemo(
-    () =>
-      excludedTickers.reduce((s, t) => s + (reserves[t]?.targetPct ?? 0), 0),
+    () => excludedTickers.reduce((s, t) => s + (reserves[t]?.targetPct ?? 0), 0),
     [excludedTickers, reserves],
   );
 
@@ -73,10 +68,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
     [excludedTickers, reserves],
   );
 
-  const contributionCAD = useMemo(() => {
-    const amt = parseFloat(amount) || 0;
-    return currency === "CAD" ? amt : amt; // UI compares to amount in source currency for warning, fxRate not loaded here
-  }, [amount, currency]);
+  const contribAmt = parseFloat(amount) || 0;
 
   async function saveContribution() {
     setContribStatus("saving");
@@ -86,7 +78,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
       body: JSON.stringify({
         type: "contribution",
         frequency,
-        amount: parseFloat(amount) || 0,
+        amount: contribAmt,
         currency,
       }),
     });
@@ -115,7 +107,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
     if (r.ok) {
       setTargetsStatus((s) => ({ ...s, [ticker]: "saved" }));
       startTransition(() => router.refresh());
-      setTimeout(() => setTargetsStatus((s) => ({ ...s, [ticker]: "idle" })), 1000);
+      setTimeout(() => setTargetsStatus((s) => ({ ...s, [ticker]: "idle" })), 1200);
     } else {
       setTargetsStatus((s) => ({ ...s, [ticker]: "error" }));
     }
@@ -138,7 +130,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
     if (resp.ok) {
       setReserveStatus((s) => ({ ...s, [ticker]: "saved" }));
       startTransition(() => router.refresh());
-      setTimeout(() => setReserveStatus((s) => ({ ...s, [ticker]: "idle" })), 1000);
+      setTimeout(() => setReserveStatus((s) => ({ ...s, [ticker]: "idle" })), 1200);
     } else {
       setReserveStatus((s) => ({ ...s, [ticker]: "error" }));
     }
@@ -163,197 +155,235 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
+      <header className="space-y-1">
+        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
+          Settings
+        </h1>
+        <p className="v2-caption">Tune contribution, targets, and reserve behavior.</p>
+      </header>
+
       <Help />
 
       <ThemeSection />
 
-      {/* Contribution */}
       <Section
         title="Weekly Contribution"
         description="Total amount you plan to deploy each period. Excluded ticker reserves draw from this."
       >
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
-          <Input
-            label="Amount"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            min={0}
-            step={1}
-          />
-          <Select
-            label="Currency"
-            value={currency}
-            onChange={(v) => setCurrency(v as "CAD" | "USD")}
-            options={[
-              { value: "CAD", label: "CAD" },
-              { value: "USD", label: "USD" },
-            ]}
-          />
-          <Select
-            label="Frequency"
-            value={frequency}
-            onChange={(v) => setFrequency(v as "weekly" | "biweekly" | "monthly")}
-            options={[
-              { value: "weekly", label: "Weekly" },
-              { value: "biweekly", label: "Biweekly" },
-              { value: "monthly", label: "Monthly" },
-            ]}
-          />
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
+          <Field label="Amount">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              min={0}
+              step={1}
+              className="v2-input v2-tnum"
+            />
+          </Field>
+          <Field label="Currency">
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as "CAD" | "USD")}
+              className="v2-select"
+            >
+              <option value="CAD">CAD</option>
+              <option value="USD">USD</option>
+            </select>
+          </Field>
+          <Field label="Frequency">
+            <select
+              value={frequency}
+              onChange={(e) =>
+                setFrequency(e.target.value as "weekly" | "biweekly" | "monthly")
+              }
+              className="v2-select"
+            >
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Biweekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </Field>
           <SaveButton onClick={saveContribution} status={contribStatus} />
         </div>
       </Section>
 
-      {/* Targets */}
       <Section
         title="Ticker Targets"
-        description="Set target % for each ticker. Toggle 'Excluded' to move a ticker into the Reserve group (e.g. SGOV, IAUM)."
+        description="Set target % for each ticker. Toggle excluded to move a ticker into the Reserve group (e.g. SGOV, IAUM)."
         subRight={
           <span
-            className={`text-[11px] tabular-nums ${
-              Math.abs(targetSum - 100) > 0.5 ? "text-accent" : "text-muted-foreground"
-            }`}
+            className="v2-tnum v2-fineprint"
+            style={{
+              color:
+                Math.abs(targetSum - 100) > 0.5
+                  ? "hsl(36 90% 38%)"
+                  : "hsl(var(--v2-ink-muted-48))",
+            }}
           >
-            normal sum: {targetSum.toFixed(2)}%
+            normal sum {targetSum.toFixed(2)}%
           </span>
         }
       >
-        <div className="overflow-hidden rounded-xl border border-border">
-          {allTickers.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">
-              No tickers in your portfolio yet.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {allTickers.map((ticker) => {
-                const t = targets[ticker] ?? { pct: 0 };
-                const status = targetsStatus[ticker] ?? "idle";
-                return (
-                  <li key={ticker} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                    <div className="w-16 font-medium">{ticker}</div>
-                    <div className="flex-1 min-w-[8rem]">
-                      <input
-                        type="number"
-                        value={t.pct}
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        onChange={(e) =>
-                          setTargets({
-                            ...targets,
-                            [ticker]: { ...t, pct: parseFloat(e.target.value) || 0 },
-                          })
-                        }
-                        className="w-24 rounded-md border border-border bg-input px-2 py-1 text-right text-sm tabular-nums"
-                      />
-                      <span className="ml-1 text-[11px] text-muted-foreground">%</span>
-                    </div>
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={!!t.excluded}
-                        onChange={(e) =>
-                          setTargets({
-                            ...targets,
-                            [ticker]: { ...t, excluded: e.target.checked },
-                          })
-                        }
-                      />
-                      excluded
-                    </label>
+        {allTickers.length === 0 ? (
+          <EmptyHint>No tickers in your portfolio yet.</EmptyHint>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: "hsl(var(--v2-divider-soft))" }}>
+            {allTickers.map((ticker) => {
+              const t = targets[ticker] ?? { pct: 0 };
+              const status = targetsStatus[ticker] ?? "idle";
+              return (
+                <li
+                  key={ticker}
+                  className="flex flex-wrap items-center gap-3 py-3"
+                  style={{ borderColor: "hsl(var(--v2-divider-soft))" }}
+                >
+                  <div className="v2-body-strong" style={{ width: 72 }}>
+                    {ticker}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={t.pct}
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      onChange={(e) =>
+                        setTargets({
+                          ...targets,
+                          [ticker]: { ...t, pct: parseFloat(e.target.value) || 0 },
+                        })
+                      }
+                      className="v2-input v2-tnum"
+                      style={{ width: 92, textAlign: "right" }}
+                    />
+                    <span className="v2-caption">%</span>
+                  </div>
+                  <Toggle
+                    label="excluded"
+                    checked={!!t.excluded}
+                    onChange={(checked) =>
+                      setTargets({
+                        ...targets,
+                        [ticker]: { ...t, excluded: checked },
+                      })
+                    }
+                  />
+                  <div className="ml-auto">
                     <SaveButton onClick={() => saveTarget(ticker)} status={status} compact />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Section>
 
-      {/* Reserves */}
       <Section
-        title="Reserve / Excluded Ticker Settings"
+        title="Reserve / Excluded Settings"
         description="For each excluded ticker, set the target reserve %, planned weekly CAD, and whether it's active. Inactive tickers receive no allocation."
         subRight={
-          <div className="flex flex-col items-end text-[11px] tabular-nums">
-            <span
-              className={
-                reservePctSum > 100 ? "text-destructive" : "text-muted-foreground"
-              }
+          <div className="text-right v2-fineprint v2-tnum" style={{ lineHeight: 1.4 }}>
+            <div
+              style={{
+                color:
+                  reservePctSum > 100
+                    ? "hsl(var(--negative))"
+                    : "hsl(var(--v2-ink-muted-48))",
+              }}
             >
-              reserve sum: {reservePctSum.toFixed(2)}%
-            </span>
-            <span
-              className={
-                plannedSum > contributionCAD && contributionCAD > 0
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }
+              reserve sum {reservePctSum.toFixed(2)}%
+            </div>
+            <div
+              style={{
+                color:
+                  plannedSum > contribAmt && contribAmt > 0
+                    ? "hsl(var(--negative))"
+                    : "hsl(var(--v2-ink-muted-48))",
+              }}
             >
-              planned: {plannedSum.toFixed(2)} {currency}
-            </span>
+              planned {plannedSum.toFixed(2)} {currency}
+            </div>
           </div>
         }
       >
-        <div className="overflow-hidden rounded-xl border border-border">
-          {excludedTickers.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">
-              No excluded tickers yet. Toggle &quot;excluded&quot; in the Targets section above.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {excludedTickers.map((ticker) => {
-                const r = reserves[ticker] ?? {
-                  targetPct: 0,
-                  plannedWeeklyCAD: 0,
-                  active: true,
-                };
-                const status = reserveStatus[ticker] ?? "idle";
-                return (
-                  <li key={ticker} className="grid gap-2 px-3 py-3 sm:grid-cols-[6rem_1fr_1fr_auto_auto]">
-                    <div className="font-medium">{ticker}</div>
-                    <NumberField
-                      label="Target %"
+        {excludedTickers.length === 0 ? (
+          <EmptyHint>
+            No excluded tickers yet. Toggle &ldquo;excluded&rdquo; in the Targets section above.
+          </EmptyHint>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: "hsl(var(--v2-divider-soft))" }}>
+            {excludedTickers.map((ticker) => {
+              const r = reserves[ticker] ?? {
+                targetPct: 0,
+                plannedWeeklyCAD: 0,
+                active: true,
+              };
+              const status = reserveStatus[ticker] ?? "idle";
+              return (
+                <li
+                  key={ticker}
+                  className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[6rem_1fr_1fr_auto_auto] sm:items-end"
+                >
+                  <div className="v2-body-strong">{ticker}</div>
+                  <Field label="Target %">
+                    <input
+                      type="number"
                       value={r.targetPct}
+                      min={0}
                       max={100}
-                      onChange={(v) =>
-                        setReserves({ ...reserves, [ticker]: { ...r, targetPct: v } })
+                      step={0.1}
+                      onChange={(e) =>
+                        setReserves({
+                          ...reserves,
+                          [ticker]: { ...r, targetPct: parseFloat(e.target.value) || 0 },
+                        })
                       }
+                      className="v2-input v2-tnum"
+                      style={{ textAlign: "right" }}
                     />
-                    <NumberField
-                      label="Planned (CAD)"
+                  </Field>
+                  <Field label="Planned (CAD)">
+                    <input
+                      type="number"
                       value={r.plannedWeeklyCAD}
-                      onChange={(v) =>
-                        setReserves({ ...reserves, [ticker]: { ...r, plannedWeeklyCAD: v } })
+                      min={0}
+                      step={0.5}
+                      onChange={(e) =>
+                        setReserves({
+                          ...reserves,
+                          [ticker]: {
+                            ...r,
+                            plannedWeeklyCAD: parseFloat(e.target.value) || 0,
+                          },
+                        })
                       }
+                      className="v2-input v2-tnum"
+                      style={{ textAlign: "right" }}
                     />
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={r.active}
-                        onChange={(e) =>
-                          setReserves({
-                            ...reserves,
-                            [ticker]: { ...r, active: e.target.checked },
-                          })
-                        }
-                      />
-                      active
-                    </label>
-                    <SaveButton onClick={() => saveReserve(ticker)} status={status} compact />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                  </Field>
+                  <Toggle
+                    label="active"
+                    checked={r.active}
+                    onChange={(checked) =>
+                      setReserves({
+                        ...reserves,
+                        [ticker]: { ...r, active: checked },
+                      })
+                    }
+                  />
+                  <SaveButton onClick={() => saveReserve(ticker)} status={status} compact />
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Section>
 
-      {/* Redistribution Rule */}
       <Section
         title="Redistribution Rule"
-        description="When an excluded ticker has reached its reserve target, where does its planned amount go?"
+        description="When an excluded ticker reaches its reserve target, where does its planned amount go?"
       >
         <div className="space-y-3">
           {(
@@ -375,25 +405,39 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
               },
             ] as const
           ).map((opt) => (
-            <label key={opt.id} className="flex items-start gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30">
+            <label
+              key={opt.id}
+              className="flex cursor-pointer items-start gap-3 rounded-[11px] p-3 transition-colors"
+              style={{
+                border:
+                  rule === opt.id
+                    ? "1px solid hsl(var(--ring))"
+                    : "1px solid hsl(var(--v2-hairline))",
+                background:
+                  rule === opt.id
+                    ? "hsla(var(--v2-action-blue) / 0.04)"
+                    : "transparent",
+              }}
+            >
               <input
                 type="radio"
                 name="rule"
                 checked={rule === opt.id}
                 onChange={() => setRule(opt.id)}
-                className="mt-0.5"
+                style={{ accentColor: "hsl(var(--v2-action-blue))", marginTop: 4 }}
               />
               <div>
-                <div className="text-sm font-medium">{opt.label}</div>
-                <div className="text-[11px] text-muted-foreground">{opt.hint}</div>
+                <div className="v2-body-strong" style={{ fontSize: 15 }}>
+                  {opt.label}
+                </div>
+                <div className="v2-caption" style={{ marginTop: 2 }}>
+                  {opt.hint}
+                </div>
               </div>
             </label>
           ))}
           {rule === "priority" ? (
-            <div>
-              <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                Priority list (comma-separated tickers)
-              </label>
+            <Field label="Priority list (comma-separated tickers)">
               <input
                 type="text"
                 value={priorityList.join(", ")}
@@ -406,11 +450,11 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
                   )
                 }
                 placeholder="e.g. IAUM, SGOV"
-                className="mt-1 w-full rounded-md border border-border bg-input px-2 py-1.5 text-sm"
+                className="v2-input"
               />
-            </div>
+            </Field>
           ) : null}
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-1">
             <SaveButton onClick={saveRule} status={ruleStatus} />
           </div>
         </div>
@@ -431,59 +475,53 @@ function Section({
   subRight?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+    <section className="v2-card p-5 sm:p-6">
+      <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em]">{title}</h2>
+          <h2 className="v2-display v2-display-md" style={{ color: "hsl(var(--v2-ink-strong))" }}>
+            {title}
+          </h2>
           {description ? (
-            <p className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="v2-caption" style={{ marginTop: 2, maxWidth: 540 }}>
               {description}
             </p>
           ) : null}
         </div>
         {subRight}
-      </div>
+      </header>
       {children}
     </section>
   );
 }
 
 function ThemeSection() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [mode, setMode] = useState<"dark" | "light">("light");
 
   useEffect(() => {
-    const t = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-    setTheme(t);
+    const root = document.querySelector<HTMLElement>(".v2-root");
+    setMode(root?.getAttribute("data-v2-mode") === "dark" ? "dark" : "light");
   }, []);
 
   const setAndApply = (next: "dark" | "light") => {
-    setTheme(next);
-    if (next === "light") document.documentElement.setAttribute("data-theme", "light");
-    else document.documentElement.removeAttribute("data-theme");
+    setMode(next);
+    const root = document.querySelector<HTMLElement>(".v2-root");
+    if (root) root.setAttribute("data-v2-mode", next);
     try {
-      localStorage.setItem("dt-theme", next);
+      localStorage.setItem("dt-v2-theme", next);
     } catch {
       /* ignore */
     }
   };
 
   return (
-    <Section title="THEME" description="SWITCH BETWEEN DARK AND LIGHT APPEARANCE.">
-      <div className="inline-flex rounded-full bg-muted/50 p-0.5 text-[11px]">
-        {(["dark", "light"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setAndApply(t)}
-            className={`rounded-full px-3 py-1 font-medium uppercase tracking-[0.18em] transition-colors ${
-              theme === t
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+    <Section title="Appearance" description="Switch between light and dark mode for v2.">
+      <div className="v2-segmented">
+        <button type="button" data-active={mode === "light"} onClick={() => setAndApply("light")}>
+          Light
+        </button>
+        <button type="button" data-active={mode === "dark"} onClick={() => setAndApply("dark")}>
+          Dark
+        </button>
       </div>
     </Section>
   );
@@ -491,102 +529,106 @@ function ThemeSection() {
 
 function Help() {
   return (
-    <details className="rounded-xl border border-border bg-card p-3 text-[11px]">
-      <summary className="cursor-pointer text-xs font-medium">How v2 allocation works</summary>
-      <ol className="mt-2 list-decimal pl-5 space-y-1 text-muted-foreground">
-        <li>Each period your <em>Weekly Contribution</em> is the total CAD to deploy.</li>
-        <li>Excluded tickers receive their <em>Planned (CAD)</em> first, capped at the gap to their reserve target.</li>
-        <li>If an excluded ticker is already at/above its reserve target, its planned amount is redistributed using your rule.</li>
+    <details
+      className="v2-card-soft p-4"
+      style={{ background: "hsl(var(--v2-canvas-parchment))" }}
+    >
+      <summary className="cursor-pointer v2-body-strong" style={{ fontSize: 15 }}>
+        How v2 allocation works
+      </summary>
+      <ol
+        className="mt-3 space-y-1.5 v2-caption"
+        style={{ color: "hsl(var(--v2-ink-muted-80))", paddingLeft: 18, listStyle: "decimal" }}
+      >
+        <li>Each period your Weekly Contribution is the total CAD to deploy.</li>
+        <li>
+          Excluded tickers receive their Planned (CAD) first, capped at the gap to their reserve
+          target.
+        </li>
+        <li>
+          If an excluded ticker is already at/above its reserve target, its planned amount is
+          redistributed using your rule.
+        </li>
         <li>Whatever remains goes to Normal tickers, weighted by their target shortfall.</li>
-        <li>If planned-excluded sum exceeds Weekly Contribution, all planned amounts are scaled down proportionally.</li>
+        <li>
+          If planned-excluded sum exceeds Weekly Contribution, all planned amounts are scaled down
+          proportionally.
+        </li>
       </ol>
     </details>
   );
 }
 
-function Input({
-  label,
-  type,
-  value,
-  onChange,
-  min,
-  step,
-}: {
-  label: string;
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
-  min?: number;
-  step?: number;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        min={min}
-        step={step}
-        className="mt-1 rounded-md border border-border bg-input px-2 py-1.5 text-sm tabular-nums"
-      />
+    <label className="flex flex-col gap-1.5">
+      <span className="v2-fineprint">{label}</span>
+      {children}
     </label>
   );
 }
 
-function Select({
+function Toggle({
   label,
-  value,
+  checked,
   onChange,
-  options,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
+  checked: boolean;
+  onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 rounded-md border border-border bg-input px-2 py-1.5 text-sm"
+    <label className="inline-flex cursor-pointer items-center gap-2 select-none">
+      <span
+        role="switch"
+        aria-checked={checked}
+        tabIndex={0}
+        onClick={() => onChange(!checked)}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            onChange(!checked);
+          }
+        }}
+        style={{
+          position: "relative",
+          width: 38,
+          height: 22,
+          borderRadius: 9999,
+          background: checked
+            ? "hsl(var(--v2-action-blue))"
+            : "hsl(0 0% 80%)",
+          transition: "background 160ms ease",
+          flexShrink: 0,
+        }}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 18 : 2,
+            width: 18,
+            height: 18,
+            borderRadius: 9999,
+            background: "#fff",
+            transition: "left 160ms ease",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
+          }}
+        />
+      </span>
+      <span className="v2-caption">{label}</span>
     </label>
   );
 }
 
-function NumberField({
-  label,
-  value,
-  onChange,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  max?: number;
-}) {
+function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
-    <label className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        value={value}
-        min={0}
-        max={max}
-        step={0.1}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="mt-1 w-full rounded-md border border-border bg-input px-2 py-1.5 text-right text-sm tabular-nums"
-      />
-    </label>
+    <div
+      className="v2-caption rounded-[11px] px-4 py-6 text-center"
+      style={{ background: "hsl(var(--v2-canvas-parchment))" }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -603,25 +645,27 @@ function SaveButton({
     status === "saving"
       ? "Saving…"
       : status === "saved"
-        ? "✓ Saved"
+        ? "Saved"
         : status === "error"
-          ? "Error"
+          ? "Try again"
           : "Save";
+
+  const isError = status === "error";
+  const isSaved = status === "saved";
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={status === "saving"}
-      className={`rounded-md border border-border bg-background ${
-        compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs"
-      } font-medium transition-colors hover:bg-muted disabled:opacity-50 ${
-        status === "saved"
-          ? "border-primary/50 text-primary"
-          : status === "error"
-            ? "border-destructive text-destructive"
-            : ""
-      }`}
+      className={isError ? "v2-btn v2-btn-secondary" : "v2-btn v2-btn-primary"}
+      style={
+        compact
+          ? { padding: "6px 14px", fontSize: 13 }
+          : undefined
+      }
     >
+      {isSaved ? "✓ " : ""}
       {label}
     </button>
   );

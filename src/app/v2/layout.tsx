@@ -2,49 +2,65 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { V2TabNav } from "@/components/v2/v2-tab-nav";
 import { V2ThemeToggle } from "@/components/v2/v2-theme-toggle";
+import "./v2-apple.css";
 
 export const metadata = {
-  title: "COCKPIT — V2",
+  title: "Cockpit · v2",
 };
 
 export default function V2Layout({ children }: { children: ReactNode }) {
   return (
     <div
-      className="min-h-screen bg-background text-foreground"
+      className="v2-root min-h-screen"
+      data-v2-mode="light"
       style={{
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', Arial, sans-serif",
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
+        background: "hsl(var(--background))",
+        color: "hsl(var(--foreground))",
       }}
     >
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      {/* Theme bootstrap: read dt-v2-theme localStorage early so first paint is correct */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var r=document.currentScript&&document.currentScript.parentElement;if(!r)return;var t=localStorage.getItem('dt-v2-theme');r.setAttribute('data-v2-mode',t==='dark'?'dark':'light');}catch(e){}})();`,
+        }}
+      />
+
+      <header
+        className="sticky top-0 z-30 border-b"
+        style={{
+          background: "hsla(var(--background) / 0.78)",
+          backdropFilter: "saturate(180%) blur(20px)",
+          WebkitBackdropFilter: "saturate(180%) blur(20px)",
+          borderColor: "hsl(var(--v2-hairline))",
+        }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
           <div className="flex items-baseline gap-3">
             <Link
               href="/v2"
-              className="text-sm font-semibold uppercase tracking-[0.18em]"
+              className="v2-display"
+              style={{ fontSize: 18, color: "hsl(var(--v2-ink-strong))" }}
             >
-              COCKPIT
+              Cockpit
             </Link>
-            <span className="hidden text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
-              V2 · ALLOCATION
-            </span>
+            <span className="v2-fineprint hidden sm:inline">Allocation</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <V2TabNav />
             <V2ThemeToggle />
             <Link
               href="/v1"
-              className="hidden text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground sm:inline"
+              className="v2-caption hidden sm:inline"
+              style={{ color: "hsl(var(--v2-action-blue))" }}
               title="Go to legacy v1"
             >
-              V1 →
+              v1 →
             </Link>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+
+      <main className="mx-auto max-w-6xl px-5 py-7 sm:px-8 sm:py-10">{children}</main>
     </div>
   );
 }
