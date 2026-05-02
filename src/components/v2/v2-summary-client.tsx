@@ -12,13 +12,6 @@ export function V2SummaryClient({ data }: { data: V2AllocationData }) {
 
   return (
     <div className="space-y-7">
-      <header className="space-y-1">
-        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
-          Allocation
-        </h1>
-        <p className="v2-caption">A calm view of where your weekly contribution lands.</p>
-      </header>
-
       <V2SummaryCards data={data} />
 
       {data.warnings.length > 0 ? (
@@ -40,13 +33,13 @@ export function V2SummaryClient({ data }: { data: V2AllocationData }) {
       {/* Desktop / tablet: stacked full-width */}
       <div className="hidden space-y-7 lg:block">
         <Section
-          title="Normal Targets"
+          title="Holdings"
           sub={`${data.normalRows.length} tickers · ${fmtCAD(data.normalGroupValueCAD)}`}
         >
           <V2NormalTable rows={data.normalRows} />
         </Section>
         <Section
-          title="Reserve / Excluded"
+          title="Reserves"
           sub={`${data.excludedRows.length} tickers · ${fmtCAD(data.excludedGroupValueCAD)}`}
         >
           <V2ExcludedTable rows={data.excludedRows} />
@@ -58,10 +51,10 @@ export function V2SummaryClient({ data }: { data: V2AllocationData }) {
         <div className="flex items-center justify-between">
           <div className="v2-segmented">
             <button type="button" data-active={tab === "normal"} onClick={() => setTab("normal")}>
-              Normal · {data.normalRows.length}
+              Holdings · {data.normalRows.length}
             </button>
             <button type="button" data-active={tab === "reserve"} onClick={() => setTab("reserve")}>
-              Reserve · {data.excludedRows.length}
+              Reserves · {data.excludedRows.length}
             </button>
           </div>
           <span className="v2-fineprint v2-tnum">

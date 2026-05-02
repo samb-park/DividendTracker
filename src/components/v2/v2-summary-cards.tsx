@@ -10,18 +10,6 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
   );
   const avgDrift = data.normalRows.length > 0 ? totalDriftAbs / data.normalRows.length : 0;
 
-  const reserveActive = data.excludedRows.filter((r) => r.active && r.reserveTargetPct > 0);
-  const reserveProgress =
-    reserveActive.length === 0
-      ? null
-      : reserveActive.reduce(
-          (s, r) => s + Math.min(1, r.currentReservePct / r.reserveTargetPct),
-          0,
-        ) / reserveActive.length;
-  const reserveOnTarget = data.excludedRows.filter(
-    (r) => r.status === "at_target" || r.status === "above_target",
-  ).length;
-
   const items = [
     {
       label: "Total",
@@ -46,16 +34,6 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
       title: "USD→CAD exchange rate from Yahoo Finance.",
     },
     {
-      label: "Reserve",
-      value: reserveProgress == null ? "—" : fmtPct(reserveProgress * 100, 0),
-      hint:
-        data.excludedRows.length === 0
-          ? "No excluded tickers"
-          : `${reserveOnTarget}/${data.excludedRows.length} on target`,
-      title:
-        "Average progress of excluded (reserve) tickers toward their reserve target % of total portfolio. 100% = all reserve tickers at target.",
-    },
-    {
       label: "Avg Drift",
       value: fmtSignedPct(avgDrift, 1),
       hint: "Normal targets",
@@ -66,7 +44,7 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
 
   return (
     <div className="v2-card overflow-hidden">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4">
         {items.map((it, i) => (
           <div
             key={it.label}
@@ -76,7 +54,7 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
               borderLeft:
                 i === 0 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
               borderTop:
-                i < 3 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
+                i < 2 ? "none" : "1px solid hsl(var(--v2-divider-soft))",
             }}
           >
             <div className="v2-fineprint" style={{ fontSize: 11, marginBottom: 6 }}>
@@ -87,10 +65,10 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
               style={{
                 fontFamily:
                   "'SF Pro Display', system-ui, -apple-system, Inter, sans-serif",
-                fontSize: 22,
+                fontSize: 17,
                 fontWeight: 600,
-                lineHeight: 1.15,
-                letterSpacing: "-0.32px",
+                lineHeight: 1.24,
+                letterSpacing: "-0.374px",
                 color: "hsl(var(--v2-ink-strong))",
               }}
             >
@@ -108,7 +86,6 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
         ))}
       </div>
 
-      {/* Stack into 2-row layout on smaller screens with hairlines visible */}
       <style>{`
         @media (max-width: 639px) {
           .v2-root .v2-card .grid > div:nth-child(2n) {
@@ -117,7 +94,7 @@ export function V2SummaryCards({ data }: { data: V2AllocationData }) {
           .v2-root .v2-card .grid > div:nth-child(odd):not(:first-child) {
             border-top: 1px solid hsl(var(--v2-divider-soft)) !important;
           }
-          .v2-root .v2-card .grid > div:nth-child(even) {
+          .v2-root .v2-card .grid > div:nth-child(even):not(:nth-child(2)) {
             border-top: 1px solid hsl(var(--v2-divider-soft)) !important;
           }
         }

@@ -156,13 +156,6 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
 
   return (
     <div className="space-y-7">
-      <header className="space-y-1">
-        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
-          Settings
-        </h1>
-        <p className="v2-caption">Tune contribution, targets, and reserve behavior.</p>
-      </header>
-
       <Help />
 
       <ThemeSection />

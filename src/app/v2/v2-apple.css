@@ -11,6 +11,13 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "ss03" on, "cv11" on;
+  text-transform: uppercase;
+}
+/* Numeric currency strings include lowercase 'k', 'M', commas — keep as-is */
+.v2-root input,
+.v2-root select,
+.v2-root textarea {
+  text-transform: none;
 }
 
 /* LIGHT — apple parchment canvas */

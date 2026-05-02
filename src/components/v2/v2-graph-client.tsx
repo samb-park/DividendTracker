@@ -71,13 +71,6 @@ export function V2GraphClient({ initialRange, initialSeries }: V2GraphProps) {
 
   return (
     <div className="space-y-7">
-      <header className="space-y-1">
-        <h1 className="v2-display v2-heroish" style={{ color: "hsl(var(--v2-ink-strong))" }}>
-          Trend
-        </h1>
-        <p className="v2-caption">Daily portfolio value over time. Source: PortfolioSnapshot.</p>
-      </header>
-
       <div className="flex items-end justify-between gap-3">
         <div>
           <div className="v2-fineprint">Portfolio</div>
