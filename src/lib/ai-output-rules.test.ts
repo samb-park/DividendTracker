@@ -168,6 +168,11 @@ test("RULEBOOK_GUARDRAILS [K] forbids re-explaining authoritative tables", () =>
   assert.ok(RULEBOOK_GUARDRAILS.includes("표를 다시 풀어 쓰지"), "must forbid table re-explanation");
 });
 
+test("v4.1.10-2: [L] 수치 인용 금지 section is enforced", () => {
+  assert.ok(RULEBOOK_GUARDRAILS.includes("[L] 수치 인용 절대 금지"), "Section L missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("화면 표에 이미 모든 CAD"), "Section L body missing");
+});
+
 test("flags fields are mapped", () => {
   const input = "qldEmergencyCap=true, sgovNeedsRefill=true, iaumAtCap=false";
   const out = sanitizeAiOutput(input);

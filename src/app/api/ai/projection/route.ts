@@ -480,11 +480,6 @@ async function runProjection(userId: string) {
 
   // ── AI narrative ──
   // Provide structured numbers in the prompt and require Korean labels in output.
-  const projTable = scenarios.map(s =>
-    `[${s.label} 연수익률 ${s.cagrPct}%]  ` +
-    s.points.map(p => `${p.year}년 총 $${p.totalCAD.toLocaleString()} CAD (SCHD ${p.schdCAD.toLocaleString()} / QLD ${p.qldCAD.toLocaleString()} / SGOV ${p.sgovCAD.toLocaleString()} / IAUM ${p.iaumCAD.toLocaleString()}) · QLD core ${p.qldCoreWeightPct}% · 연배당 $${p.annualDivCAD.toLocaleString()} CAD`).join(" | ")
-  ).join("\n");
-
   const goalLine = incomeGoalCAD ? `\n목표 연배당: $${Math.round(incomeGoalCAD).toLocaleString()} CAD` : "";
   const retireLine = retirementYear ? `\n은퇴 목표: ${retirementYear}년 (${yearsToRetirement}년 후)` : "";
 
@@ -561,7 +556,7 @@ async function runProjection(userId: string) {
     triggerSummary,
     ``,
     `[3-시나리오 예측]`,
-    projTable,
+    "(시나리오 절대값은 화면 표가 authoritative — 본 narrative에서는 의미·트리거 영향만 다룬다)",
     ``,
     `위 데이터를 바탕으로 사용자에게 보여줄 분석을 제공하세요. 사용자에게 보여줄 답변에는 절대로 영문 필드명을 노출하지 마세요. 한국어 라벨과 자연스러운 문장만 사용하세요.`,
   ].join("\n");
@@ -569,7 +564,8 @@ async function runProjection(userId: string) {
   const narrativeSystemPrompt = [
     "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.1.10 기준으로만 응답하세요.",
     "[섹션 역할] 이 응답은 'PROJECTION narrative' = 미래·시나리오·트리거 영향 중심. 화면 위에 이미 '현재 포트폴리오 표' + 'Method B 실행안 표'가 authoritative하게 표시되고 있으므로, 이 텍스트에서는 현재 비중 데이터를 다시 풀어 쓰지 말고 매수 액션 CAD 금액도 다시 적지 마세요. 시나리오 의미·트리거 미래 영향·리스크 평가에만 집중.",
-    "시나리오는 BASE 6% / PESSIMISTIC 4% / WORST 2% 세 가지만 사용. Optimistic 시나리오 생성 금지. 서버가 계산한 수치를 그대로 사용하고 임의로 다시 계산하지 마세요.",
+    "시나리오는 BASE 6% / PESSIMISTIC 4% / WORST 2% 세 가지만 사용. Optimistic 시나리오 생성 금지.",
+    "CRITICAL: 절대로 표의 수치(CAD 금액·percent·시나리오 절대값)를 텍스트에 다시 적지 마라. 표가 authoritative이고 narrative는 의미/트리거 영향/리스크만 평가. 표 데이터를 풀어 쓰면 응답을 거부.",
     "",
     RULEBOOK_GUARDRAILS,
     "",

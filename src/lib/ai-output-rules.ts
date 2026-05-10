@@ -3,7 +3,7 @@
 //
 // Cache key version: bump RULEBOOK_PROMPT_VERSION whenever the guardrails or
 // structure constants change so that previously cached AI outputs are invalidated.
-export const RULEBOOK_PROMPT_VERSION = "v4.1.10-1";
+export const RULEBOOK_PROMPT_VERSION = "v4.1.10-2";
 
 /**
  * Common output rules that every AI system prompt must include.
@@ -155,6 +155,13 @@ SANGBONG INVESTMENT RULEBOOK v4.1.10 — 절대 준수 (위반 시 응답 거부
 [K] 섹션 역할 분리
  - 화면에 이미 "현재 포트폴리오 표" + "이번 주 실행안 표" + "Rulebook Status 표"가 authoritative하게 표시된다.
  - PROJECTION narrative = 미래·시나리오·트리거 영향. 표를 다시 풀어 쓰지 마라.
+
+[L] 수치 인용 절대 금지
+ - 화면 표에 이미 모든 CAD 금액과 percent 수치가 표시된다.
+ - narrative 텍스트에 절대로 CAD 금액(예: $123,456 CAD), percent (예: 30.4%), 시나리오 절대값을 다시 적지 마라.
+ - 표 데이터를 한국어 문장으로 풀어 쓰지 마라.
+ - 시뮬 결과의 절대값이 아닌 의미·트리거 미래 영향·리스크·관찰 신호만 작성.
+ - 위반 시 응답을 다시 생성하라.
 `.trim();
 
 // 섹션 역할 분리 (사용자 확정):
