@@ -228,6 +228,42 @@ export function computeMethodBAllocation(
   };
 }
 
+// ── §6.2 Soft Exit — growth bucket ≥ 34% → sell HALF of TQQQ ─────────────────
+// Proceeds order (rulebook [6.2]):
+//   1) SGOV refill up to 8% of total
+//   2) remainder → SCHD
+// SCHD is never sold.
+export interface TqqqExitPlan {
+  active: boolean;
+  tqqqSaleCAD: number;
+  qldSaleCAD: number;          // 0 for Soft, > 0 for Hard
+  sgovRefillCAD: number;
+  schdBuyCAD: number;
+  postGrowthBucketPct: number;
+}
+
+export function computeTqqqSoftExitPlan(args: {
+  schdCAD: number;
+  qldCAD: number;
+  tqqqCAD: number;
+  sgovCAD: number;
+  totalCAD: number;
+  softExit: boolean;
+}): TqqqExitPlan {
+  const inactive: TqqqExitPlan = {
+    active: false, tqqqSaleCAD: 0, qldSaleCAD: 0, sgovRefillCAD: 0, schdBuyCAD: 0, postGrowthBucketPct: 0,
+  };
+  if (!args.softExit || args.tqqqCAD <= 0) return inactive;
+  const sale = args.tqqqCAD / 2;
+  const sgovGap = Math.max(0, (RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100) * args.totalCAD - args.sgovCAD);
+  const sgovRefill = Math.min(sale, sgovGap);
+  const schdBuy = Math.max(0, sale - sgovRefill);
+  const postTqqq = args.tqqqCAD - sale;
+  const postTotal = args.totalCAD;  // proceeds reinvested → total unchanged
+  const postGrowthBucketPct = postTotal > 0 ? ((args.qldCAD + postTqqq) / postTotal) * 100 : 0;
+  return { active: true, tqqqSaleCAD: sale, qldSaleCAD: 0, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
+}
+
 // ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
 // Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
 // 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.

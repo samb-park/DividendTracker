@@ -4,6 +4,7 @@ import {
   computeRulebookWeights,
   computeMethodBAllocation,
   computeIaumWeeklyPlan,
+  computeTqqqSoftExitPlan,
   computeQldEmergencyPlan,
   projectScenarios,
   projectScenariosRulebook,
@@ -540,6 +541,34 @@ test("projectScenariosRulebook: QLD div yield grows by qldDivGrowthFactor × dg 
   // fullQld dividend should be greater than flatQld
   assert.ok(fullQld.annualDivGrossCAD > flatQld.annualDivGrossCAD,
     `full QLD dg ${fullQld.annualDivGrossCAD} should exceed flat ${flatQld.annualDivGrossCAD}`);
+});
+
+// ── computeTqqqSoftExitPlan (§6.2 — half-sell when growth bucket ≥ 34) ──
+test("§6.2 Soft Exit: inactive when growth bucket < 34", () => {
+  const plan = computeTqqqSoftExitPlan({
+    schdCAD: 60, qldCAD: 30, tqqqCAD: 5, sgovCAD: 5, totalCAD: 100, softExit: false,
+  });
+  assert.equal(plan.active, false);
+  assert.equal(plan.tqqqSaleCAD, 0);
+});
+
+test("§6.2 Soft Exit: sells exactly HALF of TQQQ, refills SGOV to 8%", () => {
+  // total 100, TQQQ 10, SGOV 0. Half-sell = 5. SGOV gap to 8% = 8. → 5 to SGOV (still < 8), 0 to SCHD.
+  const plan = computeTqqqSoftExitPlan({
+    schdCAD: 60, qldCAD: 30, tqqqCAD: 10, sgovCAD: 0, totalCAD: 100, softExit: true,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(close(plan.tqqqSaleCAD, 5));
+  assert.ok(close(plan.sgovRefillCAD, 5));
+  assert.equal(plan.schdBuyCAD, 0);
+});
+
+test("§6.2 Soft Exit: when SGOV already at 8%, proceeds all → SCHD", () => {
+  const plan = computeTqqqSoftExitPlan({
+    schdCAD: 50, qldCAD: 30, tqqqCAD: 10, sgovCAD: 10, totalCAD: 100, softExit: true,
+  });
+  assert.ok(plan.sgovRefillCAD === 0);
+  assert.ok(close(plan.schdBuyCAD, plan.tqqqSaleCAD));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
