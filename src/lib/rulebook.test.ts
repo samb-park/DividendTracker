@@ -319,6 +319,7 @@ const baseProjectionInput = (overrides: Partial<Parameters<typeof projectScenari
     qldCAD: 15000,
     sgovCAD: 2500,
     iaumCAD: 0,
+    tqqqCAD: 0,
     schdYieldPct: 3.5,
     qldYieldPct: 0.5,
     sgovYieldPct: 4.5,
@@ -365,13 +366,13 @@ test("projectScenariosRulebook: per-asset values sum to totalCAD", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   for (const s of out) {
     for (const p of s.points) {
-      const sum = p.schdCAD + p.qldCAD + p.sgovCAD + p.iaumCAD;
+      const sum = p.schdCAD + p.qldCAD + p.sgovCAD + p.iaumCAD + p.tqqqCAD;
       assert.ok(Math.abs(sum - p.totalCAD) <= 1, `sum ${sum} vs total ${p.totalCAD} (${s.id} year ${p.year})`);
     }
   }
 });
 
-test("projectScenariosRulebook: emergency cap fires when QLD overshoots in Base 6%", () => {
+test("projectScenariosRulebook: Case A or Hard Exit fires when QLD overshoots in Base 6%", () => {
   // Start with QLD already at 35% core (close to cap) and let it grow at 1.5x cagr.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
@@ -379,14 +380,17 @@ test("projectScenariosRulebook: emergency cap fires when QLD overshoots in Base 
       qldCAD: 17500,  // 35% of core 50000
       sgovCAD: 2500,
       iaumCAD: 0,
+      tqqqCAD: 0,
       schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
     },
     yearPoints: [1, 2, 3, 5, 10, 20],
   }));
   const base = out.find(s => s.id === "base")!;
-  // At least one year should fire emergency cap or annual rebalance
-  const anyTrigger = base.points.some(p => p.emergencyCapApplied || p.annualRebalanceApplied);
-  assert.ok(anyTrigger, "expected emergency cap or annual rebalance to fire at least once");
+  // Across the full 25-year horizon, Case A or Hard Exit must fire at least once.
+  // Asserting on triggerCounts (not yearPoints sampling) avoids missing fires that land
+  // outside the surfaced rows.
+  assert.ok(base.triggerCounts.caseA > 0 || base.triggerCounts.hardExit > 0,
+    `expected Case A or Hard Exit to fire at least once, got counts=${JSON.stringify(base.triggerCounts)}`);
 });
 
 test("projectScenariosRulebook: IAUM exits at age 65", () => {
@@ -401,11 +405,11 @@ test("projectScenariosRulebook: IAUM exits at age 65", () => {
   assert.equal(exitYear?.iaumCAD, 0, "after exit, IAUM should be 0");
 });
 
-test("projectScenariosRulebook: SGOV gating — when SGOV ≥ 5% of total, weekly SGOV stops", () => {
-  // Start SGOV already at 30% of total → above 5%. Annual SGOV contribution should be 0.
+test("projectScenariosRulebook: SGOV gating — when SGOV ≥ 8% of total, weekly SGOV stops", () => {
+  // Start SGOV already at ~28.6% of total → above 8% target. Annual SGOV contribution should be 0.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
       schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
     },
     yearPoints: [1],
@@ -430,10 +434,10 @@ test("projectScenariosRulebook: IAUM gating — when no TFSA room, IAUM contribu
 });
 
 test("projectScenariosRulebook: gated SGOV/IAUM redirects to Core when option is on", () => {
-  // Start with SGOV already > 5% so SGOV gating kicks in.
+  // Start with SGOV already > 8% so SGOV gating kicks in.
   const inputWithRedirect = baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
       schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
     },
     redirectGatedToCore: true,
@@ -442,7 +446,7 @@ test("projectScenariosRulebook: gated SGOV/IAUM redirects to Core when option is
   });
   const inputNoRedirect = baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
       schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
     },
     redirectGatedToCore: false,
@@ -513,6 +517,39 @@ test("projectScenariosRulebook: QLD div yield grows by qldDivGrowthFactor × dg 
   // fullQld dividend should be greater than flatQld
   assert.ok(fullQld.annualDivGrossCAD > flatQld.annualDivGrossCAD,
     `full QLD dg ${fullQld.annualDivGrossCAD} should exceed flat ${flatQld.annualDivGrossCAD}`);
+});
+
+test("projection: Case B fires when QLD core under 29 and TQQQ=0 (Sangbong path)", () => {
+  // Start at 26% core (above the 25% Crisis-T1 line, below the 29% deadband floor) with
+  // contributions zeroed so Method B doesn't drag QLD back into deadband on Y1.
+  // Case B should buy QLD with SGOV at year-end while TQQQ stays at 0.
+  const out = projectScenariosRulebook(baseProjectionInput({
+    start: {
+      schdCAD: 74000, qldCAD: 26000,   // 26% core
+      sgovCAD: 8000, iaumCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+    },
+    coreWeeklyCAD: 0,
+    sgovWeeklyCAD: 0,
+    iaumWeeklyCAD: 0,
+    yearPoints: [1, 2, 3, 5],
+    maxYears: 5,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  assert.ok(base.triggerCounts.caseB > 0,
+    `expected Case B to fire at least once, got counts=${JSON.stringify(base.triggerCounts)}`);
+});
+
+test("projection: SGOV target 8% — sgovCAD below 8% triggers refill contribution", () => {
+  const out = projectScenariosRulebook(baseProjectionInput({
+    start: { schdCAD: 30000, qldCAD: 13000, sgovCAD: 1000, iaumCAD: 0, tqqqCAD: 0,
+             schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5 },
+    sgovWeeklyCAD: 50, iaumWeeklyCAD: 0,
+    yearPoints: [1], maxYears: 1,
+  }));
+  const y1 = out.find(s => s.id === "base")!.points[0];
+  // SGOV starts 1000, total 44000 → 2.27% < 8 → SGOV contribution applied
+  assert.ok(y1.sgovCAD > 3000, `expected SGOV refill (≥ ~3000), got ${y1.sgovCAD}`);
 });
 
 // ── computeTqqqSoftExitPlan (§6.2 — half-sell when growth bucket ≥ 34) ──

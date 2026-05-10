@@ -503,10 +503,12 @@ export interface ProjectionStartStateV2 {
   qldCAD: number;
   sgovCAD: number;
   iaumCAD: number;
+  tqqqCAD: number;        // overlay; typically 0 outside crisis cycle
   schdYieldPct: number;   // e.g. 3.5
   qldYieldPct: number;    // e.g. 0.5
   sgovYieldPct: number;   // e.g. 4.5
   // IAUM yield = 0 (gold pays no dividend)
+  // TQQQ yield ≈ 0 (leveraged ETF; effectively no dividend)
 }
 
 export interface ProjectionInputV2 {
@@ -545,8 +547,10 @@ export interface ProjectionYearPointV2 {
   qldCAD: number;
   sgovCAD: number;
   iaumCAD: number;
+  tqqqCAD: number;
   totalCAD: number;
   qldCoreWeightPct: number;
+  growthBucketPct: number;     // (QLD + TQQQ) / Total × 100
   sgovTotalWeightPct: number;
   iaumTotalWeightPct: number;
   /** Net-of-withholding-tax annual dividend (taxWithholdPct subtracted). */
@@ -555,8 +559,13 @@ export interface ProjectionYearPointV2 {
   annualDivGrossCAD: number;
   monthlyDivCAD: number;
   totalContribCAD: number;
-  emergencyCapApplied: boolean;
-  annualRebalanceApplied: boolean;
+  // v4.1.10 priority-order event flags
+  hardExitApplied: boolean;
+  softExitApplied: boolean;
+  crisisT1Applied: boolean;
+  crisisT2Applied: boolean;
+  caseAApplied: boolean;
+  caseBApplied: boolean;
   iaumExited: boolean;
 }
 
@@ -567,8 +576,12 @@ export interface ProjectionScenarioV2 {
   points: ProjectionYearPointV2[];
   /** Total times each rulebook trigger fired across the horizon. */
   triggerCounts: {
-    emergencyCap: number;
-    annualRebalance: number;
+    hardExit: number;
+    softExit: number;
+    crisisT1: number;
+    crisisT2: number;
+    caseA: number;
+    caseB: number;
     iaumExited: boolean;
   };
 }
@@ -576,6 +589,7 @@ export interface ProjectionScenarioV2 {
 const SGOV_FIXED_CAGR = 0.04;
 const IAUM_FIXED_CAGR = 0.02;
 const QLD_LEVERAGE_FACTOR = 1.5;
+const TQQQ_LEVERAGE_FACTOR = 3;   // 3× SCHD CAGR proxy for leveraged Nasdaq overlay
 
 export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionScenarioV2[] {
   const startYear = new Date().getFullYear();
@@ -598,41 +612,48 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
     let qldCAD  = Math.max(0, input.start.qldCAD);
     let sgovCAD = Math.max(0, input.start.sgovCAD);
     let iaumCAD = Math.max(0, input.start.iaumCAD);
+    let tqqqCAD = Math.max(0, input.start.tqqqCAD ?? 0);
     let schdYld = Math.max(0, input.start.schdYieldPct) / 100;
     let qldYld  = Math.max(0, input.start.qldYieldPct)  / 100;
-    const sgovYld = Math.max(0, input.start.sgovYieldPct) / 100;  // T-bill rate; held flat
+    const sgovYld = Math.max(0, input.start.sgovYieldPct) / 100;
     let cumContrib = 0;
-    let emergencyCount = 0;
-    let rebalanceCount = 0;
+
+    // Cycle gating state (in-memory; per scenario)
+    let cycleArmed = tqqqCAD <= 0;
+    let t1Fired = false;
+    let t2Fired = false;
+    const counts = { hardExit: 0, softExit: 0, crisisT1: 0, crisisT2: 0, caseA: 0, caseB: 0 };
     let iaumExitedEver = false;
 
     const points: ProjectionYearPointV2[] = [];
 
     for (let y = 1; y <= input.maxYears; y++) {
-      let emergencyCapApplied = false;
-      let annualRebalanceApplied = false;
+      let hardExitApplied = false;
+      let softExitApplied = false;
+      let crisisT1Applied = false;
+      let crisisT2Applied = false;
+      let caseAApplied = false;
+      let caseBApplied = false;
       let iaumExited = false;
 
-      // (1) Annual contribution amounts. Non-Core gated by §6/§7 conditions.
+      // (1) Annual contribution amounts — SGOV gated by 8% target (v4.1.10), IAUM by TFSA + 5% cap
       let annualCore = Math.max(0, input.coreWeeklyCAD * 52);
-      const totalForGate = schdCAD + qldCAD + sgovCAD + iaumCAD;
+      const totalForGate = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
       const sgovPctOfTotal = totalForGate > 0 ? sgovCAD / totalForGate : 1;
       const iaumPctOfTotal = totalForGate > 0 ? iaumCAD / totalForGate : 1;
       const sgovPlanned = Math.max(0, input.sgovWeeklyCAD * 52);
       const iaumPlanned = Math.max(0, input.iaumWeeklyCAD * 52);
-      const sgovGated = !(sgovPctOfTotal < 0.05);
-      const iaumGated = !(iaumPctOfTotal < 0.05 && input.tfsaRoomExists);
+      const sgovGated = !(sgovPctOfTotal < RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100);
+      const iaumGated = !(iaumPctOfTotal < RULEBOOK_TARGETS.IAUM_MAX_PCT / 100 && input.tfsaRoomExists);
       const annualSGOV = sgovGated ? 0 : sgovPlanned;
       const annualIAUM = iaumGated ? 0 : iaumPlanned;
-      // §6/§7 redirect: when Non-Core is gated and the option is on, fold the planned
-      // amount back into Core Method B so the user's total weekly outflow keeps deploying.
       if (redirectGated) {
         if (sgovGated) annualCore += sgovPlanned;
         if (iaumGated) annualCore += iaumPlanned;
       }
       cumContrib += annualCore + annualSGOV + annualIAUM;
 
-      // (2) §5 Method B for Core — proportional shortfall to 70/30.
+      // (2) Method B — Core only
       const postCorePool = schdCAD + qldCAD + annualCore;
       const targetSchd = postCorePool * 0.70;
       const targetQld  = postCorePool * 0.30;
@@ -655,49 +676,105 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         qldBuy  = annualCore * 0.30;
       }
 
-      // (3) DCA-aware growth: existing balance grows full year, contributions average mid-year.
-      // Closed form: end_of_year = start_of_year × (1+r) + contrib × (1 + r × dcaFactor)
-      //   dcaFactor = 1   → start-of-year (legacy: full year on contributions)
-      //   dcaFactor = 0.5 → mid-year average (DCA approximation)
-      //   dcaFactor = 0   → end-of-year (no growth on contributions)
+      // (3) DCA growth (mid-year average by default)
       schdCAD = schdCAD * (1 + SCHD_CAGR) + schdBuy * (1 + SCHD_CAGR * dcaFactor);
       qldCAD  = qldCAD  * (1 + QLD_CAGR)  + qldBuy  * (1 + QLD_CAGR  * dcaFactor);
       sgovCAD = sgovCAD * (1 + SGOV_FIXED_CAGR) + annualSGOV * (1 + SGOV_FIXED_CAGR * dcaFactor);
       iaumCAD = iaumCAD * (1 + IAUM_FIXED_CAGR) + annualIAUM * (1 + IAUM_FIXED_CAGR * dcaFactor);
+      // TQQQ: grow at 3× SCHD CAGR proxy (leveraged Nasdaq); contributions are NOT scheduled — only crisis-trigger buys.
+      tqqqCAD = tqqqCAD * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR);
 
-      // (4) §10 Emergency cap (QLD core ≥ 38% → sell QLD to 30%).
-      let coreCAD = schdCAD + qldCAD;
-      let qldCoreWeight = coreCAD > 0 ? qldCAD / coreCAD : 0;
-      if (qldCoreWeight >= 0.38) {
-        const sale = Math.max(0, (qldCAD - 0.30 * coreCAD) / 0.70);
-        const totalAll = schdCAD + qldCAD + sgovCAD + iaumCAD;
-        const sgovGap = Math.max(0, totalAll * 0.05 - sgovCAD);
-        const sgovRefill = Math.min(sale, sgovGap);
-        const schdAdd = sale - sgovRefill;
-        qldCAD  -= sale;
-        sgovCAD += sgovRefill;
-        schdCAD += schdAdd;
-        emergencyCapApplied = true;
-        emergencyCount++;
+      // (4) Recompute weights for rulebook decisions
+      const totalNow = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
+      const w = computeRulebookWeights([
+        { ticker: "SCHD", valueCAD: schdCAD },
+        { ticker: "QLD",  valueCAD: qldCAD },
+        { ticker: "SGOV", valueCAD: sgovCAD },
+        { ticker: "IAUM", valueCAD: iaumCAD },
+        { ticker: "TQQQ", valueCAD: tqqqCAD },
+      ]);
+
+      // (5) Priority order per rulebook [14]: Hard Exit → Soft Exit → Crisis → Annual Rebal
+      if (w.hardExit) {
+        const plan = computeTqqqHardExitPlan({
+          schdCAD, qldCAD, tqqqCAD, sgovCAD, totalCAD: totalNow, hardExit: true,
+        });
+        if (plan.active) {
+          tqqqCAD -= plan.tqqqSaleCAD;
+          qldCAD  -= plan.qldSaleCAD;
+          sgovCAD += plan.sgovRefillCAD;
+          schdCAD += plan.schdBuyCAD;
+          hardExitApplied = true;
+          counts.hardExit++;
+        }
+      } else if (w.softExit) {
+        const plan = computeTqqqSoftExitPlan({
+          schdCAD, qldCAD, tqqqCAD, sgovCAD, totalCAD: totalNow, softExit: true,
+        });
+        if (plan.active) {
+          tqqqCAD -= plan.tqqqSaleCAD;
+          sgovCAD += plan.sgovRefillCAD;
+          schdCAD += plan.schdBuyCAD;
+          softExitApplied = true;
+          counts.softExit++;
+        }
       }
 
-      // (5) §9 Annual rebalance (Dec 31). Same proceeds order.
-      coreCAD = schdCAD + qldCAD;
-      qldCoreWeight = coreCAD > 0 ? qldCAD / coreCAD : 0;
-      if (!emergencyCapApplied && qldCoreWeight > 0.30) {
-        const sale = Math.max(0, (qldCAD - 0.30 * coreCAD) / 0.70);
-        const totalAll = schdCAD + qldCAD + sgovCAD + iaumCAD;
-        const sgovGap = Math.max(0, totalAll * 0.05 - sgovCAD);
-        const sgovRefill = Math.min(sale, sgovGap);
-        const schdAdd = sale - sgovRefill;
-        qldCAD  -= sale;
-        sgovCAD += sgovRefill;
-        schdCAD += schdAdd;
-        annualRebalanceApplied = true;
-        rebalanceCount++;
+      // Crisis trigger (independent — cycle gating prevents repeat within a cycle)
+      if (w.crisisT2 && cycleArmed && !t2Fired) {
+        const plan = computeCrisisTriggerPlan({
+          totalCAD: totalNow, sgovCAD, crisisT1: false, crisisT2: true, cycleArmed, tqqqCAD,
+        });
+        if (plan.active) {
+          sgovCAD -= plan.sgovSaleCAD;
+          tqqqCAD += plan.tqqqBuyCAD;
+          t1Fired = true; t2Fired = true;
+          crisisT2Applied = true;
+          counts.crisisT2++;
+        }
+      } else if (w.crisisT1 && cycleArmed && !t1Fired) {
+        const plan = computeCrisisTriggerPlan({
+          totalCAD: totalNow, sgovCAD, crisisT1: true, crisisT2: false, cycleArmed, tqqqCAD,
+        });
+        if (plan.active) {
+          sgovCAD -= plan.sgovSaleCAD;
+          tqqqCAD += plan.tqqqBuyCAD;
+          t1Fired = true;
+          crisisT1Applied = true;
+          counts.crisisT1++;
+        }
       }
 
-      // (6) Age-65 IAUM exit → buy QLD with proceeds (per business rule).
+      // Annual rebalance (Dec 31) — only when no Hard/Soft fired this year
+      if (!hardExitApplied && !softExitApplied) {
+        const w2 = computeRulebookWeights([
+          { ticker: "SCHD", valueCAD: schdCAD },
+          { ticker: "QLD",  valueCAD: qldCAD },
+          { ticker: "SGOV", valueCAD: sgovCAD },
+          { ticker: "IAUM", valueCAD: iaumCAD },
+          { ticker: "TQQQ", valueCAD: tqqqCAD },
+        ]);
+        const reb = computeAnnualRebalancePlan({
+          schdCAD, qldCAD, tqqqCAD, sgovCAD,
+          totalCAD: schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD,
+          caseAEligible: w2.caseAEligible,
+          caseBEligible: w2.caseBEligible,
+        });
+        if (reb.action === "case_a") {
+          qldCAD  -= reb.qldSaleCAD;
+          sgovCAD += reb.sgovDeltaCAD;
+          schdCAD += reb.schdBuyCAD;
+          caseAApplied = true;
+          counts.caseA++;
+        } else if (reb.action === "case_b") {
+          qldCAD += reb.qldBuyCAD;
+          sgovCAD += reb.sgovDeltaCAD;  // negative
+          caseBApplied = true;
+          counts.caseB++;
+        }
+      }
+
+      // (6) 65 IAUM exit → QLD
       const ageThisYear = input.currentAge != null ? input.currentAge + y : null;
       if (ageThisYear === 65 && iaumCAD > 0) {
         qldCAD += iaumCAD;
@@ -706,18 +783,25 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         iaumExitedEver = true;
       }
 
-      // (7) Dividend yield growth.
-      //   SCHD: full safeDivGrowth
-      //   QLD : safeDivGrowth × qldDgFactor (default half — QLD is growth-tilted, modest div bump)
-      //   SGOV: held flat (rate-sensitive, hard to project)
+      // (7) Dividend yield growth
       schdYld = schdYld * (1 + safeDivGrowth);
       qldYld  = qldYld  * (1 + safeDivGrowth * qldDgFactor);
 
-      // (8) Dividend snapshot — gross then net of withholding.
-      coreCAD = schdCAD + qldCAD;
-      const totalCAD = schdCAD + qldCAD + sgovCAD + iaumCAD;
+      // (8) Dividend snapshot (TQQQ pays effectively 0)
+      const coreCAD = schdCAD + qldCAD;
+      const totalCAD = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
       const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld;
       const annualDivNet = annualDivGross * (1 - taxWithhold);
+
+      // (9) Cycle reset: TQQQ=0 AND growth bucket ≥ 30 → re-arm
+      const growthBucketPctNow = totalCAD > 0 ? ((qldCAD + tqqqCAD) / totalCAD) * 100 : 0;
+      if (tqqqCAD <= 0 && growthBucketPctNow >= RULEBOOK_TARGETS.CYCLE_RESET_GROWTH_BUCKET_PCT) {
+        cycleArmed = true;
+        t1Fired = false;
+        t2Fired = false;
+      } else if (tqqqCAD > 0) {
+        cycleArmed = false;
+      }
 
       if (yearPointsClean.includes(y)) {
         points.push({
@@ -727,16 +811,22 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
           qldCAD:  Math.round(qldCAD),
           sgovCAD: Math.round(sgovCAD),
           iaumCAD: Math.round(iaumCAD),
+          tqqqCAD: Math.round(tqqqCAD),
           totalCAD: Math.round(totalCAD),
-          qldCoreWeightPct:   coreCAD > 0 ? Math.round((qldCAD  / coreCAD)  * 1000) / 10 : 0,
+          qldCoreWeightPct:   coreCAD > 0 ? Math.round((qldCAD / coreCAD) * 1000) / 10 : 0,
+          growthBucketPct:    Math.round(growthBucketPctNow * 10) / 10,
           sgovTotalWeightPct: totalCAD > 0 ? Math.round((sgovCAD / totalCAD) * 1000) / 10 : 0,
           iaumTotalWeightPct: totalCAD > 0 ? Math.round((iaumCAD / totalCAD) * 1000) / 10 : 0,
           annualDivCAD:       Math.round(annualDivNet),
           annualDivGrossCAD:  Math.round(annualDivGross),
           monthlyDivCAD:      Math.round(annualDivNet / 12),
           totalContribCAD: Math.round(cumContrib),
-          emergencyCapApplied,
-          annualRebalanceApplied,
+          hardExitApplied,
+          softExitApplied,
+          crisisT1Applied,
+          crisisT2Applied,
+          caseAApplied,
+          caseBApplied,
           iaumExited,
         });
       }
@@ -748,8 +838,12 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       cagrPct: scen.cagrPct,
       points,
       triggerCounts: {
-        emergencyCap: emergencyCount,
-        annualRebalance: rebalanceCount,
+        hardExit: counts.hardExit,
+        softExit: counts.softExit,
+        crisisT1: counts.crisisT1,
+        crisisT2: counts.crisisT2,
+        caseA: counts.caseA,
+        caseB: counts.caseB,
         iaumExited: iaumExitedEver,
       },
     };
