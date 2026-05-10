@@ -127,11 +127,14 @@ export function ProjectionCard() {
                     <tbody>
                       {activeRows.map((p) => {
                         const isRetirement = a?.retirementYear === p.year;
-                        // QLD core / annual rebalance UI removed per user request.
-                        // Keep emergency cap + IAUM 65 exit since those are critical actionable events.
-                        // Task 9 compile-fix: field rename only (emergencyCapApplied → hardExitApplied); row/label redesign is Task 10.
+                        // v4.1.10 event labels: §6.2 Hard/Soft Exit, §6.1 Crisis T1/T2, §5 Case A/B, age-65 IAUM exit.
                         const events: string[] = [];
-                        if (p.hardExitApplied) events.push("§10 긴급");
+                        if (p.hardExitApplied) events.push("§6.2 Hard");
+                        if (p.softExitApplied) events.push("§6.2 Soft");
+                        if (p.crisisT2Applied) events.push("§6.1 T2");
+                        else if (p.crisisT1Applied) events.push("§6.1 T1");
+                        if (p.caseAApplied) events.push("Case A");
+                        if (p.caseBApplied) events.push("Case B");
                         if (p.iaumExited) events.push("IAUM 65세 매도");
                         return (
                           <tr key={p.year} className={`border-b border-border/50 ${isRetirement ? "text-primary" : ""}`}>
@@ -160,11 +163,14 @@ export function ProjectionCard() {
                 <ul className="md:hidden grid grid-cols-2 gap-px bg-border border border-border">
                   {activeRows.map((p) => {
                     const isRetirement = a?.retirementYear === p.year;
-                    // Annual rebalance badge ("리밸") removed per user request.
-                    // Emergency cap + IAUM 65 exit kept (rare, actionable events).
-                    // Task 9 compile-fix: field rename only (emergencyCapApplied → hardExitApplied); row/label redesign is Task 10.
+                    // v4.1.10 event labels (short form for mobile).
                     const events: string[] = [];
-                    if (p.hardExitApplied) events.push("긴급");
+                    if (p.hardExitApplied) events.push("Hard");
+                    if (p.softExitApplied) events.push("Soft");
+                    if (p.crisisT2Applied) events.push("T2");
+                    else if (p.crisisT1Applied) events.push("T1");
+                    if (p.caseAApplied) events.push("Case A");
+                    if (p.caseBApplied) events.push("Case B");
                     if (p.iaumExited) events.push("IAUM exit");
                     return (
                       <li key={p.year} className={`bg-card px-3 py-2 ${isRetirement ? "text-primary" : ""}`}>
@@ -216,9 +222,9 @@ export function ProjectionCard() {
             )}
 
             <div className="text-[10px] text-muted-foreground space-y-0.5">
-              <div>* 룰북 v4.1.8 시나리오 고정 (Base 6 / Pess 4 / Worst 2). 낙관 시나리오 미사용.</div>
-              <div>* 매년 시뮬: §5 Method B → §6 SGOV refill (SGOV&lt;5%) → §7 IAUM (TFSA room + IAUM&lt;5%) → 연간 수익률 → §10 emergency cap (QLD core ≥38%) → §9 연간 리밸런스 → 65세 IAUM 청산 → SCHD 매도 금지</div>
-              <div>* 모델 한계: SCHD CAGR=시나리오 / QLD CAGR=시나리오×1.5 / SGOV=4% / IAUM=2%. 배당 yield는 SCHD 3.5%·QLD 0.5%·SGOV 4.5% 가정 후 SCHD만 dividend growth 적용. TFSA room은 horizon 동안 존재한다고 가정.</div>
+              <div>* 룰북 v4.1.10 시나리오 고정 (Base 6 / Pess 4 / Worst 2). 낙관 시나리오 미사용.</div>
+              <div>* 매년 시뮬: Method B → §6.2 Hard Exit (성장 버킷 ≥ 38%) → §6.2 Soft Exit (≥ 34%) → §6.1 Crisis (T1/T2 cycle-gated) → §5 연말 리밸런스 (Case A/B, ±1% 데드밴드) → 65세 IAUM exit. SCHD 매도 절대 금지.</div>
+              <div>* 모델 한계: SCHD CAGR=시나리오 / QLD CAGR=시나리오×1.5 / TQQQ CAGR=시나리오×3 / SGOV=4% / IAUM=2%. 배당 yield는 SCHD 3.5%·QLD 0.5%·SGOV 4.5% 가정 후 SCHD에만 dividend growth 적용. TFSA room은 horizon 동안 존재한다고 가정.</div>
             </div>
           </>
         )}

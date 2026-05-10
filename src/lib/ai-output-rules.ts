@@ -57,7 +57,6 @@ export const AI_OUTPUT_RULES = `
    sgovDeltaCAD → "SGOV 변동금액"
    sgovSaleCAD → "SGOV 매도금액"
    tqqqBuyCAD → "TQQQ 매수금액"
-   qldBuyCAD → "QLD 매수금액"
    postGrowthBucketPct → "매도 후 성장 버킷"
    postQldCoreWeightPct → "매도 후 QLD 코어 비중"
    postSgovTotalWeightPct → "매도 후 SGOV 비중"

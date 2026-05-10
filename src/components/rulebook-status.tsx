@@ -83,8 +83,13 @@ export function RulebookStatus() {
           <div className="px-3 py-2 text-[11px] text-negative">사유: {error}</div>
         )}
         {!loading && !error && data?.currentState && (
-          // Task 9 compile-fix: qldEmergencyPlan → tqqqExitPlan rename only; row/label redesign is Task 10.
-          <Body cs={data.currentState} qldEmergency={!!data.tqqqExitPlan?.active} iaumReason={data.iaumWeeklyPlan?.reason} />
+          <Body
+            cs={data.currentState}
+            tqqqExitActive={data.tqqqExitPlan?.active ? { variant: data.tqqqExitPlan.variant } : null}
+            crisisTriggerActive={data.crisisTriggerPlan?.active ? { tier: data.crisisTriggerPlan.tier } : null}
+            annualRebalanceAction={data.annualRebalancePlan?.action ?? null}
+            iaumReason={data.iaumWeeklyPlan?.reason}
+          />
         )}
       </div>
     </div>
@@ -93,103 +98,107 @@ export function RulebookStatus() {
 
 function Body({
   cs,
-  qldEmergency,
+  tqqqExitActive,
+  crisisTriggerActive,
+  annualRebalanceAction,
   iaumReason,
 }: {
   cs: CurrentState;
-  qldEmergency: boolean;
+  tqqqExitActive: { variant?: "soft" | "hard" } | null;
+  crisisTriggerActive: { tier?: "T1" | "T2" } | null;
+  annualRebalanceAction: "deadband" | "case_a" | "case_b" | "case_b_no_room" | null;
   iaumReason?: string;
 }) {
   const f = cs.flags;
 
-  // Annual rebalance: rulebook §9 — Dec 31 only when QLD core > 30%.
+  const hardExitStatus: Status = f.hardExit ? "applied" : "inactive";
+  const softExitStatus: Status = f.softExit ? "applied" : "inactive";
+  const crisisStatus: Status = f.crisisT2 ? "applied" : f.crisisT1 ? "applied" : "inactive";
+  const crisisHint = f.crisisT2 ? "T2 (≤20% core) — 누적 5%" : f.crisisT1 ? "T1 (≤25% core) — 2.5%" : "정상 범위";
+
+  const sgovTargetStatus: Status = f.sgovBelowTarget ? "pending" : "inactive";
+  const sgovTargetLabel  = f.sgovBelowTarget ? "필요 (<8% target)" : "불필요 (≥8%)";
+  const sgovFloorStatus: Status = f.sgovBelowFloor ? "applied" : "inactive";
+  const sgovFloorLabel   = f.sgovBelowFloor ? "위기 바닥 침범" : "안전";
+
   const today = new Date();
-  const isYearEnd = today.getMonth() === 11 && today.getDate() >= 25; // late December window
-  const annualEligible = cs.qldCoreWeightPct > 30;
-  const annualStatus: Status = isYearEnd && annualEligible
-    ? "pending"
-    : "inactive";
-  const annualLabel = isYearEnd && annualEligible
-    ? "예정 (12/31, QLD core > 30%)"
-    : annualEligible
-      ? "해당 없음 (12/31 외)"
-      : "해당 없음";
+  const isYearEnd = today.getMonth() === 11 && today.getDate() >= 25;
+  const annualStatus: Status =
+    annualRebalanceAction === "deadband" || annualRebalanceAction === null
+      ? (isYearEnd && (f.caseAEligible || f.caseBEligible) ? "pending" : "inactive")
+      : "applied";
+  const annualLabel = annualRebalanceAction === "case_a"
+    ? "Case A — QLD 매도 → SCHD"
+    : annualRebalanceAction === "case_b"
+      ? "Case B — SGOV → QLD"
+      : annualRebalanceAction === "case_b_no_room"
+        ? "Case B 차단 (SGOV 바닥)"
+        : f.inDeadband
+          ? "데드밴드 (29-31%, 무행동)"
+          : isYearEnd ? "예정 (12/31)" : "해당 없음 (12/31 외)";
 
-  // Task 9 compile-fix: legacy flag renames only — qldEmergencyCap→hardExit, qldCrisisTier1/2→crisisT1/2,
-  // sgovNeedsRefill→sgovBelowTarget. Hint text/labels (e.g. "<5% total") are stale under v4.1.10
-  // (sgovBelowTarget is < 8% now); Task 10 owns the copy + 7-row redesign.
-  const emergencyStatus: Status = f.hardExit || qldEmergency ? "applied" : "inactive";
-  const crisisStatus: Status =
-    f.crisisT2 ? "applied"
-      : f.crisisT1 ? "applied"
-        : "inactive";
-  const crisisHint = f.crisisT2 ? "2단계 (≤20% core)" : f.crisisT1 ? "1단계 (≤25% core)" : "정상 범위";
-
-  const sgovRefillStatus: Status = f.hardExit
-    ? "inactive"
-    : f.sgovBelowTarget ? "pending" : "inactive";
-  const sgovRefillLabel = f.hardExit
-    ? "비활성 (긴급 매도 진행)"
-    : f.sgovBelowTarget ? "필요 (<5% total)" : "불필요 (≥5% total)";
-
-  // IAUM buy condition: needs both TFSA room and IAUM<5%. Server reason already
-  // tells us why. We classify based on the reason text.
+  // IAUM (preserve existing logic from prior version)
   let iaumStatus: Status;
   let iaumLabel: string;
   if (iaumReason && iaumReason.startsWith("적용")) {
-    iaumStatus = "pending";
-    iaumLabel = "충족";
+    iaumStatus = "pending"; iaumLabel = "충족";
   } else if (iaumReason && iaumReason.startsWith("사용자 Settings 별도")) {
-    iaumStatus = "pending";
-    iaumLabel = "충족 (사용자)";
+    iaumStatus = "pending"; iaumLabel = "충족 (사용자)";
   } else if (iaumReason?.includes("TFSA 잔여한도 없음")) {
-    iaumStatus = "inactive";
-    iaumLabel = "미충족 (TFSA room 없음)";
+    iaumStatus = "inactive"; iaumLabel = "미충족 (TFSA room 없음)";
   } else if (iaumReason?.includes("IAUM 전체 비중")) {
-    iaumStatus = "inactive";
-    iaumLabel = "미충족 (IAUM ≥ 5%)";
+    iaumStatus = "inactive"; iaumLabel = "미충족 (IAUM ≥ 5%)";
   } else if (f.iaumAtCap) {
-    iaumStatus = "inactive";
-    iaumLabel = "미충족 (상한 도달)";
+    iaumStatus = "inactive"; iaumLabel = "미충족 (상한 도달)";
   } else if (!iaumReason) {
-    iaumStatus = "unverified";
-    iaumLabel = "확인 필요";
+    iaumStatus = "unverified"; iaumLabel = "확인 필요";
   } else {
-    iaumStatus = "inactive";
-    iaumLabel = "미충족";
+    iaumStatus = "inactive"; iaumLabel = "미충족";
   }
 
   return (
     <ul className="divide-y divide-border border border-border">
       <StatusRow
-        title="QLD Emergency Cap (§10)"
-        status={emergencyStatus}
-        statusLabel={emergencyStatus === "applied" ? "적용" : "미적용"}
-        hint={emergencyStatus === "applied" ? "다음 거래일 매도 → SGOV 5%까지 → SCHD" : "core < 38%"}
+        title="TQQQ Hard Exit (§6.2)"
+        status={hardExitStatus}
+        statusLabel={hardExitStatus === "applied" ? "적용 (성장 버킷 ≥ 38%)" : "미적용"}
+        hint="다음 거래일 TQQQ 전량 + QLD 30% → SGOV 8% → SCHD"
       />
       <StatusRow
-        title="QLD Crisis Trigger (§10)"
+        title="TQQQ Soft Exit (§6.2)"
+        status={softExitStatus}
+        statusLabel={softExitStatus === "applied" ? "적용 (성장 버킷 ≥ 34%)" : "미적용"}
+        hint="TQQQ 절반 매도 → SGOV 8% → SCHD"
+      />
+      <StatusRow
+        title="Crisis Trigger (§6.1, SGOV → TQQQ)"
         status={crisisStatus}
         statusLabel={crisisStatus === "applied" ? "적용" : "미적용"}
         hint={crisisHint}
       />
       <StatusRow
-        title="SGOV Refill (§6)"
-        status={sgovRefillStatus}
-        statusLabel={sgovRefillLabel}
-        hint="기준 = total portfolio 5%"
+        title="SGOV 보충 (§8, 8% 목표)"
+        status={sgovTargetStatus}
+        statusLabel={sgovTargetLabel}
+        hint={`현재 ${cs.sgovTotalWeightPct}% · 위기 바닥 5% 별도`}
       />
       <StatusRow
-        title="IAUM Buy Condition (§7)"
+        title="SGOV 위기 바닥 (§8, 5%)"
+        status={sgovFloorStatus}
+        statusLabel={sgovFloorLabel}
+        hint="§6.1만 침범 허용"
+      />
+      <StatusRow
+        title="IAUM Buy Condition (§3)"
         status={iaumStatus}
         statusLabel={iaumLabel}
-        hint="조건 = TFSA room 존재 AND IAUM < 5% total"
+        hint="조건 = TFSA room AND IAUM < 5%"
       />
       <StatusRow
-        title="Annual Rebalance (§9)"
+        title="연말 리밸런스 (§5, ±1% 데드밴드)"
         status={annualStatus}
         statusLabel={annualLabel}
-        hint="12월 31일에만, QLD core > 30%일 때"
+        hint="29 ≤ W ≤ 31% 무행동 / W > 31% Case A / W < 29% AND TQQQ=0 Case B"
       />
     </ul>
   );

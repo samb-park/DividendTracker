@@ -5,12 +5,9 @@ import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
 
 // Compact rebalancing/trigger snapshot. Renders ONLY a 4-stat dashboard so the
 // AI page header gives an at-a-glance status read. All detailed numbers
-// (Method B table, Non-Core CAD, QLD emergency plan, full trigger list, AI
+// (Method B table, Non-Core CAD, TQQQ exit plan, full trigger list, AI
 // narrative) live in ProjectionCard below — this component intentionally
 // avoids duplicating them.
-
-// Task 9 compile-fix: flag renames only (qldEmergencyCap→hardExit, qldCrisisTier1/2→crisisT1/2,
-// sgovNeedsRefill→sgovBelowTarget); Task 10 owns the 4-stat redesign and corrected copy.
 interface CurrentState {
   portfolioValueCAD: number;
   coreCAD: number;
@@ -97,17 +94,17 @@ export function AiTriggerSummary() {
   // page header captures the most critical action without duplicating the full
   // trigger list (which lives in ProjectionCard below).
   const qldSub = cs.flags.hardExit
-    ? "긴급 매도 (≥38% core, §10) — 아래 실행안 참고"
+    ? "TQQQ Hard Exit (성장 버킷 ≥ 38%, §6.2) — 아래 실행안 참고"
     : cs.flags.crisisT2
-      ? "2단계 위기 (≤20% core)"
+      ? "위기 트리거 T2 (≤20% core, §6.1)"
       : cs.flags.crisisT1
-        ? "1단계 위기 (≤25% core)"
+        ? "위기 트리거 T1 (≤25% core, §6.1, SGOV → TQQQ)"
         : "목표 30% (core)";
 
   return (
     <div className="border border-border bg-card">
       <div className="px-4 py-2 border-b border-border text-accent text-xs tracking-wide truncate">
-        ▶ REBALANCING / TRIGGER STATUS (RULEBOOK v4.1.8)
+        ▶ REBALANCING / TRIGGER STATUS (RULEBOOK v4.1.10)
       </div>
       <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
         <Stat label="총 평가금액"   value={fmtDollar(cs.portfolioValueCAD)} />
@@ -122,7 +119,7 @@ export function AiTriggerSummary() {
           label="SGOV 전체 비중"
           value={fmtPct(cs.sgovTotalWeightPct)}
           tone={cs.flags.sgovBelowTarget ? "amber" : "default"}
-          sub={cs.flags.sgovBelowTarget ? "보충 필요 (<5% total)" : "목표 5% total"}
+          sub={cs.flags.sgovBelowTarget ? "보충 필요 (<8% target)" : "목표 8% total"}
         />
       </div>
       <div className="px-4 pb-3 text-[10px] text-muted-foreground">
