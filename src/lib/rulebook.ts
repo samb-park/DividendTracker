@@ -264,6 +264,49 @@ export function computeTqqqSoftExitPlan(args: {
   return { active: true, tqqqSaleCAD: sale, qldSaleCAD: 0, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
 }
 
+// ── §6.2 Hard Exit — growth bucket ≥ 38% → all TQQQ + QLD to 30% core ───────
+// Sequence (rulebook [6.2]):
+//   1) Sell all TQQQ
+//   2) Sell QLD down to 30% of core
+//   3) Refill SGOV to 8% of total (combined proceeds)
+//   4) Remainder → SCHD
+// SCHD never sold. With TQQQ=0 this degrades to a Case-A-style QLD unwind.
+export function computeTqqqHardExitPlan(args: {
+  schdCAD: number;
+  qldCAD: number;
+  tqqqCAD: number;
+  sgovCAD: number;
+  totalCAD: number;
+  hardExit: boolean;
+}): TqqqExitPlan {
+  const inactive: TqqqExitPlan = {
+    active: false, tqqqSaleCAD: 0, qldSaleCAD: 0, sgovRefillCAD: 0, schdBuyCAD: 0, postGrowthBucketPct: 0,
+  };
+  if (!args.hardExit) return inactive;
+
+  const tqqqSale = Math.max(0, args.tqqqCAD);
+  const coreCAD = args.schdCAD + args.qldCAD;
+  const targetRatio = RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100;
+  // (Q - x) / (Core - x) = 0.30 → x = (Q - 0.30·Core) / 0.70
+  const qldSale = Math.max(0, (args.qldCAD - targetRatio * coreCAD) / (1 - targetRatio));
+
+  const proceeds = tqqqSale + qldSale;
+  if (proceeds <= 0) return inactive;
+
+  const sgovTargetCAD = (RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100) * Math.max(0, args.totalCAD);
+  const sgovGap = Math.max(0, sgovTargetCAD - Math.max(0, args.sgovCAD));
+  const sgovRefill = Math.min(proceeds, sgovGap);
+  const schdBuy = Math.max(0, proceeds - sgovRefill);
+
+  // Post-state: TQQQ=0, QLD reduced, SGOV refilled inside total (no total change).
+  const postTqqq = 0;
+  const postQld = args.qldCAD - qldSale;
+  const postTotal = args.totalCAD;
+  const postGrowthBucketPct = postTotal > 0 ? ((postQld + postTqqq) / postTotal) * 100 : 0;
+
+  return { active: true, tqqqSaleCAD: tqqqSale, qldSaleCAD: qldSale, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
+}
+
 // ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
 // Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
 // 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.
@@ -292,67 +335,6 @@ export function computeIaumWeeklyPlan(
     reason,
     tfsaRoomExists,
     iaumBelowCap,
-  };
-}
-
-// ── §10 QLD emergency cap (event-driven sale, NOT weekly) ──────────────────
-// Rule: QLD core weight ≥ 38% → 다음 거래일에 QLD를 30%로 매도.
-// Sale 산식: x = (qldCAD - 0.30·coreCAD) / 0.70  (post-sale 비중 정확히 30%로 맞춤).
-// Proceeds 분배: 1) SGOV를 total portfolio 5%까지 refill, 2) 남은 금액은 SCHD.
-// SGOV가 이미 5% 이상이면 전액 SCHD로 간다. SCHD 매도 절대 금지.
-export interface QldEmergencyPlan {
-  active: boolean;
-  qldSaleCAD: number;          // QLD 매도금액 (CAD)
-  sgovRefillCAD: number;       // proceeds → SGOV (5% 보충까지)
-  schdBuyCAD: number;          // 남은 proceeds → SCHD
-  postSaleQldCoreWeightPct: number; // 매도 후 QLD 코어 비중 (≈ 30)
-}
-
-export function computeQldEmergencyPlan(args: {
-  schdCAD: number;
-  qldCAD: number;
-  sgovCAD: number;
-  totalCAD: number;
-  qldEmergencyCap: boolean;    // qldCoreWeightPct >= 38
-}): QldEmergencyPlan {
-  const { schdCAD, qldCAD, sgovCAD, totalCAD, qldEmergencyCap } = args;
-  const inactive: QldEmergencyPlan = {
-    active: false,
-    qldSaleCAD: 0,
-    sgovRefillCAD: 0,
-    schdBuyCAD: 0,
-    postSaleQldCoreWeightPct: 0,
-  };
-  if (!qldEmergencyCap) return inactive;
-
-  const coreCAD = schdCAD + qldCAD;
-  const targetQldRatio = RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100; // 0.30
-  // (qldCAD - x) / (coreCAD - x) = 0.30 → x = (qldCAD - 0.30·coreCAD) / 0.70
-  const saleCAD = Math.max(0, (qldCAD - targetQldRatio * coreCAD) / (1 - targetQldRatio));
-  if (saleCAD <= 0) return inactive;
-
-  // SGOV refill: gap to 5% of TOTAL portfolio (sale is reinvested → total CAD unchanged).
-  const sgovTargetCAD = (RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100) * Math.max(0, totalCAD);
-  const sgovGapCAD = Math.max(0, sgovTargetCAD - Math.max(0, sgovCAD));
-  const sgovRefillCAD = Math.min(saleCAD, sgovGapCAD);
-  const schdBuyCAD = Math.max(0, saleCAD - sgovRefillCAD);
-
-  // Post-sale state:
-  //   SGOV refill leaves CORE (cash → SGOV) — core shrinks by sgovRefillCAD.
-  //   SCHD buy stays inside core.
-  // Post: SCHD' = schdCAD + (saleCAD - sgovRefillCAD), QLD' = qldCAD - saleCAD,
-  //       core' = coreCAD - sgovRefillCAD,
-  //       QLD core weight = QLD' / core'.
-  const postQld  = qldCAD - saleCAD;
-  const postCore = coreCAD - sgovRefillCAD;
-  const postPct  = postCore > 0 ? (postQld / postCore) * 100 : 0;
-
-  return {
-    active: true,
-    qldSaleCAD: saleCAD,
-    sgovRefillCAD,
-    schdBuyCAD,
-    postSaleQldCoreWeightPct: postPct,
   };
 }
 

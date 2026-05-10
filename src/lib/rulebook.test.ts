@@ -5,7 +5,7 @@ import {
   computeMethodBAllocation,
   computeIaumWeeklyPlan,
   computeTqqqSoftExitPlan,
-  computeQldEmergencyPlan,
+  computeTqqqHardExitPlan,
   projectScenarios,
   projectScenariosRulebook,
   RULEBOOK_TARGETS,
@@ -236,54 +236,6 @@ test("§7 IAUM weekly: not forced to 5% target (4.99% still applies 25 CAD)", ()
   // The rule is "below cap" not "below target" — at 4.99% the rule still buys 25.
   const p = computeIaumWeeklyPlan(true, 4.99);
   assert.equal(p.iaumBuyCAD, 25);
-});
-
-// ── computeQldEmergencyPlan (§10) ────────────────────────────────────────────
-test("§10 QLD emergency cap: inactive when below 38% core", () => {
-  const plan = computeQldEmergencyPlan({
-    schdCAD: 70, qldCAD: 30, sgovCAD: 5, totalCAD: 105, qldEmergencyCap: false,
-  });
-  assert.equal(plan.active, false);
-  assert.equal(plan.qldSaleCAD, 0);
-});
-
-test("§10 QLD sale brings core weight back to 30% exactly", () => {
-  // Core 100, QLD 38, SCHD 62 → core weight 38%
-  const plan = computeQldEmergencyPlan({
-    schdCAD: 62, qldCAD: 38, sgovCAD: 0, totalCAD: 100, qldEmergencyCap: true,
-  });
-  assert.ok(plan.active);
-  // Sale x: (38 - 0.30·100)/0.70 = 8/0.70 ≈ 11.4286
-  assert.ok(close(plan.qldSaleCAD, 8 / 0.70, 0.01), `sale=${plan.qldSaleCAD}`);
-  // Post-sale: QLD = 38 - 11.4286 = 26.5714, core unchanged 100, weight = 26.57%
-  // Wait — core SHOULD be unchanged because proceeds go to SCHD/SGOV (not back to QLD).
-  // But SGOV is outside core, so core reduces by sgovRefill amount.
-  // Pre: core=100. Sale 11.43. SGOV gap to 5 = 5. → 5 to SGOV (outside core), 6.43 to SCHD.
-  // Post: SCHD=62+6.43=68.43, QLD=26.57, core=95. QLD/core=26.57/95=27.97%.
-  // The helper documents postSaleQldCoreWeightPct as if proceeds all stay in core; clarify in helper.
-  // For now just verify proceeds split.
-  assert.ok(close(plan.sgovRefillCAD, 5, 0.01), `sgov refill=${plan.sgovRefillCAD}`);
-  assert.ok(close(plan.schdBuyCAD, plan.qldSaleCAD - 5, 0.01));
-});
-
-test("§10 QLD sale: SGOV already at 5% → all proceeds to SCHD", () => {
-  // Core 100 (SCHD 62, QLD 38), SGOV already 5.5 of total 105.5
-  const plan = computeQldEmergencyPlan({
-    schdCAD: 62, qldCAD: 38, sgovCAD: 5.5, totalCAD: 105.5, qldEmergencyCap: true,
-  });
-  assert.ok(plan.active);
-  assert.equal(plan.sgovRefillCAD, 0, "SGOV ≥ 5% → no refill");
-  assert.ok(close(plan.schdBuyCAD, plan.qldSaleCAD, 0.01));
-});
-
-test("§10 QLD sale: when sgovGap > sale amount, all proceeds to SGOV", () => {
-  // Tiny QLD overshoot, SGOV deeply under target
-  const plan = computeQldEmergencyPlan({
-    schdCAD: 62, qldCAD: 38, sgovCAD: 0, totalCAD: 100, qldEmergencyCap: true,
-  });
-  // sale ≈ 11.43, sgovGap = 5% of 100 = 5 → refill = 5, SCHD = 6.43 (sale > gap case)
-  assert.ok(plan.sgovRefillCAD <= plan.qldSaleCAD);
-  assert.ok(plan.schdBuyCAD >= 0);
 });
 
 // ── projectScenarios ─────────────────────────────────────────────────────────
@@ -569,6 +521,49 @@ test("§6.2 Soft Exit: when SGOV already at 8%, proceeds all → SCHD", () => {
   });
   assert.ok(plan.sgovRefillCAD === 0);
   assert.ok(close(plan.schdBuyCAD, plan.tqqqSaleCAD));
+});
+
+// ── computeTqqqHardExitPlan (§6.2 — full unwind when growth bucket ≥ 38) ────
+test("§6.2 Hard Exit: inactive when growth bucket < 38", () => {
+  const plan = computeTqqqHardExitPlan({
+    schdCAD: 60, qldCAD: 30, tqqqCAD: 0, sgovCAD: 10, totalCAD: 100, hardExit: false,
+  });
+  assert.equal(plan.active, false);
+});
+
+test("§6.2 Hard Exit: sells ALL TQQQ + QLD to 30% core, refills SGOV to 8%, remainder → SCHD", () => {
+  // Pre: SCHD 50, QLD 40, TQQQ 10, SGOV 0 → total 100, core 90, QLD core W = 44.4%, growth bucket = 50%
+  // Step 1: sell all TQQQ (10). Core after TQQQ sale doesn't change (TQQQ outside core).
+  // Step 2: QLD sale = (qld - 0.30 × core) / 0.70 = (40 - 27) / 0.70 = 18.57.
+  // Total proceeds = 10 (TQQQ) + 18.57 (QLD) = 28.57.
+  // SGOV gap to 8% (target) = 8. → 8 to SGOV, 20.57 to SCHD.
+  const plan = computeTqqqHardExitPlan({
+    schdCAD: 50, qldCAD: 40, tqqqCAD: 10, sgovCAD: 0, totalCAD: 100, hardExit: true,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(close(plan.tqqqSaleCAD, 10));
+  assert.ok(close(plan.qldSaleCAD, (40 - 27) / 0.70, 0.01));
+  assert.ok(close(plan.sgovRefillCAD, 8, 0.01));
+  assert.ok(plan.schdBuyCAD > 0);
+});
+
+test("§6.2 Hard Exit with TQQQ=0: degrades to QLD-only sale (Case A-like)", () => {
+  // No TQQQ, QLD overweight at 38% of core. Plan should still fire on hardExit flag.
+  // Hard exit cleanup: only QLD sale needed, SGOV up to 8% then SCHD.
+  // SCHD 62, QLD 38, total 100, core 100, QLD core = 38% (growth bucket = 38%)
+  const plan = computeTqqqHardExitPlan({
+    schdCAD: 62, qldCAD: 38, tqqqCAD: 0, sgovCAD: 0, totalCAD: 100, hardExit: true,
+  });
+  assert.equal(plan.active, true);
+  assert.equal(plan.tqqqSaleCAD, 0);
+  assert.ok(plan.qldSaleCAD > 0);
+});
+
+test("§6.2 Hard Exit: SCHD is never sold (post-exit invariant)", () => {
+  const plan = computeTqqqHardExitPlan({
+    schdCAD: 30, qldCAD: 50, tqqqCAD: 20, sgovCAD: 0, totalCAD: 100, hardExit: true,
+  });
+  assert.ok(plan.schdBuyCAD >= 0, `SCHD action must be buy-only, got ${plan.schdBuyCAD}`);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
