@@ -121,6 +121,8 @@ export function ProjectionCard() {
                         <th className="text-right py-1.5 px-2 font-normal">IAUM</th>
                         <th className="text-right py-1.5 px-2 font-normal">연배당</th>
                         <th className="text-right py-1.5 px-2 font-normal">월배당</th>
+                        <th className="text-right py-1.5 px-2 font-normal">인출</th>
+                        <th className="text-right py-1.5 px-2 font-normal">월 가용</th>
                         <th className="text-left  py-1.5 px-2 font-normal">이벤트</th>
                       </tr>
                     </thead>
@@ -151,6 +153,12 @@ export function ProjectionCard() {
                             <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.iaumCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive">{fmtCAD(p.annualDivCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive/80">{fmtCAD(p.monthlyDivCAD)}</td>
+                            <td className="text-right py-1.5 px-2 text-amber-500">
+                              {p.withdrawalCAD > 0 ? fmtCAD(p.withdrawalCAD) : "—"}
+                            </td>
+                            <td className="text-right py-1.5 px-2 text-primary">
+                              {p.monthlyCashflowCAD > 0 ? fmtCAD(p.monthlyCashflowCAD) : "—"}
+                            </td>
                             <td className="text-left  py-1.5 px-2 text-[10px] text-amber-500">{events.join(", ") || "—"}</td>
                           </tr>
                         );
@@ -200,6 +208,12 @@ export function ProjectionCard() {
                             <span>월배당</span>
                             <span className="text-positive/80 tabular-nums truncate">{fmtCAD(p.monthlyDivCAD)}</span>
                           </div>
+                          {p.monthlyCashflowCAD > 0 && (
+                            <div className="flex items-baseline justify-between gap-1">
+                              <span>월 가용</span>
+                              <span className="text-primary tabular-nums truncate">{fmtCAD(p.monthlyCashflowCAD)}</span>
+                            </div>
+                          )}
                           {events.length > 0 && (
                             <div className="text-[9px] text-amber-500">{events.join(" / ")}</div>
                           )}
@@ -223,8 +237,9 @@ export function ProjectionCard() {
 
             <div className="text-[10px] text-muted-foreground space-y-0.5">
               <div>* 룰북 v4.1.10 시나리오 고정 (Base 6 / Pess 4 / Worst 2). 낙관 시나리오 미사용.</div>
-              <div>* 매년 시뮬: Method B → §6.2 Hard Exit (성장 버킷 ≥ 38%) → §6.2 Soft Exit (≥ 34%) → §6.1 Crisis (T1/T2 cycle-gated) → §5 연말 리밸런스 (Case A/B, ±1% 데드밴드) → 65세 IAUM exit. SCHD 매도 절대 금지.</div>
+              <div>* 매년 시뮬: §11 RRSP 멜트다운 (60-71, 40K/년, SCHD 우선) → Method B → §6.2 Hard/Soft Exit → §6.1 Crisis (cycle-gated) → §5 연말 리밸런스 → §10 65세 IAUM exit → §10 배당 소비 (65+) → §16 펜션 합산 (65+, 가구 추정). SCHD 매도 금지 (멜트다운 인출은 예외, 룰북 [11]).</div>
               <div>* 모델 한계: SCHD CAGR=시나리오 / QLD CAGR=시나리오×1.5 / TQQQ CAGR=시나리오×3 / SGOV=4% / IAUM=2%. 배당 yield는 SCHD 3.5%·QLD 0.5%·SGOV 4.5% 가정 후 SCHD에만 dividend growth 적용. TFSA room은 horizon 동안 존재한다고 가정.</div>
+              <div>* 모든 CAD 수치는 세전·명목값. 인플레/세금/RRIF 의무 인출/CPP·OAS 연기는 미반영. 펜션 7,781은 가구 합산 추정값.</div>
             </div>
           </>
         )}
