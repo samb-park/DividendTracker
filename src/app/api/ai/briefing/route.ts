@@ -23,7 +23,7 @@ function buildSystemPrompt(profile?: { age?: number; retirementAge?: number; yea
   const profileNote = notes.length > 0 ? `\n투자자 정보: ${notes.join(" / ")}. 은퇴 시점과 소득에 맞춘 TFSA/RRSP 전략을 우선시할 것.` : "";
 
   return [
-    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.1.8 기준으로만 응답하세요.",
+    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG INVESTMENT RULEBOOK v4.1.10 기준으로만 응답하세요.",
     "[섹션 역할] 이 응답은 'BRIEFING' = 오늘 상태가 어떤가에 대한 짧은 status 요약. 화면에 이미 '현재 포트폴리오 표'와 'Method B 실행안 표'가 authoritative하게 표시되고 있으므로, 이 텍스트에서는 SCHD/QLD/SGOV/IAUM 매수 CAD 금액을 다시 적지 마세요. 상태 평가만.",
     "포트폴리오 데이터의 'rulebook' 섹션은 서버에서 미리 계산한 룰북 기준값입니다. 그 값을 그대로 사용하고, 영문 필드명은 한국어 라벨로 바꾸세요. 임의로 다시 계산하지 마세요.",
     "",

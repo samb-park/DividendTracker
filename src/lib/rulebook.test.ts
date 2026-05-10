@@ -503,21 +503,22 @@ test("projectScenariosRulebook: tax withholding produces lower net but unchanged
   assert.ok(ratio > 0.84 && ratio < 0.86, `expected ~0.85 ratio, got ${ratio.toFixed(4)}`);
 });
 
-test("projectScenariosRulebook: QLD div yield grows by qldDivGrowthFactor × dg per year", () => {
-  // qldDivGrowthFactor = 0 → QLD yield stays flat. = 1 → grows at full dg.
-  const flatQld = projectScenariosRulebook(baseProjectionInput({
+test("projectScenariosRulebook: yield held constant — dividend grows via balance × const yield only", () => {
+  // Yield growth model removed (it compounded with CAGR and produced unrealistic
+  // 90%+ yield-of-balance figures in 20yr horizons). qldDivGrowthFactor is now ignored.
+  // Same balance → same dividend regardless of qldDivGrowthFactor setting.
+  const a = projectScenariosRulebook(baseProjectionInput({
     qldDivGrowthFactor: 0,
     yearPoints: [10],
     maxYears: 10,
   })).find(s => s.id === "base")!.points[0];
-  const fullQld = projectScenariosRulebook(baseProjectionInput({
+  const b = projectScenariosRulebook(baseProjectionInput({
     qldDivGrowthFactor: 1,
     yearPoints: [10],
     maxYears: 10,
   })).find(s => s.id === "base")!.points[0];
-  // fullQld dividend should be greater than flatQld
-  assert.ok(fullQld.annualDivGrossCAD > flatQld.annualDivGrossCAD,
-    `full QLD dg ${fullQld.annualDivGrossCAD} should exceed flat ${flatQld.annualDivGrossCAD}`);
+  assert.equal(a.annualDivGrossCAD, b.annualDivGrossCAD,
+    `qldDivGrowthFactor must NOT affect dividend (got ${a.annualDivGrossCAD} vs ${b.annualDivGrossCAD})`);
 });
 
 test("projection: Case B fires when QLD core under 29 and TQQQ=0 (Sangbong path)", () => {

@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const profileNote = notes.length > 0 ? ` 투자자 정보: ${notes.join(", ")}. 이를 바탕으로 맞춤 조언.` : "";
 
   const systemPrompt = [
-    "캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.1.8 기준으로만 응답하세요.",
+    "캐나다 배당 투자 전문 어시스턴트. TFSA/RRSP/FHSA/NON_REG 계좌 전문가. SANGBONG INVESTMENT RULEBOOK v4.1.10 기준으로만 응답하세요.",
     "포트폴리오 데이터의 'rulebook' 섹션 값을 그대로 활용하고, 영문 필드명은 한국어 라벨로 바꾸세요.",
     "",
     RULEBOOK_GUARDRAILS,

@@ -841,11 +841,10 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         iaumExitedEver = true;
       }
 
-      // (7) Dividend yield growth
-      schdYld = schdYld * (1 + safeDivGrowth);
-      qldYld  = qldYld  * (1 + safeDivGrowth * qldDgFactor);
-
-      // (8) Dividend snapshot (TQQQ pays effectively 0)
+      // (7) Dividend snapshot (TQQQ pays effectively 0).
+      // Yield is held CONSTANT — dividend dollars grow via balance × yield (CAGR captures
+      // total return; multiplying yield by (1+divGrowth) on top compounds with CAGR and
+      // produces unrealistic 90%+ yield-of-balance figures in 20yr horizons.
       const coreCAD = schdCAD + qldCAD;
       const totalCAD = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
       const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld;

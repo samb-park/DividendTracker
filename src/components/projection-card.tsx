@@ -235,12 +235,6 @@ export function ProjectionCard() {
               </section>
             )}
 
-            <div className="text-[10px] text-muted-foreground space-y-0.5">
-              <div>* 룰북 v4.1.10 시나리오 고정 (Base 6 / Pess 4 / Worst 2). 낙관 시나리오 미사용.</div>
-              <div>* 매년 시뮬: §11 RRSP 멜트다운 (60-71, 40K/년, SCHD 우선) → Method B → §6.2 Hard/Soft Exit → §6.1 Crisis (cycle-gated) → §5 연말 리밸런스 → §10 65세 IAUM exit → §10 배당 소비 (65+) → §16 펜션 합산 (65+, 가구 추정). SCHD 매도 금지 (멜트다운 인출은 예외, 룰북 [11]).</div>
-              <div>* 모델 한계: SCHD CAGR=시나리오 / QLD CAGR=시나리오×1.5 / TQQQ CAGR=시나리오×3 / SGOV=4% / IAUM=2%. 배당 yield는 SCHD 3.5%·QLD 0.5%·SGOV 4.5% 가정 후 SCHD에만 dividend growth 적용. TFSA room은 horizon 동안 존재한다고 가정.</div>
-              <div>* 모든 CAD 수치는 세전·명목값. 인플레/세금/RRIF 의무 인출/CPP·OAS 연기는 미반영. 펜션 7,781은 가구 합산 추정값.</div>
-            </div>
           </>
         )}
       </div>
