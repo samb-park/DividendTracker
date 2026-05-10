@@ -1,0 +1,632 @@
+// SANGBONG INVESTMENT RULEBOOK v4.1.10 calculation helpers.
+// Pure functions; all CAD-normalized inputs; all output is JSON-serializable.
+//
+// Rule references (v4.1.10):
+//  - Core         = SCHD + QLD (excluding SGOV, IAUM, TQQQ)
+//  - QLD weight   = QLD / (SCHD + QLD)            ← Core basis
+//  - Growth bucket= (QLD + TQQQ) / TotalPortfolio ← Total basis
+//  - SGOV weight  = SGOV / TotalPortfolio         ← Total basis (target 8%, crisis floor 5%)
+//  - IAUM weight  = IAUM / TotalPortfolio         ← Total basis (cap 5%)
+//  - Scenarios    : Base 6%, Pessimistic 4%, Worst 2%  (no optimistic)
+//  - TQQQ         : Overlay-only (per §15). Starts at 0; bought via §6.1 crisis trigger, sold via §6.2 exit ladder.
+
+export const RULEBOOK_TICKERS = {
+  CORE: ["SCHD", "QLD"] as const,
+  RESERVE: ["SGOV", "IAUM"] as const,
+  OVERLAY: ["TQQQ"] as const,
+};
+
+/** True when the ticker is a Non-Core (reserve) asset such as SGOV or IAUM. */
+export function isNonCoreTicker(ticker: string): boolean {
+  const t = (ticker ?? "").toUpperCase();
+  return (RULEBOOK_TICKERS.RESERVE as readonly string[]).includes(t);
+}
+
+export const RULEBOOK_TARGETS = {
+  SCHD_OF_CORE_PCT: 70,
+  QLD_OF_CORE_PCT:  30,
+  // §5 annual rebalance deadband
+  REBAL_HIGH_PCT: 31,   // W > 31% → Case A
+  REBAL_LOW_PCT:  29,   // W < 29% AND TQQQ=0 → Case B
+  // §6.1 crisis triggers (core basis)
+  CRISIS_T1_PCT: 25,    // core W ≤ 25% → 2.5% total → TQQQ
+  CRISIS_T2_PCT: 20,    // core W ≤ 20% → additional 2.5% total → TQQQ
+  CRISIS_T1_BUY_PCT_OF_TOTAL: 2.5,
+  CRISIS_T2_BUY_PCT_OF_TOTAL: 2.5,
+  CYCLE_RESET_GROWTH_BUCKET_PCT: 30,  // TQQQ=0 AND growth bucket ≥ 30% → cycle re-armed
+  // §6.2 TQQQ exit ladder (growth-bucket basis)
+  SOFT_EXIT_GROWTH_BUCKET_PCT: 34,    // sell HALF of TQQQ
+  HARD_EXIT_GROWTH_BUCKET_PCT: 38,    // sell ALL TQQQ + QLD to 30%
+  // SGOV
+  SGOV_TARGET_PCT: 8,                 // §8 normal target / Soft & Hard Exit refill ceiling
+  SGOV_FLOOR_PCT:  5,                 // §8 crisis floor — only §6.1 may pierce
+  // IAUM
+  IAUM_MAX_PCT: 5,
+  // Weekly contributions ([3])
+  IAUM_WEEKLY_BUY_CAD: 25,
+  SGOV_WEEKLY_REFILL_CAD: 50,
+  CORE_WEEKLY_CAD: 350,
+};
+
+export const RULEBOOK_SCENARIOS = [
+  { id: "base",        label: "BASE",        cagrPct: 6 },
+  { id: "pessimistic", label: "PESSIMISTIC", cagrPct: 4 },
+  { id: "worst",       label: "WORST",       cagrPct: 2 },
+] as const;
+
+export type RulebookScenarioId = typeof RULEBOOK_SCENARIOS[number]["id"];
+
+export interface RulebookHoldingValue {
+  ticker: string;
+  valueCAD: number;
+}
+
+export interface RulebookWeights {
+  totalCAD: number;
+  coreCAD: number;             // SCHD + QLD
+  schdCAD: number;
+  qldCAD: number;
+  sgovCAD: number;
+  iaumCAD: number;
+  tqqqCAD: number;             // overlay asset; 0 when no holding
+  // Core basis
+  qldCoreWeightPct: number;    // QLD / (SCHD + QLD) × 100
+  schdCoreWeightPct: number;
+  // Total basis
+  growthBucketPct: number;     // (QLD + TQQQ) / Total × 100
+  sgovTotalWeightPct: number;
+  iaumTotalWeightPct: number;
+  tqqqTotalWeightPct: number;
+  // Trigger flags
+  inDeadband: boolean;          // 29 ≤ QLD core W ≤ 31 → no annual rebal action
+  caseAEligible: boolean;       // QLD core W > 31 (regardless of overlay)
+  caseBEligible: boolean;       // QLD core W < 29 AND TQQQ = 0
+  hardExit: boolean;            // growth bucket ≥ 38
+  softExit: boolean;            // growth bucket ≥ 34 (and not hard)
+  crisisT1: boolean;            // 20 < core W ≤ 25
+  crisisT2: boolean;            // core W ≤ 20
+  cycleArmable: boolean;        // TQQQ=0 AND growth bucket ≥ 30  (cycle reset condition met)
+  sgovBelowTarget: boolean;     // SGOV total W < 8
+  sgovBelowFloor: boolean;      // SGOV total W < 5  (warning state)
+  iaumAtCap: boolean;
+}
+
+function pct(numerator: number, denominator: number): number {
+  if (!isFinite(denominator) || denominator <= 0) return 0;
+  return (numerator / denominator) * 100;
+}
+
+function findValue(holdings: RulebookHoldingValue[], ticker: string): number {
+  const t = ticker.toUpperCase();
+  return holdings
+    .filter(h => h.ticker.toUpperCase() === t)
+    .reduce((sum, h) => sum + (isFinite(h.valueCAD) ? h.valueCAD : 0), 0);
+}
+
+export function computeRulebookWeights(holdings: RulebookHoldingValue[]): RulebookWeights {
+  const schdCAD = findValue(holdings, "SCHD");
+  const qldCAD  = findValue(holdings, "QLD");
+  const sgovCAD = findValue(holdings, "SGOV");
+  const iaumCAD = findValue(holdings, "IAUM");
+  const allCAD  = holdings.reduce((s, h) => s + (isFinite(h.valueCAD) ? h.valueCAD : 0), 0);
+  const coreCAD = schdCAD + qldCAD;
+
+  const qldCoreWeightPct  = pct(qldCAD, coreCAD);
+  const schdCoreWeightPct = pct(schdCAD, coreCAD);
+  const sgovTotalWeightPct = pct(sgovCAD, allCAD);
+  const iaumTotalWeightPct = pct(iaumCAD, allCAD);
+
+  return {
+    totalCAD: allCAD,
+    coreCAD,
+    schdCAD,
+    qldCAD,
+    sgovCAD,
+    iaumCAD,
+    qldCoreWeightPct,
+    schdCoreWeightPct,
+    sgovTotalWeightPct,
+    iaumTotalWeightPct,
+    qldEmergencyCap: qldCoreWeightPct >= RULEBOOK_TARGETS.QLD_EMERGENCY_CAP_PCT,
+    qldCrisisTier1:  qldCoreWeightPct <= RULEBOOK_TARGETS.QLD_CRISIS_T1_PCT && qldCoreWeightPct > RULEBOOK_TARGETS.QLD_CRISIS_T2_PCT,
+    qldCrisisTier2:  qldCoreWeightPct <= RULEBOOK_TARGETS.QLD_CRISIS_T2_PCT,
+    sgovNeedsRefill: sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_TARGET_PCT,
+    iaumAtCap:       iaumTotalWeightPct >= RULEBOOK_TARGETS.IAUM_MAX_PCT,
+  };
+}
+
+// ── Method B (no-sell) Core allocation ───────────────────────────────────────
+export interface MethodBAllocation {
+  contributionCAD: number;
+  schdValueCAD: number;
+  qldValueCAD: number;
+  targetCoreCAD: number;
+  targetSchdCAD: number;
+  targetQldCAD: number;
+  schdShortCAD: number;        // never negative (no-sell)
+  qldShortCAD: number;         // never negative (no-sell)
+  schdBuyCAD: number;
+  qldBuyCAD: number;
+  unallocatedCAD: number;      // when both at/above target → carries to next week
+}
+
+export function computeMethodBAllocation(
+  schdValueCAD: number,
+  qldValueCAD: number,
+  contributionCAD: number,
+): MethodBAllocation {
+  const C = Math.max(0, isFinite(contributionCAD) ? contributionCAD : 0);
+  const S = Math.max(0, isFinite(schdValueCAD) ? schdValueCAD : 0);
+  const Q = Math.max(0, isFinite(qldValueCAD) ? qldValueCAD : 0);
+  const targetCore = S + Q + C;
+  const targetSchd = (RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100) * targetCore;
+  const targetQld  = (RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100) * targetCore;
+  const schdShort = Math.max(0, targetSchd - S);   // no-sell clamp
+  const qldShort  = Math.max(0, targetQld  - Q);
+  const totalShort = schdShort + qldShort;
+
+  let schdBuy = 0;
+  let qldBuy = 0;
+  let unallocated = 0;
+
+  if (totalShort <= 0 || C <= 0) {
+    unallocated = C;
+  } else if (totalShort >= C) {
+    // proportional shortfall
+    schdBuy = (schdShort / totalShort) * C;
+    qldBuy  = (qldShort  / totalShort) * C;
+  } else {
+    // contribution exceeds total shortfall — fill shortfalls, leave the rest unallocated
+    schdBuy = schdShort;
+    qldBuy  = qldShort;
+    unallocated = C - totalShort;
+  }
+
+  return {
+    contributionCAD: C,
+    schdValueCAD: S,
+    qldValueCAD: Q,
+    targetCoreCAD: targetCore,
+    targetSchdCAD: targetSchd,
+    targetQldCAD:  targetQld,
+    schdShortCAD: schdShort,
+    qldShortCAD:  qldShort,
+    schdBuyCAD: schdBuy,
+    qldBuyCAD:  qldBuy,
+    unallocatedCAD: unallocated,
+  };
+}
+
+// ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
+// Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
+// 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.
+// IAUM은 forced allocation이 아니므로 5% 보정 매수도 절대 금지.
+export interface IaumWeeklyPlan {
+  iaumBuyCAD: number;          // 0 또는 25
+  redirectedToCoreCAD: number; // IAUM 미적용 시 25 (Method B로 재투입)
+  reason: string;              // 한국어 사유 ("적용" / "TFSA room 없음" / "IAUM ≥ 5%")
+  tfsaRoomExists: boolean;
+  iaumBelowCap: boolean;
+}
+
+export function computeIaumWeeklyPlan(
+  tfsaRoomExists: boolean,
+  iaumTotalWeightPct: number,
+): IaumWeeklyPlan {
+  const cap = RULEBOOK_TARGETS.IAUM_WEEKLY_BUY_CAD;
+  const iaumBelowCap = iaumTotalWeightPct < RULEBOOK_TARGETS.IAUM_MAX_PCT;
+  const conditionsMet = tfsaRoomExists && iaumBelowCap;
+  let reason = "적용";
+  if (!tfsaRoomExists) reason = "TFSA 잔여한도 없음 → Method B로 재투입";
+  else if (!iaumBelowCap) reason = "IAUM 전체 비중 ≥ 5% (상한 도달) → Method B로 재투입";
+  return {
+    iaumBuyCAD:           conditionsMet ? cap : 0,
+    redirectedToCoreCAD:  conditionsMet ? 0   : cap,
+    reason,
+    tfsaRoomExists,
+    iaumBelowCap,
+  };
+}
+
+// ── §10 QLD emergency cap (event-driven sale, NOT weekly) ──────────────────
+// Rule: QLD core weight ≥ 38% → 다음 거래일에 QLD를 30%로 매도.
+// Sale 산식: x = (qldCAD - 0.30·coreCAD) / 0.70  (post-sale 비중 정확히 30%로 맞춤).
+// Proceeds 분배: 1) SGOV를 total portfolio 5%까지 refill, 2) 남은 금액은 SCHD.
+// SGOV가 이미 5% 이상이면 전액 SCHD로 간다. SCHD 매도 절대 금지.
+export interface QldEmergencyPlan {
+  active: boolean;
+  qldSaleCAD: number;          // QLD 매도금액 (CAD)
+  sgovRefillCAD: number;       // proceeds → SGOV (5% 보충까지)
+  schdBuyCAD: number;          // 남은 proceeds → SCHD
+  postSaleQldCoreWeightPct: number; // 매도 후 QLD 코어 비중 (≈ 30)
+}
+
+export function computeQldEmergencyPlan(args: {
+  schdCAD: number;
+  qldCAD: number;
+  sgovCAD: number;
+  totalCAD: number;
+  qldEmergencyCap: boolean;    // qldCoreWeightPct >= 38
+}): QldEmergencyPlan {
+  const { schdCAD, qldCAD, sgovCAD, totalCAD, qldEmergencyCap } = args;
+  const inactive: QldEmergencyPlan = {
+    active: false,
+    qldSaleCAD: 0,
+    sgovRefillCAD: 0,
+    schdBuyCAD: 0,
+    postSaleQldCoreWeightPct: 0,
+  };
+  if (!qldEmergencyCap) return inactive;
+
+  const coreCAD = schdCAD + qldCAD;
+  const targetQldRatio = RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100; // 0.30
+  // (qldCAD - x) / (coreCAD - x) = 0.30 → x = (qldCAD - 0.30·coreCAD) / 0.70
+  const saleCAD = Math.max(0, (qldCAD - targetQldRatio * coreCAD) / (1 - targetQldRatio));
+  if (saleCAD <= 0) return inactive;
+
+  // SGOV refill: gap to 5% of TOTAL portfolio (sale is reinvested → total CAD unchanged).
+  const sgovTargetCAD = (RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100) * Math.max(0, totalCAD);
+  const sgovGapCAD = Math.max(0, sgovTargetCAD - Math.max(0, sgovCAD));
+  const sgovRefillCAD = Math.min(saleCAD, sgovGapCAD);
+  const schdBuyCAD = Math.max(0, saleCAD - sgovRefillCAD);
+
+  // Post-sale state:
+  //   SGOV refill leaves CORE (cash → SGOV) — core shrinks by sgovRefillCAD.
+  //   SCHD buy stays inside core.
+  // Post: SCHD' = schdCAD + (saleCAD - sgovRefillCAD), QLD' = qldCAD - saleCAD,
+  //       core' = coreCAD - sgovRefillCAD,
+  //       QLD core weight = QLD' / core'.
+  const postQld  = qldCAD - saleCAD;
+  const postCore = coreCAD - sgovRefillCAD;
+  const postPct  = postCore > 0 ? (postQld / postCore) * 100 : 0;
+
+  return {
+    active: true,
+    qldSaleCAD: saleCAD,
+    sgovRefillCAD,
+    schdBuyCAD,
+    postSaleQldCoreWeightPct: postPct,
+  };
+}
+
+// ── Three-scenario forward projection (rulebook-fixed CAGR) ──────────────────
+export interface ProjectionYearPoint {
+  year: number;
+  yearsFromNow: number;
+  portfolioCAD: number;
+  annualDivCAD: number;
+  monthlyDivCAD: number;
+  totalContribCAD: number;
+}
+
+export interface ProjectionScenario {
+  id: RulebookScenarioId;
+  label: string;
+  cagrPct: number;
+  points: ProjectionYearPoint[];
+}
+
+// ── Rulebook-based per-asset projection (v2) ───────────────────────────────────
+// Year-by-year simulation that actually applies §5 Method B, §6 SGOV refill,
+// §7 IAUM gating, §10 emergency cap, §9 annual rebalance, and the age-65
+// IAUM exit. Per-asset CAD evolves over time so that QLD core weight, SGOV
+// total weight, and IAUM total weight can be tracked against the rulebook
+// thresholds in every projected year.
+//
+// Per-asset CAGR model (assumption — document as 모델 한계):
+//   SCHD CAGR = scenario CAGR (0.06 / 0.04 / 0.02)
+//   QLD  CAGR = scenario CAGR × 1.5 (rough leverage proxy; 2x daily-reset decays)
+//   SGOV CAGR = 0.04 (T-bill / cash-equivalent)
+//   IAUM CAGR = 0.02 (long-term real gold)
+//
+// Yields (annual dividend / price) for each asset are caller-provided, then
+// SCHD yield grows by safeDivGrowth each year (dividend growth assumption).
+// QLD / SGOV / IAUM yields stay flat in this simple model.
+export interface ProjectionStartStateV2 {
+  schdCAD: number;
+  qldCAD: number;
+  sgovCAD: number;
+  iaumCAD: number;
+  schdYieldPct: number;   // e.g. 3.5
+  qldYieldPct: number;    // e.g. 0.5
+  sgovYieldPct: number;   // e.g. 4.5
+  // IAUM yield = 0 (gold pays no dividend)
+}
+
+export interface ProjectionInputV2 {
+  start: ProjectionStartStateV2;
+  /** Plan amount (Core only) per week, CAD. Distributed via Method B to SCHD/QLD. */
+  coreWeeklyCAD: number;
+  /** Settings nonCorePlan.cad for SGOV (per Plan period). 0 if not set. */
+  sgovWeeklyCAD: number;
+  /** Settings nonCorePlan.cad for IAUM (per Plan period). 0 if not set. */
+  iaumWeeklyCAD: number;
+  /** Whether TFSA room remains; assumed constant for projection horizon (model 한계). */
+  tfsaRoomExists: boolean;
+  /** User's current age, for age-65 IAUM exit. Null → no exit modelled. */
+  currentAge: number | null;
+  /** Annual dividend growth rate %, capped 0-20. */
+  divGrowthPct: number;
+  /** Years-from-now to surface in the output table (e.g. [1, 5, 10, 20]). */
+  yearPoints: number[];
+  /** Maximum projection horizon in years. */
+  maxYears: number;
+  // ── Optional refinements (defaults match prior behaviour) ────────────────
+  /** When SGOV/IAUM gating fails, redirect that contribution into Core Method B. Default: true (rulebook §7). */
+  redirectGatedToCore?: boolean;
+  /** Effective dividend-growth factor applied to QLD yield each year (multiplied by safeDivGrowth). Default 0.5. */
+  qldDivGrowthFactor?: number;
+  /** DCA timing factor for new contributions: 0 = end-of-year (no growth), 0.5 = mid-year average, 1 = start-of-year (full growth). Default 0.5. */
+  dcaContributionFactor?: number;
+  /** Withholding tax % to subtract from annualDiv for net-of-tax display. Default 0 (gross). 15 = typical US-ETF in TFSA. */
+  taxWithholdPct?: number;
+}
+
+export interface ProjectionYearPointV2 {
+  year: number;
+  yearsFromNow: number;
+  schdCAD: number;
+  qldCAD: number;
+  sgovCAD: number;
+  iaumCAD: number;
+  totalCAD: number;
+  qldCoreWeightPct: number;
+  sgovTotalWeightPct: number;
+  iaumTotalWeightPct: number;
+  /** Net-of-withholding-tax annual dividend (taxWithholdPct subtracted). */
+  annualDivCAD: number;
+  /** Gross annual dividend (before withholding tax). */
+  annualDivGrossCAD: number;
+  monthlyDivCAD: number;
+  totalContribCAD: number;
+  emergencyCapApplied: boolean;
+  annualRebalanceApplied: boolean;
+  iaumExited: boolean;
+}
+
+export interface ProjectionScenarioV2 {
+  id: RulebookScenarioId;
+  label: string;
+  cagrPct: number;
+  points: ProjectionYearPointV2[];
+  /** Total times each rulebook trigger fired across the horizon. */
+  triggerCounts: {
+    emergencyCap: number;
+    annualRebalance: number;
+    iaumExited: boolean;
+  };
+}
+
+const SGOV_FIXED_CAGR = 0.04;
+const IAUM_FIXED_CAGR = 0.02;
+const QLD_LEVERAGE_FACTOR = 1.5;
+
+export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionScenarioV2[] {
+  const startYear = new Date().getFullYear();
+  const safeDivGrowth = Math.max(0, Math.min(20, input.divGrowthPct)) / 100;
+  const yearPointsClean = Array.from(new Set(
+    input.yearPoints.filter(y => Number.isFinite(y) && y > 0 && y <= input.maxYears),
+  )).sort((a, b) => a - b);
+
+  // Optional knobs with defaults preserving prior behaviour where useful.
+  const redirectGated = input.redirectGatedToCore ?? true;
+  const qldDgFactor = Math.max(0, Math.min(1, input.qldDivGrowthFactor ?? 0.5));
+  const dcaFactor = Math.max(0, Math.min(1, input.dcaContributionFactor ?? 0.5));
+  const taxWithhold = Math.max(0, Math.min(50, input.taxWithholdPct ?? 0)) / 100;
+
+  return RULEBOOK_SCENARIOS.map(scen => {
+    const SCHD_CAGR = scen.cagrPct / 100;
+    const QLD_CAGR = SCHD_CAGR * QLD_LEVERAGE_FACTOR;
+
+    let schdCAD = Math.max(0, input.start.schdCAD);
+    let qldCAD  = Math.max(0, input.start.qldCAD);
+    let sgovCAD = Math.max(0, input.start.sgovCAD);
+    let iaumCAD = Math.max(0, input.start.iaumCAD);
+    let schdYld = Math.max(0, input.start.schdYieldPct) / 100;
+    let qldYld  = Math.max(0, input.start.qldYieldPct)  / 100;
+    const sgovYld = Math.max(0, input.start.sgovYieldPct) / 100;  // T-bill rate; held flat
+    let cumContrib = 0;
+    let emergencyCount = 0;
+    let rebalanceCount = 0;
+    let iaumExitedEver = false;
+
+    const points: ProjectionYearPointV2[] = [];
+
+    for (let y = 1; y <= input.maxYears; y++) {
+      let emergencyCapApplied = false;
+      let annualRebalanceApplied = false;
+      let iaumExited = false;
+
+      // (1) Annual contribution amounts. Non-Core gated by §6/§7 conditions.
+      let annualCore = Math.max(0, input.coreWeeklyCAD * 52);
+      const totalForGate = schdCAD + qldCAD + sgovCAD + iaumCAD;
+      const sgovPctOfTotal = totalForGate > 0 ? sgovCAD / totalForGate : 1;
+      const iaumPctOfTotal = totalForGate > 0 ? iaumCAD / totalForGate : 1;
+      const sgovPlanned = Math.max(0, input.sgovWeeklyCAD * 52);
+      const iaumPlanned = Math.max(0, input.iaumWeeklyCAD * 52);
+      const sgovGated = !(sgovPctOfTotal < 0.05);
+      const iaumGated = !(iaumPctOfTotal < 0.05 && input.tfsaRoomExists);
+      const annualSGOV = sgovGated ? 0 : sgovPlanned;
+      const annualIAUM = iaumGated ? 0 : iaumPlanned;
+      // §6/§7 redirect: when Non-Core is gated and the option is on, fold the planned
+      // amount back into Core Method B so the user's total weekly outflow keeps deploying.
+      if (redirectGated) {
+        if (sgovGated) annualCore += sgovPlanned;
+        if (iaumGated) annualCore += iaumPlanned;
+      }
+      cumContrib += annualCore + annualSGOV + annualIAUM;
+
+      // (2) §5 Method B for Core — proportional shortfall to 70/30.
+      const postCorePool = schdCAD + qldCAD + annualCore;
+      const targetSchd = postCorePool * 0.70;
+      const targetQld  = postCorePool * 0.30;
+      const schdShort = Math.max(0, targetSchd - schdCAD);
+      const qldShort  = Math.max(0, targetQld  - qldCAD);
+      const totalShort = schdShort + qldShort;
+      let schdBuy = 0;
+      let qldBuy = 0;
+      if (totalShort >= annualCore && totalShort > 0) {
+        schdBuy = annualCore * (schdShort / totalShort);
+        qldBuy  = annualCore * (qldShort  / totalShort);
+      } else if (totalShort > 0) {
+        schdBuy = schdShort;
+        qldBuy  = qldShort;
+        const leftover = annualCore - schdShort - qldShort;
+        schdBuy += leftover * 0.70;
+        qldBuy  += leftover * 0.30;
+      } else {
+        schdBuy = annualCore * 0.70;
+        qldBuy  = annualCore * 0.30;
+      }
+
+      // (3) DCA-aware growth: existing balance grows full year, contributions average mid-year.
+      // Closed form: end_of_year = start_of_year × (1+r) + contrib × (1 + r × dcaFactor)
+      //   dcaFactor = 1   → start-of-year (legacy: full year on contributions)
+      //   dcaFactor = 0.5 → mid-year average (DCA approximation)
+      //   dcaFactor = 0   → end-of-year (no growth on contributions)
+      schdCAD = schdCAD * (1 + SCHD_CAGR) + schdBuy * (1 + SCHD_CAGR * dcaFactor);
+      qldCAD  = qldCAD  * (1 + QLD_CAGR)  + qldBuy  * (1 + QLD_CAGR  * dcaFactor);
+      sgovCAD = sgovCAD * (1 + SGOV_FIXED_CAGR) + annualSGOV * (1 + SGOV_FIXED_CAGR * dcaFactor);
+      iaumCAD = iaumCAD * (1 + IAUM_FIXED_CAGR) + annualIAUM * (1 + IAUM_FIXED_CAGR * dcaFactor);
+
+      // (4) §10 Emergency cap (QLD core ≥ 38% → sell QLD to 30%).
+      let coreCAD = schdCAD + qldCAD;
+      let qldCoreWeight = coreCAD > 0 ? qldCAD / coreCAD : 0;
+      if (qldCoreWeight >= 0.38) {
+        const sale = Math.max(0, (qldCAD - 0.30 * coreCAD) / 0.70);
+        const totalAll = schdCAD + qldCAD + sgovCAD + iaumCAD;
+        const sgovGap = Math.max(0, totalAll * 0.05 - sgovCAD);
+        const sgovRefill = Math.min(sale, sgovGap);
+        const schdAdd = sale - sgovRefill;
+        qldCAD  -= sale;
+        sgovCAD += sgovRefill;
+        schdCAD += schdAdd;
+        emergencyCapApplied = true;
+        emergencyCount++;
+      }
+
+      // (5) §9 Annual rebalance (Dec 31). Same proceeds order.
+      coreCAD = schdCAD + qldCAD;
+      qldCoreWeight = coreCAD > 0 ? qldCAD / coreCAD : 0;
+      if (!emergencyCapApplied && qldCoreWeight > 0.30) {
+        const sale = Math.max(0, (qldCAD - 0.30 * coreCAD) / 0.70);
+        const totalAll = schdCAD + qldCAD + sgovCAD + iaumCAD;
+        const sgovGap = Math.max(0, totalAll * 0.05 - sgovCAD);
+        const sgovRefill = Math.min(sale, sgovGap);
+        const schdAdd = sale - sgovRefill;
+        qldCAD  -= sale;
+        sgovCAD += sgovRefill;
+        schdCAD += schdAdd;
+        annualRebalanceApplied = true;
+        rebalanceCount++;
+      }
+
+      // (6) Age-65 IAUM exit → buy QLD with proceeds (per business rule).
+      const ageThisYear = input.currentAge != null ? input.currentAge + y : null;
+      if (ageThisYear === 65 && iaumCAD > 0) {
+        qldCAD += iaumCAD;
+        iaumCAD = 0;
+        iaumExited = true;
+        iaumExitedEver = true;
+      }
+
+      // (7) Dividend yield growth.
+      //   SCHD: full safeDivGrowth
+      //   QLD : safeDivGrowth × qldDgFactor (default half — QLD is growth-tilted, modest div bump)
+      //   SGOV: held flat (rate-sensitive, hard to project)
+      schdYld = schdYld * (1 + safeDivGrowth);
+      qldYld  = qldYld  * (1 + safeDivGrowth * qldDgFactor);
+
+      // (8) Dividend snapshot — gross then net of withholding.
+      coreCAD = schdCAD + qldCAD;
+      const totalCAD = schdCAD + qldCAD + sgovCAD + iaumCAD;
+      const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld;
+      const annualDivNet = annualDivGross * (1 - taxWithhold);
+
+      if (yearPointsClean.includes(y)) {
+        points.push({
+          year: startYear + y,
+          yearsFromNow: y,
+          schdCAD: Math.round(schdCAD),
+          qldCAD:  Math.round(qldCAD),
+          sgovCAD: Math.round(sgovCAD),
+          iaumCAD: Math.round(iaumCAD),
+          totalCAD: Math.round(totalCAD),
+          qldCoreWeightPct:   coreCAD > 0 ? Math.round((qldCAD  / coreCAD)  * 1000) / 10 : 0,
+          sgovTotalWeightPct: totalCAD > 0 ? Math.round((sgovCAD / totalCAD) * 1000) / 10 : 0,
+          iaumTotalWeightPct: totalCAD > 0 ? Math.round((iaumCAD / totalCAD) * 1000) / 10 : 0,
+          annualDivCAD:       Math.round(annualDivNet),
+          annualDivGrossCAD:  Math.round(annualDivGross),
+          monthlyDivCAD:      Math.round(annualDivNet / 12),
+          totalContribCAD: Math.round(cumContrib),
+          emergencyCapApplied,
+          annualRebalanceApplied,
+          iaumExited,
+        });
+      }
+    }
+
+    return {
+      id: scen.id,
+      label: scen.label,
+      cagrPct: scen.cagrPct,
+      points,
+      triggerCounts: {
+        emergencyCap: emergencyCount,
+        annualRebalance: rebalanceCount,
+        iaumExited: iaumExitedEver,
+      },
+    };
+  });
+}
+
+export function projectScenarios(params: {
+  currentValueCAD: number;
+  currentAnnualDivCAD: number;
+  divYieldPct: number;
+  divGrowthPct: number;        // capped to safe range by caller; unused in worst case
+  annualContribCAD: number;
+  yearPoints: number[];        // years-from-now to surface in tables (e.g. [1,5,10,20])
+  maxYears: number;
+}): ProjectionScenario[] {
+  const startYear = new Date().getFullYear();
+  const safeDivGrowth = Math.max(0, Math.min(20, params.divGrowthPct));   // never optimistic
+  const yearPointsClean = Array.from(new Set(
+    params.yearPoints.filter(y => Number.isFinite(y) && y > 0 && y <= params.maxYears),
+  )).sort((a, b) => a - b);
+
+  return RULEBOOK_SCENARIOS.map(scen => {
+    let pv = Math.max(0, params.currentValueCAD);
+    let div = Math.max(0, params.currentAnnualDivCAD);
+    let cumContrib = 0;
+    const cagr = scen.cagrPct / 100;
+    const dg = safeDivGrowth / 100;
+    const yld = Math.max(0, params.divYieldPct) / 100;
+    const points: ProjectionYearPoint[] = [];
+
+    for (let y = 1; y <= params.maxYears; y++) {
+      const contrib = Math.max(0, params.annualContribCAD);
+      cumContrib += contrib;
+      pv = (pv + contrib) * (1 + cagr);
+      div = div * (1 + dg) + contrib * yld;
+
+      if (yearPointsClean.includes(y)) {
+        points.push({
+          year: startYear + y,
+          yearsFromNow: y,
+          portfolioCAD: Math.round(pv),
+          annualDivCAD: Math.round(div),
+          monthlyDivCAD: Math.round(div / 12),
+          totalContribCAD: Math.round(cumContrib),
+        });
+      }
+    }
+
+    return {
+      id: scen.id,
+      label: scen.label,
+      cagrPct: scen.cagrPct,
+      points,
+    };
+  });
+}
