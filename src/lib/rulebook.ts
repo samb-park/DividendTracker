@@ -14,7 +14,7 @@ export const RULEBOOK_TICKERS = {
   CORE: ["SCHD", "QLD"] as const,
   RESERVE: ["SGOV", "IAUM"] as const,
   OVERLAY: ["TQQQ"] as const,
-};
+} as const;
 
 /** True when the ticker is a Non-Core (reserve) asset such as SGOV or IAUM. */
 export function isNonCoreTicker(ticker: string): boolean {
@@ -46,7 +46,7 @@ export const RULEBOOK_TARGETS = {
   IAUM_WEEKLY_BUY_CAD: 25,
   SGOV_WEEKLY_REFILL_CAD: 50,
   CORE_WEEKLY_CAD: 350,
-};
+} as const;
 
 export const RULEBOOK_SCENARIOS = [
   { id: "base",        label: "BASE",        cagrPct: 6 },
@@ -108,13 +108,35 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   const qldCAD  = findValue(holdings, "QLD");
   const sgovCAD = findValue(holdings, "SGOV");
   const iaumCAD = findValue(holdings, "IAUM");
+  const tqqqCAD = findValue(holdings, "TQQQ");
   const allCAD  = holdings.reduce((s, h) => s + (isFinite(h.valueCAD) ? h.valueCAD : 0), 0);
   const coreCAD = schdCAD + qldCAD;
 
   const qldCoreWeightPct  = pct(qldCAD, coreCAD);
   const schdCoreWeightPct = pct(schdCAD, coreCAD);
+  const growthBucketPct   = pct(qldCAD + tqqqCAD, allCAD);
   const sgovTotalWeightPct = pct(sgovCAD, allCAD);
   const iaumTotalWeightPct = pct(iaumCAD, allCAD);
+  const tqqqTotalWeightPct = pct(tqqqCAD, allCAD);
+
+  const hardExit = growthBucketPct >= RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT;
+  const softExit = !hardExit && growthBucketPct >= RULEBOOK_TARGETS.SOFT_EXIT_GROWTH_BUCKET_PCT;
+  const crisisT2 = qldCoreWeightPct <= RULEBOOK_TARGETS.CRISIS_T2_PCT && coreCAD > 0;
+  const crisisT1 = !crisisT2
+    && qldCoreWeightPct <= RULEBOOK_TARGETS.CRISIS_T1_PCT
+    && coreCAD > 0;
+  const inDeadband =
+    coreCAD > 0
+    && qldCoreWeightPct >= RULEBOOK_TARGETS.REBAL_LOW_PCT
+    && qldCoreWeightPct <= RULEBOOK_TARGETS.REBAL_HIGH_PCT;
+  const caseAEligible = coreCAD > 0 && qldCoreWeightPct > RULEBOOK_TARGETS.REBAL_HIGH_PCT;
+  const caseBEligible =
+    coreCAD > 0
+    && qldCoreWeightPct < RULEBOOK_TARGETS.REBAL_LOW_PCT
+    && tqqqCAD <= 0;
+  const cycleArmable =
+    tqqqCAD <= 0
+    && growthBucketPct >= RULEBOOK_TARGETS.CYCLE_RESET_GROWTH_BUCKET_PCT;
 
   return {
     totalCAD: allCAD,
@@ -123,14 +145,23 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
     qldCAD,
     sgovCAD,
     iaumCAD,
+    tqqqCAD,
     qldCoreWeightPct,
     schdCoreWeightPct,
+    growthBucketPct,
     sgovTotalWeightPct,
     iaumTotalWeightPct,
-    qldEmergencyCap: qldCoreWeightPct >= RULEBOOK_TARGETS.QLD_EMERGENCY_CAP_PCT,
-    qldCrisisTier1:  qldCoreWeightPct <= RULEBOOK_TARGETS.QLD_CRISIS_T1_PCT && qldCoreWeightPct > RULEBOOK_TARGETS.QLD_CRISIS_T2_PCT,
-    qldCrisisTier2:  qldCoreWeightPct <= RULEBOOK_TARGETS.QLD_CRISIS_T2_PCT,
-    sgovNeedsRefill: sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_TARGET_PCT,
+    tqqqTotalWeightPct,
+    inDeadband,
+    caseAEligible,
+    caseBEligible,
+    hardExit,
+    softExit,
+    crisisT1,
+    crisisT2,
+    cycleArmable,
+    sgovBelowTarget: sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_TARGET_PCT,
+    sgovBelowFloor:  sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_FLOOR_PCT,
     iaumAtCap:       iaumTotalWeightPct >= RULEBOOK_TARGETS.IAUM_MAX_PCT,
   };
 }
