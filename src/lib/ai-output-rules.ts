@@ -17,7 +17,12 @@ export const AI_OUTPUT_RULES = `
    flags, qldEmergencyCap, qldCrisisTier1, qldCrisisTier2, sgovNeedsRefill, iaumAtCap,
    depositedThisYear, annualIncomeCAD, annualDivCAD, totalValueCAD, returnPct, currentPct,
    diffPct, contribFrequency, divGrowthPct, divYieldPct, totalContribCAD, monthlyDivCAD,
-   carryover, rrspRoomEstimate, fxRate, contributions, accountSummaries, holdings.
+   carryover, rrspRoomEstimate, fxRate, contributions, accountSummaries, holdings,
+   growthBucketPct, tqqqCAD, tqqqTotalWeightPct, hardExit, softExit, crisisT1, crisisT2,
+   caseAEligible, caseBEligible, inDeadband, cycleArmable, sgovBelowTarget, sgovBelowFloor,
+   tqqqSaleCAD, qldSaleCAD, sgovRefillCAD, sgovDeltaCAD, sgovSaleCAD, tqqqBuyCAD, qldBuyCAD,
+   postGrowthBucketPct, postQldCoreWeightPct, postSgovTotalWeightPct,
+   tqqqExitPlan, crisisTriggerPlan, annualRebalancePlan.
 2. 위 필드 대신 다음 한국어 라벨을 사용:
    coreCAD → "코어 평가금액"
    qldCoreWeightPct → "QLD 코어 비중"
@@ -33,6 +38,32 @@ export const AI_OUTPUT_RULES = `
    annualIncomeCAD → "연소득"
    annualDivCAD → "연배당"
    monthlyDivCAD → "월배당"
+   growthBucketPct → "성장 버킷 비중"
+   tqqqCAD → "TQQQ 평가금액"
+   tqqqTotalWeightPct → "TQQQ 전체 비중"
+   hardExit → "Hard Exit 신호"
+   softExit → "Soft Exit 신호"
+   crisisT1 → "위기 1단계 신호"
+   crisisT2 → "위기 2단계 신호"
+   caseAEligible → "Case A 적용 가능"
+   caseBEligible → "Case B 적용 가능"
+   inDeadband → "데드밴드 구간"
+   cycleArmable → "사이클 재무장 가능"
+   sgovBelowTarget → "SGOV 목표 미달"
+   sgovBelowFloor → "SGOV 위기 바닥 침범"
+   tqqqSaleCAD → "TQQQ 매도금액"
+   qldSaleCAD → "QLD 매도금액"
+   sgovRefillCAD → "SGOV 보충금액"
+   sgovDeltaCAD → "SGOV 변동금액"
+   sgovSaleCAD → "SGOV 매도금액"
+   tqqqBuyCAD → "TQQQ 매수금액"
+   qldBuyCAD → "QLD 매수금액"
+   postGrowthBucketPct → "매도 후 성장 버킷"
+   postQldCoreWeightPct → "매도 후 QLD 코어 비중"
+   postSgovTotalWeightPct → "매도 후 SGOV 비중"
+   tqqqExitPlan → "TQQQ 출구 사다리"
+   crisisTriggerPlan → "위기 트리거 실행안"
+   annualRebalancePlan → "연말 리밸런스 실행안"
 3. 마크다운 bold(**...**)와 italic(*...*)을 사용하지 말 것. 별표(*)를 글머리 기호로도 쓰지 말 것.
 4. 마크다운 헤더(#, ##) 사용 금지. 한국어 번호 섹션(1., 2., 3.)을 사용.
 5. 가능하면 계산식을 함께 보여줄 것. 예: "QLD 코어 비중 = QLD / (SCHD + QLD) = 15,932 / (30,894 + 15,932) = 34.0%".
@@ -189,6 +220,35 @@ const FIELD_LABEL_MAP: Array<[RegExp, string]> = [
   [/\bqldCrisisTier2\b/g,         "QLD 2단계 위기 매수 신호"],
   [/\bsgovNeedsRefill\b/g,        "SGOV 보충 필요"],
   [/\biaumAtCap\b/g,              "IAUM 상한 도달"],
+  // v4.1.10 — new field names (Task 9). Order matters: place after the existing
+  // qldBuyCAD/schdBuyCAD entries so those keep their "이번 주 …" labels in
+  // Method-B contexts. The shared names below only kick in when the LLM leaks
+  // raw plan-object keys that have no v4.1.8 equivalent.
+  [/\bgrowthBucketPct\b/g,        "성장 버킷 비중"],
+  [/\btqqqCAD\b/g,                "TQQQ 평가금액"],
+  [/\btqqqTotalWeightPct\b/g,     "TQQQ 전체 비중"],
+  [/\bhardExit\b/g,               "Hard Exit 신호"],
+  [/\bsoftExit\b/g,               "Soft Exit 신호"],
+  [/\bcrisisT1\b/g,               "위기 1단계 신호"],
+  [/\bcrisisT2\b/g,               "위기 2단계 신호"],
+  [/\bcaseAEligible\b/g,          "Case A 적용 가능"],
+  [/\bcaseBEligible\b/g,          "Case B 적용 가능"],
+  [/\binDeadband\b/g,             "데드밴드 구간"],
+  [/\bcycleArmable\b/g,           "사이클 재무장 가능"],
+  [/\bsgovBelowTarget\b/g,        "SGOV 목표 미달"],
+  [/\bsgovBelowFloor\b/g,         "SGOV 위기 바닥 침범"],
+  [/\btqqqSaleCAD\b/g,            "TQQQ 매도금액"],
+  [/\bqldSaleCAD\b/g,             "QLD 매도금액"],
+  [/\bsgovRefillCAD\b/g,          "SGOV 보충금액"],
+  [/\bsgovDeltaCAD\b/g,           "SGOV 변동금액"],
+  [/\bsgovSaleCAD\b/g,            "SGOV 매도금액"],
+  [/\btqqqBuyCAD\b/g,             "TQQQ 매수금액"],
+  [/\bpostGrowthBucketPct\b/g,    "매도 후 성장 버킷"],
+  [/\bpostQldCoreWeightPct\b/g,   "매도 후 QLD 코어 비중"],
+  [/\bpostSgovTotalWeightPct\b/g, "매도 후 SGOV 비중"],
+  [/\btqqqExitPlan\b/g,           "TQQQ 출구 사다리"],
+  [/\bcrisisTriggerPlan\b/g,      "위기 트리거 실행안"],
+  [/\bannualRebalancePlan\b/g,    "연말 리밸런스 실행안"],
 ];
 
 /**
