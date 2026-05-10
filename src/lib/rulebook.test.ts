@@ -7,6 +7,7 @@ import {
   computeTqqqSoftExitPlan,
   computeTqqqHardExitPlan,
   computeCrisisTriggerPlan,
+  computeAnnualRebalancePlan,
   projectScenarios,
   projectScenariosRulebook,
   RULEBOOK_TARGETS,
@@ -123,6 +124,24 @@ test("deadband: 29 ≤ QLD core W ≤ 31 → inDeadband true, Case A/B false", (
   assert.equal(w.inDeadband, true);
   assert.equal(w.caseAEligible, false);
   assert.equal(w.caseBEligible, false);
+});
+
+test("deadband: exact W=29.0 → inDeadband true (FP-safe)", () => {
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 71 },
+    { ticker: "QLD",  valueCAD: 29 },  // 29.0% exactly (FP-fragile)
+  ]);
+  assert.equal(w.inDeadband, true, `expected inDeadband=true at W=29.0, got W=${w.qldCoreWeightPct}`);
+  assert.equal(w.caseBEligible, false);
+});
+
+test("deadband: exact W=31.0 → inDeadband true (FP-safe)", () => {
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 69 },
+    { ticker: "QLD",  valueCAD: 31 },
+  ]);
+  assert.equal(w.inDeadband, true);
+  assert.equal(w.caseAEligible, false);
 });
 
 test("Case B eligibility requires TQQQ=0 in addition to W<29", () => {
@@ -625,6 +644,64 @@ test("§6.1 Crisis: sale capped at available SGOV (cannot sell more than held)",
   assert.equal(plan.active, true);
   assert.ok(plan.sgovSaleCAD <= 20);
   assert.ok(close(plan.sgovSaleCAD, plan.tqqqBuyCAD), "buy equals SGOV sale (proceeds chained)");
+});
+
+// ── computeAnnualRebalancePlan (§5 — Dec 31 only, bidirectional with deadband) ─
+test("§5 Deadband: 29 ≤ W ≤ 31 → no action (caseA=false, caseB=false)", () => {
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 70, qldCAD: 30, tqqqCAD: 0, sgovCAD: 10, totalCAD: 110,
+    caseAEligible: false, caseBEligible: false,
+  });
+  assert.equal(plan.action, "deadband");
+});
+
+test("§5 Case A (W > 31): QLD sale to 30%, SGOV refill to 8%, remainder → SCHD", () => {
+  // SCHD 60, QLD 40 → core 100, total 100, SGOV 0
+  // Sale = (40 - 30) / 0.70 = 14.286
+  // SGOV gap to 8% of 100 = 8 → 8 to SGOV, 6.286 to SCHD
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 60, qldCAD: 40, tqqqCAD: 0, sgovCAD: 0, totalCAD: 100,
+    caseAEligible: true, caseBEligible: false,
+  });
+  assert.equal(plan.action, "case_a");
+  assert.ok(close(plan.qldSaleCAD, 10 / 0.70, 0.01));
+  assert.ok(close(plan.sgovDeltaCAD, 8, 0.01));    // refill (+)
+  assert.ok(plan.schdBuyCAD > 0);
+});
+
+test("§5 Case B (W < 29 AND TQQQ=0): SGOV → QLD, 5% floor protected", () => {
+  // SCHD 75, QLD 25, total 110, SGOV 10. (caseBEligible passed externally.)
+  // E_under = 0.30·(75+25) - 25 = 5
+  // X_need = 5 / 0.70 = 7.143
+  // SGOV available = SGOV - 5%·Total = 10 - 5.5 = 4.5 → X = min(7.143, 4.5) = 4.5
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 75, qldCAD: 25, tqqqCAD: 0, sgovCAD: 10, totalCAD: 110,
+    caseAEligible: false, caseBEligible: true,
+  });
+  assert.equal(plan.action, "case_b");
+  assert.ok(close(plan.sgovDeltaCAD, -4.5, 0.01));   // sale (−)
+  assert.ok(close(plan.qldBuyCAD, 4.5));
+});
+
+test("§5 Case B: blocked when SGOV ≤ floor (no action)", () => {
+  // SCHD 75, QLD 25, SGOV at exactly 5% of total 105
+  // available = 5 - 0.05*105 = 5 - 5.25 = -0.25 → 0
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 75, qldCAD: 25, tqqqCAD: 0, sgovCAD: 5, totalCAD: 105,
+    caseAEligible: false, caseBEligible: true,
+  });
+  assert.equal(plan.qldBuyCAD, 0);
+  assert.equal(plan.action, "case_b_no_room");
+});
+
+test("§5 Case B: blocked when TQQQ > 0 (caller must pass caseBEligible=false)", () => {
+  // Caller never sets caseBEligible=true with TQQQ>0. The function trusts caller.
+  // If caseAEligible=false AND caseBEligible=false, action is 'deadband'.
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 75, qldCAD: 25, tqqqCAD: 1, sgovCAD: 10, totalCAD: 111,
+    caseAEligible: false, caseBEligible: false,
+  });
+  assert.equal(plan.action, "deadband");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

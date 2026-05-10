@@ -125,14 +125,19 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   const crisisT1 = !crisisT2
     && qldCoreWeightPct <= RULEBOOK_TARGETS.CRISIS_T1_PCT
     && coreCAD > 0;
+  // FP-safe boundaries: at SCHD=71 / QLD=29 the calc yields 28.9999…, which
+  // silently flipped Case B true and deadband false in v4.1.10 pre-fix. Use a
+  // 1e-9 tolerance for the inclusive deadband bounds.
+  const FP_EPS = 1e-9;
   const inDeadband =
     coreCAD > 0
-    && qldCoreWeightPct >= RULEBOOK_TARGETS.REBAL_LOW_PCT
-    && qldCoreWeightPct <= RULEBOOK_TARGETS.REBAL_HIGH_PCT;
-  const caseAEligible = coreCAD > 0 && qldCoreWeightPct > RULEBOOK_TARGETS.REBAL_HIGH_PCT;
+    && qldCoreWeightPct >= RULEBOOK_TARGETS.REBAL_LOW_PCT - FP_EPS
+    && qldCoreWeightPct <= RULEBOOK_TARGETS.REBAL_HIGH_PCT + FP_EPS;
+  const caseAEligible = coreCAD > 0
+    && qldCoreWeightPct > RULEBOOK_TARGETS.REBAL_HIGH_PCT + FP_EPS;
   const caseBEligible =
     coreCAD > 0
-    && qldCoreWeightPct < RULEBOOK_TARGETS.REBAL_LOW_PCT
+    && qldCoreWeightPct < RULEBOOK_TARGETS.REBAL_LOW_PCT - FP_EPS
     && tqqqCAD <= 0;
   const cycleArmable =
     tqqqCAD <= 0
@@ -353,6 +358,79 @@ export function computeCrisisTriggerPlan(args: {
     tqqqBuyCAD: tqqqBuy,
     postSgovTotalWeightPct: postSgovPct,
     reason: sgovSale > 0 ? "applied" : "sgov-empty",
+  };
+}
+
+// ── §5 Annual Rebalance (Dec 31) — bidirectional with ±1% deadband ──────────
+// Case A: W > 31  → QLD sale to 30% (same proceeds order as Hard Exit but TQQQ untouched).
+// Case B: W < 29 AND TQQQ = 0 → SGOV → QLD, capped by SGOV 5% floor.
+//   E_under  = 0.30·(S+Q) − Q
+//   X_need   = E_under / 0.70
+//   X_avail  = max(0, SGOV − 0.05·Total)
+//   X        = min(X_need, X_avail)
+// Deadband (29 ≤ W ≤ 31): no action.
+export interface AnnualRebalancePlan {
+  action: "deadband" | "case_a" | "case_b" | "case_b_no_room";
+  qldSaleCAD: number;
+  qldBuyCAD: number;
+  sgovDeltaCAD: number;     // + = refill (Case A), − = drain (Case B)
+  schdBuyCAD: number;
+  postQldCoreWeightPct: number;
+}
+
+export function computeAnnualRebalancePlan(args: {
+  schdCAD: number;
+  qldCAD: number;
+  tqqqCAD: number;
+  sgovCAD: number;
+  totalCAD: number;
+  caseAEligible: boolean;
+  caseBEligible: boolean;
+}): AnnualRebalancePlan {
+  const coreCAD = args.schdCAD + args.qldCAD;
+  const noop: AnnualRebalancePlan = {
+    action: "deadband", qldSaleCAD: 0, qldBuyCAD: 0, sgovDeltaCAD: 0, schdBuyCAD: 0,
+    postQldCoreWeightPct: coreCAD > 0 ? (args.qldCAD / coreCAD) * 100 : 0,
+  };
+  if (!args.caseAEligible && !args.caseBEligible) return noop;
+
+  if (args.caseAEligible) {
+    const targetRatio = RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100;
+    const qldSale = Math.max(0, (args.qldCAD - targetRatio * coreCAD) / (1 - targetRatio));
+    if (qldSale <= 0) return { ...noop, action: "deadband" };
+    const sgovTargetCAD = (RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100) * Math.max(0, args.totalCAD);
+    const sgovGap = Math.max(0, sgovTargetCAD - Math.max(0, args.sgovCAD));
+    const sgovRefill = Math.min(qldSale, sgovGap);
+    const schdBuy = Math.max(0, qldSale - sgovRefill);
+    const postQld = args.qldCAD - qldSale;
+    const postCore = coreCAD - sgovRefill;
+    return {
+      action: "case_a",
+      qldSaleCAD: qldSale,
+      qldBuyCAD: 0,
+      sgovDeltaCAD: sgovRefill,
+      schdBuyCAD: schdBuy,
+      postQldCoreWeightPct: postCore > 0 ? (postQld / postCore) * 100 : 0,
+    };
+  }
+
+  // Case B
+  const eUnder = Math.max(0, (RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100) * coreCAD - args.qldCAD);
+  if (eUnder <= 0) return noop;
+  const xNeed = eUnder / (1 - RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100);
+  const sgovFloorCAD = (RULEBOOK_TARGETS.SGOV_FLOOR_PCT / 100) * Math.max(0, args.totalCAD);
+  const xAvail = Math.max(0, args.sgovCAD - sgovFloorCAD);
+  if (xAvail <= 0) return { ...noop, action: "case_b_no_room" };
+  const x = Math.min(xNeed, xAvail);
+  const postQld = args.qldCAD + x;
+  const postCore = coreCAD + x;  // SGOV moves into core
+  return {
+    action: "case_b",
+    qldSaleCAD: 0,
+    qldBuyCAD: x,
+    sgovDeltaCAD: -x,
+    schdBuyCAD: 0,
+    postQldCoreWeightPct: postCore > 0 ? (postQld / postCore) * 100 : 0,
   };
 }
 
