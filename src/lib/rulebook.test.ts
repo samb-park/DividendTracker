@@ -6,6 +6,7 @@ import {
   computeIaumWeeklyPlan,
   computeTqqqSoftExitPlan,
   computeTqqqHardExitPlan,
+  computeCrisisTriggerPlan,
   projectScenarios,
   projectScenariosRulebook,
   RULEBOOK_TARGETS,
@@ -564,6 +565,66 @@ test("§6.2 Hard Exit: SCHD is never sold (post-exit invariant)", () => {
     schdCAD: 30, qldCAD: 50, tqqqCAD: 20, sgovCAD: 0, totalCAD: 100, hardExit: true,
   });
   assert.ok(plan.schdBuyCAD >= 0, `SCHD action must be buy-only, got ${plan.schdBuyCAD}`);
+});
+
+// ── computeCrisisTriggerPlan (§6.1 — SGOV → TQQQ when QLD core W is low) ────
+test("§6.1 Crisis: inactive when both T1 and T2 false", () => {
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 1000, sgovCAD: 100,
+    crisisT1: false, crisisT2: false, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.equal(plan.active, false);
+});
+
+test("§6.1 Crisis T1: buys 2.5% of total CAD into TQQQ from SGOV", () => {
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 1000, sgovCAD: 100,
+    crisisT1: true, crisisT2: false, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(close(plan.sgovSaleCAD, 25));   // 2.5% of 1000
+  assert.ok(close(plan.tqqqBuyCAD, 25));
+  assert.equal(plan.tier, "T1");
+});
+
+test("§6.1 Crisis T2: buys cumulative 5% (both tiers same day) when W ≤ 20", () => {
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 1000, sgovCAD: 100,
+    crisisT1: false, crisisT2: true, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(close(plan.sgovSaleCAD, 50));   // T1 + T2 = 5% of 1000
+  assert.ok(close(plan.tqqqBuyCAD, 50));
+  assert.equal(plan.tier, "T2");
+});
+
+test("§6.1 Crisis: blocked when cycle not armed (prior trigger not reset)", () => {
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 1000, sgovCAD: 100,
+    crisisT1: true, crisisT2: false, cycleArmed: false, tqqqCAD: 1,
+  });
+  assert.equal(plan.active, false);
+  assert.equal(plan.reason, "cycle-not-armed");
+});
+
+test("§6.1 Crisis: may pierce SGOV 5% floor (rule allows only here)", () => {
+  // SGOV = 100 = 5.0% of 2000 total. Plan asks for 50. After: SGOV = 50 = 2.5% → below floor, allowed.
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 2000, sgovCAD: 100,
+    crisisT1: false, crisisT2: true, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(plan.sgovSaleCAD <= 100, "sale must not exceed available SGOV");
+});
+
+test("§6.1 Crisis: sale capped at available SGOV (cannot sell more than held)", () => {
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 2000, sgovCAD: 20,
+    crisisT1: false, crisisT2: true, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(plan.sgovSaleCAD <= 20);
+  assert.ok(close(plan.sgovSaleCAD, plan.tqqqBuyCAD), "buy equals SGOV sale (proceeds chained)");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

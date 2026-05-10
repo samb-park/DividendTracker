@@ -307,6 +307,55 @@ export function computeTqqqHardExitPlan(args: {
   return { active: true, tqqqSaleCAD: tqqqSale, qldSaleCAD: qldSale, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
 }
 
+// ── §6.1 Crisis Trigger — buy TQQQ with SGOV proceeds ────────────────────────
+// Tier sizes (rulebook [6.1]):
+//   T1 (core W ≤ 25%) : 2.5% of total → TQQQ
+//   T2 (core W ≤ 20%) : additional 2.5% → TQQQ (cumulative 5% when both fire same day)
+// Cycle gating: each tier may only fire once per cycle. Cycle resets when
+//   TQQQ=0 AND growth bucket ≥ 30% (caller passes `cycleArmed`).
+// SCHD never sold. Crisis is the ONLY mechanism that may pierce SGOV 5% floor.
+export interface CrisisTriggerPlan {
+  active: boolean;
+  tier: "T1" | "T2" | null;
+  sgovSaleCAD: number;
+  tqqqBuyCAD: number;
+  postSgovTotalWeightPct: number;
+  reason: string;
+}
+
+export function computeCrisisTriggerPlan(args: {
+  totalCAD: number;
+  sgovCAD: number;
+  crisisT1: boolean;
+  crisisT2: boolean;
+  cycleArmed: boolean;
+  tqqqCAD: number;
+}): CrisisTriggerPlan {
+  const inactive = (reason: string): CrisisTriggerPlan => ({
+    active: false, tier: null, sgovSaleCAD: 0, tqqqBuyCAD: 0, postSgovTotalWeightPct: 0, reason,
+  });
+  if (!args.crisisT1 && !args.crisisT2) return inactive("no-crisis");
+  if (!args.cycleArmed) return inactive("cycle-not-armed");
+
+  const tierPctTotal = args.crisisT2
+    ? (RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL + RULEBOOK_TARGETS.CRISIS_T2_BUY_PCT_OF_TOTAL)
+    : RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL;
+  const requested = (tierPctTotal / 100) * Math.max(0, args.totalCAD);
+  const sgovSale  = Math.min(Math.max(0, args.sgovCAD), requested);
+  const tqqqBuy   = sgovSale;
+  const postSgov  = args.sgovCAD - sgovSale;
+  const postTotal = args.totalCAD;  // proceeds chained → total unchanged
+  const postSgovPct = postTotal > 0 ? (postSgov / postTotal) * 100 : 0;
+  return {
+    active: sgovSale > 0,
+    tier: args.crisisT2 ? "T2" : "T1",
+    sgovSaleCAD: sgovSale,
+    tqqqBuyCAD: tqqqBuy,
+    postSgovTotalWeightPct: postSgovPct,
+    reason: sgovSale > 0 ? "applied" : "sgov-empty",
+  };
+}
+
 // ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
 // Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
 // 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.
