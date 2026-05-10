@@ -3,7 +3,7 @@
 //
 // Cache key version: bump RULEBOOK_PROMPT_VERSION whenever the guardrails or
 // structure constants change so that previously cached AI outputs are invalidated.
-export const RULEBOOK_PROMPT_VERSION = "v4.1.10-2";
+export const RULEBOOK_PROMPT_VERSION = "v4.1.10-3";
 
 /**
  * Common output rules that every AI system prompt must include.
