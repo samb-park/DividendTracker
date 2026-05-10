@@ -46,6 +46,13 @@ export const RULEBOOK_TARGETS = {
   IAUM_WEEKLY_BUY_CAD: 25,
   SGOV_WEEKLY_REFILL_CAD: 50,
   CORE_WEEKLY_CAD: 350,
+  // Retirement phase (rulebook [10] / [11] / [16])
+  RRSP_MELTDOWN_START_AGE: 60,
+  RRSP_MELTDOWN_END_AGE:   71,
+  RRSP_MELTDOWN_ANNUAL_CAD: 40000,
+  DIVIDEND_CONSUMPTION_AGE: 65,
+  PENSION_START_AGE:        65,
+  PENSION_MONTHLY_CAD:      7781,
 } as const;
 
 export const RULEBOOK_SCENARIOS = [
@@ -434,6 +441,37 @@ export function computeAnnualRebalancePlan(args: {
   };
 }
 
+// ── §11 RRSP Meltdown — SCHD-first withdrawal helper ─────────────────────────
+// Rulebook [11]: RRSP 멜트다운 60-71세, 연 30-50K. SCHD 인-카인드 선호.
+// 이 helper는 매매 메커니즘이 아니라 인출 (distribution) 이므로 §15 "SCHD 매도 금지"의 예외.
+// SCHD가 부족하면 QLD에서 잔여를 차감. 둘 다 부족하면 unmet으로 surface.
+export interface MeltdownAllocation {
+  fromSchd: number;
+  fromQld: number;
+  totalWithdrawn: number;
+  unmet: number;
+}
+
+export function computeMeltdownAllocation(
+  schdCAD: number,
+  qldCAD: number,
+  requestedCAD: number,
+): MeltdownAllocation {
+  const safeSchd = Math.max(0, schdCAD);
+  const safeQld  = Math.max(0, qldCAD);
+  const safeReq  = Math.max(0, requestedCAD);
+  const fromSchd = Math.min(safeSchd, safeReq);
+  const remaining = safeReq - fromSchd;
+  const fromQld = Math.min(safeQld, remaining);
+  const totalWithdrawn = fromSchd + fromQld;
+  return {
+    fromSchd,
+    fromQld,
+    totalWithdrawn,
+    unmet: Math.max(0, safeReq - totalWithdrawn),
+  };
+}
+
 // ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
 // Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
 // 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.
@@ -567,6 +605,11 @@ export interface ProjectionYearPointV2 {
   caseAApplied: boolean;
   caseBApplied: boolean;
   iaumExited: boolean;
+  // Retirement phase fields ([10] / [11] / [16])
+  withdrawalCAD: number;
+  dividendConsumedCAD: number;
+  pensionCAD: number;
+  monthlyCashflowCAD: number;
 }
 
 export interface ProjectionScenarioV2 {
@@ -635,6 +678,21 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       let caseAApplied = false;
       let caseBApplied = false;
       let iaumExited = false;
+      let withdrawalCAD = 0;
+      let dividendConsumedCAD = 0;
+      let pensionCAD = 0;
+
+      // (0) §11 RRSP Meltdown — 60-71세, runs FIRST per rulebook [14] priority #1 (법률/세무 출금 의미적 유사).
+      //     SCHD 우선 인출, SCHD 부족시 QLD 보조. SCHD 매도 금지 invariant의 예외 (distribution, not trading).
+      const meltdownAgeNow = input.currentAge != null ? input.currentAge + y : null;
+      if (meltdownAgeNow != null
+          && meltdownAgeNow >= RULEBOOK_TARGETS.RRSP_MELTDOWN_START_AGE
+          && meltdownAgeNow <= RULEBOOK_TARGETS.RRSP_MELTDOWN_END_AGE) {
+        const m = computeMeltdownAllocation(schdCAD, qldCAD, RULEBOOK_TARGETS.RRSP_MELTDOWN_ANNUAL_CAD);
+        schdCAD -= m.fromSchd;
+        qldCAD  -= m.fromQld;
+        withdrawalCAD = m.totalWithdrawn;
+      }
 
       // (1) Annual contribution amounts — SGOV gated by 8% target (v4.1.10), IAUM by TFSA + 5% cap
       let annualCore = Math.max(0, input.coreWeeklyCAD * 52);
@@ -793,6 +851,21 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld;
       const annualDivNet = annualDivGross * (1 - taxWithhold);
 
+      // §10 65+ Dividend Consumption Mode — disable reinvestment, track as cashflow only.
+      const consumptionAgeNow = input.currentAge != null ? input.currentAge + y : null;
+      if (consumptionAgeNow != null && consumptionAgeNow >= RULEBOOK_TARGETS.DIVIDEND_CONSUMPTION_AGE) {
+        dividendConsumedCAD = Math.round(annualDivGross);
+      }
+
+      // §16 65+ Pension Cashflow — household estimate, portfolio 영향 없음, tracking only.
+      const pensionAgeNow = input.currentAge != null ? input.currentAge + y : null;
+      if (pensionAgeNow != null && pensionAgeNow >= RULEBOOK_TARGETS.PENSION_START_AGE) {
+        pensionCAD = RULEBOOK_TARGETS.PENSION_MONTHLY_CAD * 12;
+      }
+
+      const totalAnnualCashflow = withdrawalCAD + dividendConsumedCAD + pensionCAD;
+      const monthlyCashflowCAD = Math.round(totalAnnualCashflow / 12);
+
       // (9) Cycle reset: TQQQ=0 AND growth bucket ≥ 30 → re-arm
       const growthBucketPctNow = totalCAD > 0 ? ((qldCAD + tqqqCAD) / totalCAD) * 100 : 0;
       if (tqqqCAD <= 0 && growthBucketPctNow >= RULEBOOK_TARGETS.CYCLE_RESET_GROWTH_BUCKET_PCT) {
@@ -828,6 +901,10 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
           caseAApplied,
           caseBApplied,
           iaumExited,
+          withdrawalCAD: Math.round(withdrawalCAD),
+          dividendConsumedCAD: Math.round(dividendConsumedCAD),
+          pensionCAD: Math.round(pensionCAD),
+          monthlyCashflowCAD,
         });
       }
     }

@@ -8,6 +8,7 @@ import {
   computeTqqqHardExitPlan,
   computeCrisisTriggerPlan,
   computeAnnualRebalancePlan,
+  computeMeltdownAllocation,
   projectScenarios,
   projectScenariosRulebook,
   RULEBOOK_TARGETS,
@@ -739,6 +740,128 @@ test("§5 Case B: blocked when TQQQ > 0 (caller must pass caseBEligible=false)",
     caseAEligible: false, caseBEligible: false,
   });
   assert.equal(plan.action, "deadband");
+});
+
+// ── computeMeltdownAllocation (§11 — SCHD-first RRSP withdrawal) ─────────────
+test("§11 Meltdown: SCHD covers full request → QLD untouched", () => {
+  const m = computeMeltdownAllocation(50000, 30000, 40000);
+  assert.equal(m.fromSchd, 40000);
+  assert.equal(m.fromQld, 0);
+  assert.equal(m.totalWithdrawn, 40000);
+  assert.equal(m.unmet, 0);
+});
+
+test("§11 Meltdown: SCHD insufficient → QLD covers remainder", () => {
+  const m = computeMeltdownAllocation(10000, 80000, 40000);
+  assert.equal(m.fromSchd, 10000);
+  assert.equal(m.fromQld, 30000);
+  assert.equal(m.totalWithdrawn, 40000);
+  assert.equal(m.unmet, 0);
+});
+
+test("§11 Meltdown: both depleted → unmet > 0", () => {
+  const m = computeMeltdownAllocation(5000, 10000, 40000);
+  assert.equal(m.fromSchd, 5000);
+  assert.equal(m.fromQld, 10000);
+  assert.equal(m.totalWithdrawn, 15000);
+  assert.equal(m.unmet, 25000);
+});
+
+// ── Retirement phase projection tests (rulebook [10] / [11] / [16]) ──────────
+test("projection: 60-71세 RRSP 멜트다운 인출 40K/년 적용", () => {
+  // Retirement-realistic start so 12yr × 40K = 480K is feasible. baseProjectionInput's
+  // 50K Core would deplete by year 6; that scenario is covered by the "unmet > 0" unit test.
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 58,
+    start: {
+      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, iaumCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+    },
+    yearPoints: [1, 2, 3, 12, 13, 14, 15],
+    maxYears: 15,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  const at60 = base.points.find(p => p.yearsFromNow === 2)!;
+  const at70 = base.points.find(p => p.yearsFromNow === 12)!;
+  const at71 = base.points.find(p => p.yearsFromNow === 13)!;
+  const at72 = base.points.find(p => p.yearsFromNow === 14)!;
+  assert.equal(at60.withdrawalCAD, 40000);
+  assert.equal(at70.withdrawalCAD, 40000);
+  assert.equal(at71.withdrawalCAD, 40000);
+  assert.equal(at72.withdrawalCAD, 0);
+});
+
+test("projection: 60세 이전에는 인출 없음", () => {
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 50,
+    yearPoints: [1, 5],
+    maxYears: 5,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  for (const p of base.points) assert.equal(p.withdrawalCAD, 0);
+});
+
+test("projection: 65세부터 배당 재투자 중단 (dividendConsumedCAD > 0)", () => {
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 60,
+    yearPoints: [4, 5, 6],
+    maxYears: 10,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  const at64 = base.points.find(p => p.yearsFromNow === 4)!;
+  const at65 = base.points.find(p => p.yearsFromNow === 5)!;
+  const at66 = base.points.find(p => p.yearsFromNow === 6)!;
+  assert.equal(at64.dividendConsumedCAD, 0, "before 65 dividends reinvested");
+  assert.ok(at65.dividendConsumedCAD > 0, "from 65 dividends consumed");
+  assert.ok(at66.dividendConsumedCAD > 0);
+});
+
+test("projection: 65세부터 펜션 합산 93,372/year", () => {
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 60,
+    yearPoints: [4, 5, 10],
+    maxYears: 10,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  const at64 = base.points.find(p => p.yearsFromNow === 4)!;
+  const at65 = base.points.find(p => p.yearsFromNow === 5)!;
+  const at70 = base.points.find(p => p.yearsFromNow === 10)!;
+  assert.equal(at64.pensionCAD, 0);
+  assert.equal(at65.pensionCAD, 7781 * 12);
+  assert.equal(at70.pensionCAD, 7781 * 12);
+});
+
+test("projection: 60-64 인출만, 펜션/배당소비 0", () => {
+  // Retirement-realistic start (same rationale as the prior 60-71 test).
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 58,
+    start: {
+      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, iaumCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+    },
+    yearPoints: [2, 3, 6],
+    maxYears: 6,
+  }));
+  const base = out.find(s => s.id === "base")!;
+  const at60 = base.points.find(p => p.yearsFromNow === 2)!;
+  const at64 = base.points.find(p => p.yearsFromNow === 6)!;
+  assert.equal(at60.withdrawalCAD, 40000);
+  assert.equal(at60.pensionCAD, 0);
+  assert.equal(at60.dividendConsumedCAD, 0);
+  assert.equal(at64.withdrawalCAD, 40000);
+  assert.equal(at64.pensionCAD, 0);
+  assert.equal(at64.dividendConsumedCAD, 0);
+});
+
+test("projection: monthlyCashflowCAD = (withdrawal + divConsumed + pension) / 12", () => {
+  const out = projectScenariosRulebook(baseProjectionInput({
+    currentAge: 60,
+    yearPoints: [5],
+    maxYears: 6,
+  }));
+  const at65 = out.find(s => s.id === "base")!.points[0];
+  const expected = Math.round((at65.withdrawalCAD + at65.dividendConsumedCAD + at65.pensionCAD) / 12);
+  assert.equal(at65.monthlyCashflowCAD, expected);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
