@@ -40,6 +40,11 @@ export interface ProjectionYearV2 {
   caseAApplied: boolean;
   caseBApplied: boolean;
   iaumExited: boolean;
+  // Retirement phase ([10] / [11] / [16])
+  withdrawalCAD: number;
+  dividendConsumedCAD: number;
+  pensionCAD: number;
+  monthlyCashflowCAD: number;
 }
 
 export interface ProjectionScenario {
