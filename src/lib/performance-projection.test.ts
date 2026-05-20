@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   BASE_RATE_OPTIONS,
+  buildBaselineReturnSeriesForRate,
   buildProjectedPortfolioSeries,
   buildProjectedPortfolioSeriesForRate,
   getProjectionScenarioCagrPct,
@@ -75,6 +76,22 @@ function anchorPlusCashflowsExpected(
   assert.ok(series[1] !== null);
   assert.ok(Math.abs((series[1] ?? 0) - expected1) < 0.01);
   assert.ok(series[1]! > 112_000, "BASE must compound the first CAD portfolio value as the starting dollar anchor");
+}
+
+{
+  const snapshots = [
+    { date: "2026-05-01", totalCAD: 31_339 },
+    { date: "2026-11-01", totalCAD: 34_000 },
+    { date: "2027-05-01", totalCAD: 38_000 },
+  ];
+  const series = buildBaselineReturnSeriesForRate(snapshots, 31_339, 6);
+  const expected1 = 31_339 * Math.pow(1.06, yearsBetween("2026-05-01", "2026-11-01"));
+  const expected2 = 31_339 * Math.pow(1.06, yearsBetween("2026-05-01", "2027-05-01"));
+
+  assert.equal(series.length, snapshots.length);
+  assert.equal(series[0], 31_339);
+  assert.ok(series[1] !== null && Math.abs(series[1] - expected1) < 0.01);
+  assert.ok(series[2] !== null && Math.abs(series[2] - expected2) < 0.01);
 }
 
 {

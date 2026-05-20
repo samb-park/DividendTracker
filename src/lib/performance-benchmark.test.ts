@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   SUPPORTED_BENCHMARKS,
+  alignBenchmarkSeriesToPortfolioBaseline,
   normalizeBenchmarkSeries,
   type BenchmarkPoint,
   type SnapshotPoint,
@@ -30,12 +31,35 @@ const qldPrices: BenchmarkPoint[] = [
 }
 
 {
+  const aligned = alignBenchmarkSeriesToPortfolioBaseline(snapshots, qldPrices, 31_339);
+
+  assert.deepEqual(
+    aligned.map((value) => value == null ? null : Math.round(value)),
+    [31_339, 39_174, 47_009],
+    "benchmark chart values must apply selected-range benchmark return to the first visible portfolio value",
+  );
+}
+
+{
   const missingFirstVisibleDate = normalizeBenchmarkSeries(snapshots, [
     { date: "2026-01-03", value: 200 },
     { date: "2026-01-04", value: 240 },
   ]);
 
   assert.deepEqual(missingFirstVisibleDate, [null, 100, 120]);
+}
+
+{
+  const alignedMissingFirstVisibleDate = alignBenchmarkSeriesToPortfolioBaseline(snapshots, [
+    { date: "2026-01-03", value: 200 },
+    { date: "2026-01-04", value: 240 },
+  ], 31_339);
+
+  assert.deepEqual(
+    alignedMissingFirstVisibleDate.map((value) => value == null ? null : Math.round(value)),
+    [null, 31_339, 37_607],
+    "benchmark line should start at the portfolio baseline on the first visible date with benchmark data",
+  );
 }
 
 {

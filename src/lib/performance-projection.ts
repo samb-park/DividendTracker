@@ -190,6 +190,27 @@ export function buildProjectedPortfolioSeriesForRate(
   });
 }
 
+export function buildBaselineReturnSeriesForRate(
+  snapshots: PerformanceProjectionSnapshot[],
+  baselinePortfolioValueCAD: number,
+  cagrPct: number,
+): Array<number | null> {
+  if (snapshots.length === 0) return [];
+
+  const anchorDate = parseSnapshotDate(snapshots[0].date);
+  const baseline = Number(baselinePortfolioValueCAD);
+  const cagr = Number(cagrPct) / 100;
+  if (!anchorDate || !Number.isFinite(baseline) || baseline < 0 || !Number.isFinite(cagr)) {
+    return snapshots.map(() => null);
+  }
+
+  return snapshots.map((snapshot) => {
+    const snapshotDate = parseSnapshotDate(snapshot.date);
+    if (!snapshotDate) return null;
+    return baseline * Math.pow(1 + cagr, yearsBetween(anchorDate, snapshotDate));
+  });
+}
+
 export function buildProjectedPortfolioSeries(
   snapshots: PerformanceProjectionSnapshot[],
   assumptions: PerformanceProjectionAssumptions | null | undefined,

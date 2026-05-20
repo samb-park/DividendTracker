@@ -6,16 +6,16 @@ import { formatPerformanceAxisLabel } from "@/lib/performance-axis";
 import { computePerformanceMetrics, type PerformanceContributionEventCAD, type PerformanceMetricRange } from "@/lib/performance-metrics";
 import {
   SUPPORTED_BENCHMARKS,
+  alignBenchmarkSeriesToPortfolioBaseline,
   normalizeBenchmarkSeries,
   type BenchmarkTicker,
 } from "@/lib/performance-benchmark";
 import {
   BASE_RATE_OPTIONS,
-  buildProjectedPortfolioSeriesForRate,
+  buildBaselineReturnSeriesForRate,
   getActiveBaseRateOptions,
   getProjectionSelectionLabel,
   type BaseRateId,
-  type PerformanceProjectionAssumptions,
   type ProjectionSelection,
 } from "@/lib/performance-projection";
 import { useCurrency } from "@/lib/currency-context";
@@ -36,11 +36,6 @@ type Range = PerformanceMetricRange;
 interface BenchmarkPoint {
   date: string;
   value: number;
-}
-
-interface ProjectionResponse {
-  assumptions?: PerformanceProjectionAssumptions;
-  error?: string;
 }
 
 const PROJECTION_OPTIONS: Array<{ id: ProjectionSelection; label: string }> = [
@@ -77,8 +72,6 @@ export function PerformanceChart() {
   const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkTicker>("SPY");
   const [selectedProjection, setSelectedProjection] = useState<ProjectionSelection>("6");
   const [benchmarkError, setBenchmarkError] = useState(false);
-  const [projectionAssumptions, setProjectionAssumptions] = useState<PerformanceProjectionAssumptions | null>(null);
-  const [projectionError, setProjectionError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
@@ -129,54 +122,24 @@ export function PerformanceChart() {
       .catch(() => { setBenchmark([]); setBenchmarkError(true); });
   }, [range, selectedBenchmark]);
 
-  useEffect(() => {
-    if (projectionAssumptions) {
-      setProjectionError(false);
-      return;
-    }
-
-    let aborted = false;
-    setProjectionError(false);
-    fetch("/api/ai/projection", { method: "POST" })
-      .then((r) => r.json() as Promise<ProjectionResponse>)
-      .then((d) => {
-        if (aborted) return;
-        if (d.error || !d.assumptions) {
-          setProjectionError(true);
-          return;
-        }
-        setProjectionAssumptions(d.assumptions);
-      })
-      .catch(() => {
-        if (!aborted) setProjectionError(true);
-      });
-
-    return () => {
-      aborted = true;
-    };
-  }, [selectedProjection, projectionAssumptions]);
-
-  const projectionInputs = useMemo(() => ({
-    ...(projectionAssumptions ?? {}),
-    contributionEventsCAD,
-  }), [projectionAssumptions, contributionEventsCAD]);
-
   const { xirr, mdd, valueChange, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
     const { xirr, mdd, valueChange } = computePerformanceMetrics(snapshots, range, contributionEventsCAD);
-    const portfolioBase = snapshots[0].totalCAD;
+    const baselinePortfolioValueCAD = snapshots[0].totalCAD;
     const normalizedBenchmark = normalizeBenchmarkSeries(snapshots, benchmark);
+    const alignedBenchmarkCAD = alignBenchmarkSeriesToPortfolioBaseline(snapshots, benchmark, baselinePortfolioValueCAD);
     const projectedSeriesByRate = Object.fromEntries(
       BASE_RATE_OPTIONS.map((option) => [
         option.id,
-        buildProjectedPortfolioSeriesForRate(snapshots, projectionInputs, option.cagrPct),
+        buildBaselineReturnSeriesForRate(snapshots, baselinePortfolioValueCAD, option.cagrPct),
       ]),
     ) as Record<BaseRateId, Array<number | null>>;
 
     const chartData = snapshots.map((s, index) => {
-      const normalizedPortfolio = portfolioBase > 0 ? (s.totalCAD / portfolioBase) * 100 : null;
+      const normalizedPortfolio = baselinePortfolioValueCAD > 0 ? (s.totalCAD / baselinePortfolioValueCAD) * 100 : null;
       const benchmarkNorm = normalizedBenchmark[index] ?? null;
+      const benchmarkValueCAD = alignedBenchmarkCAD[index] ?? null;
       const baseRate2 = projectedSeriesByRate["2"][index];
       const baseRate4 = projectedSeriesByRate["4"][index];
       const baseRate6 = projectedSeriesByRate["6"][index];
@@ -192,7 +155,7 @@ export function PerformanceChart() {
         gain: Math.round(convertAmount(s.totalCAD - s.costBasisCAD, "CAD")),
         portfolioNorm: normalizedPortfolio,
         benchmarkNorm,
-        benchmarkCAD: benchmark[index]?.value != null ? Math.round(convertAmount(benchmark[index]?.value ?? 0, "CAD")) : null,
+        benchmarkCAD: benchmarkValueCAD != null ? Math.round(convertAmount(benchmarkValueCAD, "CAD")) : null,
         baseRate2: baseRate2 != null ? Math.round(convertAmount(baseRate2, "CAD")) : null,
         baseRate4: baseRate4 != null ? Math.round(convertAmount(baseRate4, "CAD")) : null,
         baseRate6: baseRate6 != null ? Math.round(convertAmount(baseRate6, "CAD")) : null,
@@ -205,7 +168,7 @@ export function PerformanceChart() {
 
     return { xirr, mdd, valueChange, chartData };
 
-  }, [snapshots, benchmark, range, contributionEventsCAD, projectionInputs, convertAmount]);
+  }, [snapshots, benchmark, range, contributionEventsCAD, convertAmount]);
 
   const hasSufficientData = snapshots.length >= 2;
   const lastSnapshot = snapshots[snapshots.length - 1];
@@ -249,8 +212,7 @@ export function PerformanceChart() {
           const name = p.seriesName;
           let text = "";
           if (name === "Portfolio") text = `${val.toFixed(1)}`;
-          else if (showProjection && name === activeBenchmarkLabel) continue;
-          else if (name === activeBenchmarkLabel) text = `${val.toFixed(1)}`;
+          else if (name === activeBenchmarkLabel) text = formatMoney(val, displayCurrency);
           else if (name?.startsWith("BASE")) text = formatMoney(val, displayCurrency);
           else if (name === "Portfolio Value") text = formatMoney(val, displayCurrency);
           else if (name === "Cost Basis") text = formatMoney(val, displayCurrency);
@@ -300,8 +262,8 @@ export function PerformanceChart() {
         series: [
           {
             type: "line",
-            name: "Portfolio",
-            data: chartData.map((d) => d.portfolioNorm),
+            name: "Portfolio Value",
+            data: chartData.map((d) => d.total),
             color: PORTFOLIO_LINE_COLOR,
             lineStyle: { width: PORTFOLIO_LINE_WIDTH },
             symbol: "none",
@@ -310,14 +272,14 @@ export function PerformanceChart() {
             markLine: {
               silent: true,
               symbol: "none",
-              data: [{ yAxis: 100, lineStyle: { color: tokens.mutedForeground, width: 0.5, opacity: 0.4 } }],
+              data: [{ yAxis: chartData[0]?.total ?? 0, lineStyle: { color: tokens.mutedForeground, width: 0.5, opacity: 0.4 } }],
               label: { show: false },
             },
           },
           {
             type: "line",
             name: activeBenchmarkLabel ?? "Benchmark",
-            data: chartData.map((d) => d.benchmarkNorm),
+            data: chartData.map((d) => d.benchmarkCAD),
             color: BENCHMARK_LINE_COLOR,
             lineStyle: { width: BENCHMARK_LINE_WIDTH, type: BENCHMARK_LINE_DASH as unknown as string },
             symbol: "none",
@@ -602,10 +564,10 @@ export function PerformanceChart() {
                     {item.label}
                   </span>
                 ))}
-                {(benchmarkError || projectionError) ? (
+                {benchmarkError ? (
                   <span className="ml-auto text-[9px] text-negative">DATA UNAVAILABLE</span>
                 ) : (
-                  <span className="ml-auto text-[9px] opacity-60">CAD TRAJECTORY</span>
+                  <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
                 )}
               </>
             ) : showBenchmark ? (
@@ -621,7 +583,7 @@ export function PerformanceChart() {
                 {benchmarkError ? (
                   <span className="ml-auto text-[9px] text-negative">{activeBenchmarkLabel} DATA UNAVAILABLE</span>
                 ) : (
-                  <span className="ml-auto text-[9px] opacity-60">DCA SHADOW · NORMALIZED</span>
+                  <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
                 )}
               </>
             ) : showProjection ? (
@@ -636,11 +598,7 @@ export function PerformanceChart() {
                     {item.label}
                   </span>
                 ))}
-                {projectionError ? (
-                  <span className="ml-auto text-[9px] text-negative">PROJECTION DATA UNAVAILABLE</span>
-                ) : (
-                  <span className="ml-auto text-[9px] opacity-60">CAD TRAJECTORY</span>
-                )}
+                <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
               </>
             ) : (
               <>
@@ -663,4 +621,3 @@ export function PerformanceChart() {
     </Card>
   );
 }
-

@@ -10,6 +10,7 @@ import {
 const chartSource = readFileSync(join(process.cwd(), "src/components/performance-chart.tsx"), "utf8");
 const dashboardSource = readFileSync(join(process.cwd(), "src/components/dashboard-client.tsx"), "utf8");
 const projectionSource = readFileSync(join(process.cwd(), "src/lib/performance-projection.ts"), "utf8");
+const benchmarkRouteSource = readFileSync(join(process.cwd(), "src/app/api/benchmarks/route.ts"), "utf8");
 const source = `${chartSource}\n${projectionSource}`;
 
 assert.match(
@@ -69,7 +70,31 @@ assert.doesNotMatch(chartSource, /Uses first visible portfolio value as the init
 assert.match(chartSource, /xirr \* 100/, "XIRR UI must convert decimal XIRR to percentage display");
 assert.match(chartSource, /PORTFOLIO_LINE_COLOR/, "Legend chips must use the same portfolio color constant as chart series");
 assert.match(chartSource, /BASE_LINE_COLOR/, "Legend chips must use the same BASE color constant as chart series");
-assert.doesNotMatch(chartSource, /rebaseCadSeriesToPortfolioStart/, "SPY and BASE overlays must use the global contribution schedule and only re-slice by range, not rebase to range start");
+assert.match(
+  chartSource,
+  /baselinePortfolioValueCAD/,
+  "Performance chart should capture the first visible portfolio value as the range baseline",
+);
+assert.match(
+  chartSource,
+  /alignBenchmarkSeriesToPortfolioBaseline/,
+  "SPY/QLD overlays must be rebased to the first visible portfolio value for the selected range",
+);
+assert.match(
+  benchmarkRouteSource,
+  /mode: "price-return"/,
+  "Benchmark API must return raw ticker price-return points, not a contribution-weighted shadow portfolio",
+);
+assert.doesNotMatch(
+  benchmarkRouteSource,
+  /computeShadowPortfolio|shadow-dca/,
+  "Benchmark API must not feed the chart with shadow-DCA values when comparing selected-range ticker returns",
+);
+assert.match(
+  chartSource,
+  /buildBaselineReturnSeriesForRate/,
+  "BASE overlays must start from the first visible portfolio value for the selected range",
+);
 
 assert.doesNotMatch(chartSource, /endpointMarkPoint/, "Chart should not render right-side endpoint markPoint labels");
 assert.doesNotMatch(chartSource, /endpointLabel/, "Chart should not keep endpoint label formatter helpers");
@@ -117,18 +142,8 @@ assert.match(
 
 assert.match(
   chartSource,
-  /const projectionInputs = useMemo\(\(\) => \(\{[\s\S]*\.\.\.\(projectionAssumptions \?\? \{\}\),[\s\S]*contributionEventsCAD,[\s\S]*\}\), \[projectionAssumptions, contributionEventsCAD\]\)/,
-  "Performance chart BASE calculation must pass engine/API contributionEventsCAD into projection inputs so dropdown r applies to ExternalDeposit cash flows",
-);
-assert.match(
-  chartSource,
-  /buildProjectedPortfolioSeriesForRate\(snapshots, projectionInputs, option\.cagrPct\)/,
-  "Performance chart BASE series must use the projection input object that includes ExternalDeposit cash flows",
-);
-assert.match(
-  chartSource,
-  /projectionInputs, convertAmount\]/,
-  "Performance chart memo dependencies must include projectionInputs so BASE recomputes when contribution cash flows change",
+  /buildBaselineReturnSeriesForRate\(snapshots, baselinePortfolioValueCAD, option\.cagrPct\)/,
+  "Performance chart BASE series must use selected-range portfolio baseline and fixed return rate",
 );
 
 assert.match(

@@ -47,3 +47,16 @@ export function normalizeBenchmarkSeries(
       : null;
   });
 }
+
+export function alignBenchmarkSeriesToPortfolioBaseline(
+  snapshots: SnapshotPoint[],
+  benchmark: BenchmarkPoint[],
+  baselinePortfolioValueCAD: number,
+): Array<number | null> {
+  const baseline = Number(baselinePortfolioValueCAD);
+  if (!Number.isFinite(baseline) || baseline < 0) return snapshots.map(() => null);
+
+  return normalizeBenchmarkSeries(snapshots, benchmark).map((normalizedValue) => (
+    normalizedValue == null ? null : baseline * (normalizedValue / 100)
+  ));
+}
