@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 
 const yf = new YahooFinance();
 const TTL = 60 * 60 * 1000;
-const VALID_RANGES = ["3m", "6m", "1y", "all"] as const;
+const VALID_RANGES = ["1y", "3y", "5y", "all"] as const;
 const VALID_BASE_RATES = [2, 4, 6] as const;
 type Range = (typeof VALID_RANGES)[number];
 type BaseRate = (typeof VALID_BASE_RATES)[number];
@@ -83,9 +83,9 @@ function rangeToStartDate(range: Range, now = new Date()): string | null {
   if (range === "all") return null;
 
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (range === "3m") d.setUTCMonth(d.getUTCMonth() - 3);
-  if (range === "6m") d.setUTCMonth(d.getUTCMonth() - 6);
   if (range === "1y") d.setUTCFullYear(d.getUTCFullYear() - 1);
+  if (range === "3y") d.setUTCFullYear(d.getUTCFullYear() - 3);
+  if (range === "5y") d.setUTCFullYear(d.getUTCFullYear() - 5);
   return dateOnly(d);
 }
 

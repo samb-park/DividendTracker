@@ -16,6 +16,8 @@ export default auth((req) => {
     pathname === "/pending" ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
+    pathname === "/sw.js" ||
+    pathname === "/icon.png" ||
     pathname.startsWith("/apple-icon");
 
   if (isPublic) return NextResponse.next();

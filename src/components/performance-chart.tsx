@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { computePerformanceYAxisDomain } from "@/lib/charts/performanceDomain";
 
 interface SeriesPoint {
   date: string;
@@ -32,10 +33,10 @@ interface PerformanceResponse {
   ratePercent: BaseRate;
 }
 
-const RANGES = ["3m", "6m", "1y", "all"] as const;
+const RANGES = ["1y", "3y", "5y", "all"] as const;
 type Range = (typeof RANGES)[number];
 
-const BENCHMARK_TICKERS = ["SPY", "QQQ", "VOO"] as const;
+const BENCHMARK_TICKERS = ["SPY", "QLD", "QQQ", "VOO"] as const;
 type BenchmarkTicker = (typeof BENCHMARK_TICKERS)[number];
 
 const BASE_RATES = [2, 4, 6] as const;
@@ -109,6 +110,11 @@ export function PerformanceChart() {
       baseR: baseByDate.get(point.date) ?? null,
     }));
   }, [data, range]);
+
+  const yAxisDomain = useMemo(
+    () => computePerformanceYAxisDomain(chartData, ["portfolio", "benchmark", "baseR"]),
+    [chartData],
+  );
 
   const hasSufficientData = chartData.length >= 2;
   const valueChangeClass = data?.valueChangePct != null && data.valueChangePct >= 0 ? "text-positive" : "text-negative";
@@ -205,12 +211,13 @@ export function PerformanceChart() {
               BASE {baseRate}%
             </span>
           </div>
-          <div className="h-48 lg:h-72 chart-touch-zone">
+          <div className="h-56 lg:h-80 chart-touch-zone">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" hide />
                 <YAxis
+                  domain={yAxisDomain}
                   width={54}
                   tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                   tickLine={false}
