@@ -91,6 +91,16 @@ assert.doesNotMatch(
   "Benchmark API must not feed the chart with shadow-DCA values when comparing selected-range ticker returns",
 );
 assert.match(
+  benchmarkRouteSource,
+  /transaction\.findMany/,
+  "Benchmark API must include the same transaction event dates used by /api/snapshots for the selected range",
+);
+assert.match(
+  benchmarkRouteSource,
+  /cashTransaction\.findMany/,
+  "Benchmark API must include the same cash event dates used by /api/snapshots for the selected range",
+);
+assert.match(
   chartSource,
   /buildBaselineReturnSeriesForRate/,
   "BASE overlays must start from the first visible portfolio value for the selected range",

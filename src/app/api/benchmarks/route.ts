@@ -18,6 +18,10 @@ interface MarketPoint {
   value: number;
 }
 
+interface DateRow {
+  date: Date;
+}
+
 function rangeToSince(range: Range): Date | undefined {
   if (range === "all") return undefined;
   const d = new Date();
@@ -31,6 +35,11 @@ function rangeToSince(range: Range): Date | undefined {
 
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function dateKey(value: Date | string): string {
+  if (value instanceof Date) return isoDate(value);
+  return value.slice(0, 10);
 }
 
 function addDays(date: string, days: number): string {
@@ -48,6 +57,22 @@ function valueOnOrBefore(points: MarketPoint[], targetDate: string): number | nu
   return candidate;
 }
 
+function valuationDatesFromSources(
+  snapshots: DateRow[],
+  transactions: DateRow[],
+  cashTxns: DateRow[],
+  since: Date | undefined,
+): string[] {
+  const sinceKey = since ? dateKey(since) : undefined;
+  const snapshotDates = snapshots.map((snapshot) => dateKey(snapshot.date));
+  const eventDates = [
+    ...transactions.map((transaction) => dateKey(transaction.date)),
+    ...cashTxns.map((cashTxn) => dateKey(cashTxn.date)),
+  ].filter((date) => !sinceKey || date >= sinceKey);
+
+  return Array.from(new Set([...snapshotDates, ...eventDates])).sort();
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -63,7 +88,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ prices: [], mode: "price-return" });
   }
   const ticker = rawTicker;
-  const cacheKey = `${userId}:${ticker}-${range}:price-return-v1`;
+  const cacheKey = `${userId}:${ticker}-${range}:price-return-v2`;
 
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < TTL) {
@@ -72,18 +97,30 @@ export async function GET(req: NextRequest) {
 
   try {
     const since = rangeToSince(range);
-    const snapshots = await prisma.portfolioSnapshot.findMany({
-      where: {
-        userId,
-        ...(since ? { date: { gte: since } } : {}),
-      },
-      orderBy: { date: "asc" },
-      select: { date: true },
-    });
+    const [snapshots, transactions, cashTxns] = await Promise.all([
+      prisma.portfolioSnapshot.findMany({
+        where: {
+          userId,
+          ...(since ? { date: { gte: since } } : {}),
+        },
+        orderBy: { date: "asc" },
+        select: { date: true },
+      }),
+      prisma.transaction.findMany({
+        where: { holding: { portfolio: { userId } } },
+        orderBy: { date: "asc" },
+        select: { date: true },
+      }),
+      prisma.cashTransaction.findMany({
+        where: { portfolio: { userId } },
+        orderBy: { date: "asc" },
+        select: { date: true },
+      }),
+    ]);
 
-    if (snapshots.length === 0) return NextResponse.json({ prices: [], mode: "price-return" });
+    const valuationDates = valuationDatesFromSources(snapshots, transactions, cashTxns, since);
+    if (valuationDates.length === 0) return NextResponse.json({ prices: [], mode: "price-return" });
 
-    const valuationDates = snapshots.map((snapshot) => isoDate(snapshot.date));
     const firstValuationDate = valuationDates[0];
     const lastValuationDate = valuationDates[valuationDates.length - 1];
     const marketStartDate = addDays(firstValuationDate, -10);
