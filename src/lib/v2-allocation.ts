@@ -9,9 +9,18 @@ export interface V2Holding {
   isCashEquivalent?: boolean;
 }
 
+export type NonCoreFrequency = "weekly" | "biweekly" | "monthly";
+
+export interface V2NonCorePlan {
+  frequency: NonCoreFrequency;
+  cad: number;
+}
+
 export interface V2TargetEntry {
   pct: number;
   excluded?: boolean;
+  /** When excluded=true, optional self-managed budget (frequency + CAD per period). Informational only — does NOT draw from the main weekly contribution. */
+  nonCorePlan?: V2NonCorePlan;
 }
 
 export interface V2ReserveEntry {
@@ -61,18 +70,30 @@ export interface V2ExcludedRow {
   valueCAD: number;
   currentReservePct: number;
   reserveTargetPct: number;
+  /** @deprecated legacy field — Non-Core no longer draws from main contribution. Kept for backward-compat display. */
   plannedWeeklyCAD: number;
+  /** @deprecated legacy field — kept for backward-compat. */
   active: boolean;
+  /** @deprecated always 0 under Non-Core manual mode. */
   baseAllocCAD: number;
+  /** @deprecated always 0 under Non-Core manual mode. */
   redistributedInCAD: number;
+  /** @deprecated always 0 under Non-Core manual mode. */
   redistributedOutCAD: number;
+  /** Always 0 for Non-Core (excluded) tickers under the new manual-budget model. */
   actualSuggestedCAD: number;
+  /** @deprecated always empty under Non-Core manual mode. */
   reservedFromTickers: string[];
+  /** @deprecated always empty under Non-Core manual mode. */
   reallocatedToTickers: string[];
   postValueCAD: number;
   postReservePct: number;
   status: V2ExcludedStatus;
   missingPrice: boolean;
+  /** User-defined self-managed budget (frequency + CAD). Informational; not deployed from main contribution. */
+  nonCorePlan?: V2NonCorePlan;
+  /** True when legacy reserve config (plannedWeeklyCAD>0 / active=true) exists; signals UI to show a migration hint. */
+  hasLegacyReserveConfig: boolean;
 }
 
 export interface V2AllocationResult {
@@ -135,160 +156,34 @@ export function buildV2AllocationPlan(input: V2AllocationInput): V2AllocationRes
   const excludedGroupValueCAD = excludedCls.reduce((s, c) => s + c.valueCAD, 0);
   const totalValueCAD = normalGroupValueCAD + excludedGroupValueCAD;
 
-  // Step 3: per-excluded reserve allocation
-  let overflowCAD = 0;
-  const excAlloc: Record<string, number> = {};       // realized base alloc
-  const excGapCAD: Record<string, number> = {};       // remaining gap (CAD) until target
-  const excActive: Record<string, boolean> = {};
+  // Step 3: classify excluded as Non-Core (manual budget mode).
+  // Non-Core does NOT draw from the main weekly contribution — actualSuggestedCAD is always 0.
+  // The legacy reserve config (plannedWeeklyCAD / active / redistribution) is preserved
+  // in storage for backward compatibility but no longer flows into the contribution plan.
+  const excAlloc: Record<string, number> = {};
   const excReserveTargetPct: Record<string, number> = {};
   const excPlannedCAD: Record<string, number> = {};
-  const reservedFromTickers: Record<string, string[]> = {};
-  const reallocatedToTickers: Record<string, string[]> = {};
-
-  for (const c of excludedCls) {
-    reservedFromTickers[c.h.ticker] = [];
-    reallocatedToTickers[c.h.ticker] = [];
-    excAlloc[c.h.ticker] = 0;
-  }
-
-  // Validate reserve target sum (excluded ticker reserve targets are in % of total portfolio)
-  const reserveTargetSum = excludedCls.reduce((s, c) => {
-    const r = input.reserves[c.h.ticker];
-    return s + (r?.targetPct ?? 0);
-  }, 0);
-  if (reserveTargetSum > 100 + EPS) {
-    warnings.push(`reserve target sum (${reserveTargetSum.toFixed(2)}%) exceeds 100% of portfolio`);
-  }
-
-  // Compute base allocation per excluded ticker
+  const excActive: Record<string, boolean> = {};
+  const excHasLegacy: Record<string, boolean> = {};
   for (const c of excludedCls) {
     const t = c.h.ticker;
     const r = input.reserves[t];
     const cfg: V2ReserveEntry = r
       ? { targetPct: r.targetPct, plannedWeeklyCAD: Math.max(0, r.plannedWeeklyCAD), active: !!r.active }
       : { targetPct: 0, plannedWeeklyCAD: 0, active: false };
-    excActive[t] = cfg.active;
+    excAlloc[t] = 0;                           // Non-Core: no contribution allocation
     excReserveTargetPct[t] = cfg.targetPct;
-    excPlannedCAD[t] = cfg.plannedWeeklyCAD;
-
-    if (!cfg.active) {
-      // inactive ticker: planned amount becomes overflow (note: usually 0 if user didn't set planned for inactive)
-      overflowCAD += cfg.plannedWeeklyCAD;
-      excGapCAD[t] = Math.max(0, (cfg.targetPct / 100) * totalValueCAD - c.valueCAD);
-      continue;
-    }
-
-    const reserveTargetCAD = (cfg.targetPct / 100) * totalValueCAD;
-    const gapCAD = Math.max(0, reserveTargetCAD - c.valueCAD);
-    excGapCAD[t] = gapCAD;
-
-    if (gapCAD <= EPS) {
-      // already at/above target — full planned amount becomes overflow
-      overflowCAD += cfg.plannedWeeklyCAD;
-      excAlloc[t] = 0;
-    } else {
-      const take = Math.min(cfg.plannedWeeklyCAD, gapCAD);
-      excAlloc[t] = take;
-      overflowCAD += cfg.plannedWeeklyCAD - take;
-    }
+    excPlannedCAD[t] = cfg.plannedWeeklyCAD;   // displayed only
+    excActive[t] = cfg.active;                 // displayed only
+    excHasLegacy[t] = cfg.active && cfg.plannedWeeklyCAD > 0;
   }
 
-  // Track which tickers contributed to overflow (for "reallocatedTo" trail)
-  const overflowSourceTickers = excludedCls
-    .filter((c) => {
-      const t = c.h.ticker;
-      const planned = excPlannedCAD[t] ?? 0;
-      return planned > 0 && (excPlannedCAD[t] - excAlloc[t]) > EPS;
-    })
-    .map((c) => c.h.ticker);
-
-  // Step 4: redistribute overflow within excluded group
-  const remainingGap = (t: string) => Math.max(0, excGapCAD[t] - excAlloc[t]);
-
-  let safetyCounter = 0;
-  while (overflowCAD > EPS && safetyCounter++ < 20) {
-    const underweight = excludedCls
-      .map((c) => c.h.ticker)
-      .filter((t) => excActive[t] && remainingGap(t) > EPS);
-
-    if (underweight.length === 0) break;
-
-    let progressed = false;
-
-    if (input.redistribution.rule === "even") {
-      const share = overflowCAD / underweight.length;
-      for (const t of underweight) {
-        const take = Math.min(share, remainingGap(t));
-        if (take > EPS) {
-          excAlloc[t] += take;
-          overflowCAD -= take;
-          progressed = true;
-          for (const src of overflowSourceTickers) {
-            if (src !== t && !reservedFromTickers[t].includes(src)) reservedFromTickers[t].push(src);
-            if (src !== t && !reallocatedToTickers[src].includes(t)) reallocatedToTickers[src].push(t);
-          }
-        }
-      }
-    } else if (input.redistribution.rule === "priority") {
-      const priorityList = input.redistribution.priorityList ?? [];
-      const ordered = priorityList
-        .map(upper)
-        .filter((t) => underweight.includes(t))
-        .concat(underweight.filter((t) => !priorityList.map(upper).includes(t)));
-      for (const t of ordered) {
-        if (overflowCAD <= EPS) break;
-        const take = Math.min(overflowCAD, remainingGap(t));
-        if (take > EPS) {
-          excAlloc[t] += take;
-          overflowCAD -= take;
-          progressed = true;
-          for (const src of overflowSourceTickers) {
-            if (src !== t && !reservedFromTickers[t].includes(src)) reservedFromTickers[t].push(src);
-            if (src !== t && !reallocatedToTickers[src].includes(t)) reallocatedToTickers[src].push(t);
-          }
-        }
-      }
-    } else {
-      // shortfall_proportional (default)
-      const totalRemainingGap = underweight.reduce((s, t) => s + remainingGap(t), 0);
-      if (totalRemainingGap <= EPS) break;
-      const snapshotOverflow = overflowCAD;
-      for (const t of underweight) {
-        const portion = (remainingGap(t) / totalRemainingGap) * snapshotOverflow;
-        const take = Math.min(portion, remainingGap(t));
-        if (take > EPS) {
-          excAlloc[t] += take;
-          overflowCAD -= take;
-          progressed = true;
-          for (const src of overflowSourceTickers) {
-            if (src !== t && !reservedFromTickers[t].includes(src)) reservedFromTickers[t].push(src);
-            if (src !== t && !reallocatedToTickers[src].includes(t)) reallocatedToTickers[src].push(t);
-          }
-        }
-      }
-    }
-
-    if (!progressed) break;
+  if (excludedCls.some((c) => excHasLegacy[c.h.ticker])) {
+    warnings.push("legacy reserve config detected — Non-Core no longer draws from main contribution. Move planned amounts to the per-asset Non-Core budget.");
   }
 
-  // Step 5: scale-down if planned excluded sum exceeds contribution
-  const plannedExcludedSum = excludedCls.reduce(
-    (s, c) => s + (excActive[c.h.ticker] ? excPlannedCAD[c.h.ticker] : 0),
-    0,
-  );
-  if (plannedExcludedSum > contributionCAD + EPS && plannedExcludedSum > EPS) {
-    warnings.push(
-      `planned excluded contributions (${plannedExcludedSum.toFixed(2)} CAD) exceed weekly total (${contributionCAD.toFixed(2)} CAD); scaling down`,
-    );
-    const scale = contributionCAD / plannedExcludedSum;
-    for (const t of Object.keys(excAlloc)) {
-      excAlloc[t] = excAlloc[t] * scale;
-    }
-    overflowCAD = 0;
-  }
-
-  const actualExcludedSum = Object.values(excAlloc).reduce((s, v) => s + v, 0);
-  const normalContributionCAD = Math.max(0, contributionCAD - actualExcludedSum);
+  const actualExcludedSum = 0;
+  const normalContributionCAD = Math.max(0, contributionCAD);
 
   // Step 6: distribute normalContributionCAD among normal tickers
   const rawTargetSum = normalCls.reduce(
@@ -373,18 +268,18 @@ export function buildV2AllocationPlan(input: V2AllocationInput): V2AllocationRes
   const excludedRows: V2ExcludedRow[] = excludedCls.map((c) => {
     const t = c.h.ticker;
     const planned = excPlannedCAD[t] ?? 0;
-    const actual = excAlloc[t] ?? 0;
-    const baseAlloc = excActive[t] ? Math.min(planned, Math.max(0, excGapCAD[t])) : 0;
-    const redistributedIn = Math.max(0, actual - baseAlloc);
-    const redistributedOut = Math.max(0, planned - actual);
     const reserveTargetPct = excReserveTargetPct[t] ?? 0;
     const currentReservePct = safeDiv(c.valueCAD, totalValueCAD) * 100;
-    const postValueCAD = c.valueCAD + actual;
+    // Non-Core no longer receives main-contribution allocation, so post-value === current value.
+    const postValueCAD = c.valueCAD;
     const postReservePct = safeDiv(postValueCAD, postTotalValueCAD) * 100;
+    const targetEntry = input.targets[t];
+    const nonCorePlan = targetEntry?.nonCorePlan
+      ? { frequency: targetEntry.nonCorePlan.frequency, cad: targetEntry.nonCorePlan.cad }
+      : undefined;
 
     let status: V2ExcludedStatus;
-    if (!excActive[t]) status = "inactive";
-    else if (currentReservePct > reserveTargetPct + 0.05) status = "above_target";
+    if (currentReservePct > reserveTargetPct + 0.05) status = "above_target";
     else if (currentReservePct >= reserveTargetPct - 0.05) status = "at_target";
     else status = "below_target";
 
@@ -398,16 +293,18 @@ export function buildV2AllocationPlan(input: V2AllocationInput): V2AllocationRes
       reserveTargetPct,
       plannedWeeklyCAD: planned,
       active: !!excActive[t],
-      baseAllocCAD: baseAlloc,
-      redistributedInCAD: redistributedIn,
-      redistributedOutCAD: redistributedOut,
-      actualSuggestedCAD: actual,
-      reservedFromTickers: reservedFromTickers[t] ?? [],
-      reallocatedToTickers: reallocatedToTickers[t] ?? [],
+      baseAllocCAD: 0,
+      redistributedInCAD: 0,
+      redistributedOutCAD: 0,
+      actualSuggestedCAD: 0,
+      reservedFromTickers: [],
+      reallocatedToTickers: [],
       postValueCAD,
       postReservePct,
       status,
       missingPrice: c.missingPrice,
+      nonCorePlan,
+      hasLegacyReserveConfig: !!excHasLegacy[t],
     };
   });
 
@@ -423,7 +320,7 @@ export function buildV2AllocationPlan(input: V2AllocationInput): V2AllocationRes
     normalRows,
     excludedRows,
     excludedTotalAllocatedCAD: actualExcludedSum,
-    normalTotalAllocatedCAD: normalContributionCAD - (overflowCAD > EPS ? overflowCAD : 0),
+    normalTotalAllocatedCAD: Object.values(normalAllocCAD).reduce((s, v) => s + v, 0),
     warnings,
   };
 }

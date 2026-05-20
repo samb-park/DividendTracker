@@ -15,6 +15,8 @@ export function ChartTouchHandler() {
 
     const getZone = (el: EventTarget | null): Element | null => {
       if (!el || !(el instanceof Element)) return null;
+      // Let ECharts own its own touch handling — don't intercept on its canvases
+      if (el.closest(".echarts-for-react")) return null;
       return el.closest(".chart-touch-zone");
     };
 

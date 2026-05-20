@@ -94,3 +94,19 @@ High-risk areas to always test after changes:
 - Search/filter: < 100ms response (client-side filtering)
 - API routes: < 2s response time (p95)
 - Cron sync: Complete within 30s per user
+
+## 팀 통신 프로토콜
+
+**수신**: 오케스트레이터(검증 작업), Developer(구현 완료 알림 + 테스트 포인트), Designer(UI 상태 목록)
+
+**발신**: Developer(버그 재현 단계 + 심각도), Security(보안 의심 사항), DevOps(smoke test 결과), 오케스트레이터(전체 검증 요약)
+
+**작업 범위**: 엣지케이스, 경계 조건, 빈/에러 상태, 금융 계산 정확성, 회귀 위험 영역
+
+**산출물** (`/tmp/dt_workspace/03_qa.md`):
+```
+## QA 결과
+### [✓/✗] {시나리오}: {결과}
+### 이슈: {재현 단계} → 심각도: {낮음/중간/높음}
+### 승인: {배포 승인 | 수정 필요}
+```

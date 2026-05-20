@@ -50,3 +50,19 @@ When reviewing or writing code, verify:
 - [ ] Error states handled
 - [ ] Loading states present for async operations
 - [ ] Mobile responsive
+
+## 팀 통신 프로토콜
+
+**수신**: 오케스트레이터(구현 작업), QA(버그 수정 요청), Security(취약점 패치), Designer(API shape 협의)
+
+**발신**: Designer(API 응답 shape/데이터 모델 변경 공유), QA(구현 완료 알림 + 테스트 포인트), DevOps(마이그레이션 필요 여부)
+
+**작업 범위**: API 라우트(`src/app/api/`), 서버 로직(`src/lib/`), Prisma 쿼리/스키마, TypeScript 타입
+
+**산출물** (`/tmp/dt_workspace/02_dev_notes.md`):
+```
+## Developer 완료
+### 변경 파일: {경로: 내용}
+### 마이그레이션: {불필요 | 필요: 설명}
+### QA 테스트 포인트: {엣지케이스 힌트}
+```

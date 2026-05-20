@@ -27,6 +27,18 @@ interface DayEvent {
   sharesHeld: number;
 }
 
+interface TxnCalEvent {
+  id: string;
+  action: "BUY" | "SELL" | "DIVIDEND";
+  date: string;
+  ticker: string;
+  quantity: number;
+  price: number;
+  commission: number;
+  total: number;
+  currency: string;
+}
+
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MONTHS = [
   "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
@@ -168,6 +180,7 @@ export function CalendarClient() {
   const [events, setEvents] = useState<DividendCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [txnEvents, setTxnEvents] = useState<TxnCalEvent[]>([]);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -178,9 +191,15 @@ export function CalendarClient() {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    fetch("/api/calendar")
-      .then((r) => r.json())
-      .then((data) => { setEvents(data); setLoading(false); })
+    Promise.all([
+      fetch("/api/calendar").then((r) => r.json()),
+      fetch("/api/transactions/calendar").then((r) => r.json()),
+    ])
+      .then(([calData, txnData]) => {
+        setEvents(calData);
+        setTxnEvents(txnData);
+        setLoading(false);
+      })
       .catch(() => { setError("Failed to load calendar data"); setLoading(false); });
   }, []);
 
@@ -237,6 +256,17 @@ export function CalendarClient() {
   const eventMap = useMemo(() => buildEventMap(events, year, month), [events, year, month]);
   const upcoming = useMemo(() => buildUpcoming(events), [events]);
 
+  const txnMap = useMemo(() => {
+    const map = new Map<string, TxnCalEvent[]>();
+    const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+    for (const t of txnEvents) {
+      if (!t.date.startsWith(monthStr)) continue;
+      if (!map.has(t.date)) map.set(t.date, []);
+      map.get(t.date)!.push(t);
+    }
+    return map;
+  }, [txnEvents, year, month]);
+
   // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -268,18 +298,11 @@ export function CalendarClient() {
       {/* Left column: legend + nav + calendar grid + selected day detail */}
       <div className="space-y-4">
         {/* Legend */}
-        <div className="flex gap-4 text-[10px] tracking-wide">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 cal-exdiv" />
-            EX-DIV DATE
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 cal-payment" />
-            PAYMENT DATE
-          </span>
-          <span className="flex items-center gap-1 text-muted-foreground">
-            * PREDICTED
-          </span>
+        <div className="flex flex-wrap gap-3 text-[9px] text-muted-foreground tracking-wide mb-1">
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 cal-exdiv" /> EX-DIV</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 cal-payment" /> PAYMENT</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-positive/80" /> BUY/SELL</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/80" /> DIV RECEIVED</span>
         </div>
 
         {/* Month navigation */}
@@ -309,9 +332,14 @@ export function CalendarClient() {
 
             const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
             const dayEvents = eventMap.get(dateStr) ?? [];
-            const hasExDiv = dayEvents.some((e) => e.type === "exdiv");
-            const hasPayment = dayEvents.some((e) => e.type === "payment");
-            const allPredicted = dayEvents.length > 0 && dayEvents.every((e) => e.predicted);
+            const dayTxns = txnMap.get(dateStr) ?? [];
+            const filteredDayEvents = dayEvents;
+            const hasBuySell = dayTxns.some(t => t.action === "BUY" || t.action === "SELL");
+            const hasDivReceived = dayTxns.some(t => t.action === "DIVIDEND");
+
+            const hasExDiv = filteredDayEvents.some((e) => e.type === "exdiv");
+            const hasPayment = filteredDayEvents.some((e) => e.type === "payment");
+            const allPredicted = filteredDayEvents.length > 0 && filteredDayEvents.every((e) => e.predicted);
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDay;
 
@@ -333,9 +361,9 @@ export function CalendarClient() {
                 <span className={`text-[11px] ${isToday ? "text-accent font-medium" : ""}`}>
                   {day}
                 </span>
-                {dayEvents.length > 0 && (
+                {filteredDayEvents.length > 0 && (
                   <div className="flex flex-wrap gap-[2px] mt-1 justify-center">
-                    {dayEvents.slice(0, 2).map((e, idx) => (
+                    {filteredDayEvents.slice(0, 2).map((e, idx) => (
                       <span
                         key={idx}
                         className="text-[8px] leading-none tracking-tighter truncate max-w-full"
@@ -344,9 +372,15 @@ export function CalendarClient() {
                         {e.ticker}
                       </span>
                     ))}
-                    {dayEvents.length > 2 && (
-                      <span className="text-[8px] text-muted-foreground">+{dayEvents.length - 2}</span>
+                    {filteredDayEvents.length > 2 && (
+                      <span className="text-[8px] text-muted-foreground">+{filteredDayEvents.length - 2}</span>
                     )}
+                  </div>
+                )}
+                {(hasBuySell || hasDivReceived) && (
+                  <div className="absolute bottom-0.5 left-0 right-0 flex justify-center gap-0.5">
+                    {hasBuySell && <span className="w-1 h-1 rounded-full bg-positive/80" />}
+                    {hasDivReceived && <span className="w-1 h-1 rounded-full bg-primary/80" />}
                   </div>
                 )}
               </div>
@@ -355,44 +389,99 @@ export function CalendarClient() {
         </div>
 
         {/* Selected day detail */}
-        {selectedDay && selectedEvents.length > 0 && (
-          <div className="border border-border bg-card p-4 space-y-2">
-            <div className="text-accent text-xs tracking-wide mb-3">
-              {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-CA", {
-                weekday: "long", year: "numeric", month: "long", day: "numeric",
-              }).toUpperCase()}
-            </div>
-            {selectedEvents.map((e, i) => (
-              <div key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                <div>
-                  <span className="font-medium">{e.ticker}</span>
-                  <span className="text-muted-foreground ml-2">{e.name}</span>
-                </div>
-                <div className="text-right">
-                  <span
-                    className="text-[10px] tracking-wide px-1 py-0.5 border"
-                    style={{
-                      color: e.type === "exdiv" ? "hsl(var(--accent))" : "hsl(var(--primary))",
-                      borderColor: e.type === "exdiv" ? "hsl(var(--accent) / 0.4)" : "hsl(var(--primary) / 0.4)",
-                    }}
-                  >
-                    {e.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
-                  </span>
-                  {e.amount && (
-                    <div className="text-muted-foreground text-[10px] mt-0.5">
-                      {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.amount)}/sh
-                    </div>
-                  )}
-                  {e.type === "payment" && e.amount && e.sharesHeld > 0 && (
-                    <div className="text-primary tabular-nums text-xs mt-1">
-                      TOTAL: {e.currency === "CAD" ? "C$" : "$"}{fmt2(e.amount * e.sharesHeld)}
-                    </div>
-                  )}
-                </div>
+        {selectedDay && (() => {
+          const selDivEvents = selectedEvents;
+          const selTxns = txnMap.get(selectedDay) ?? [];
+          if (selDivEvents.length === 0 && selTxns.length === 0) return null;
+
+          // Build unified entries: group dividend events + div-received txns by ticker; keep BUY/SELL separate
+          const tickerMap = new Map<string, { divEvent?: DayEvent; divTxn?: TxnCalEvent }>();
+          for (const e of selDivEvents) {
+            const entry = tickerMap.get(e.ticker) ?? {};
+            entry.divEvent = e;
+            tickerMap.set(e.ticker, entry);
+          }
+          for (const t of selTxns) {
+            if (t.action === "DIVIDEND") {
+              const entry = tickerMap.get(t.ticker) ?? {};
+              entry.divTxn = t;
+              tickerMap.set(t.ticker, entry);
+            }
+          }
+          const buySellTxns = selTxns.filter(t => t.action === "BUY" || t.action === "SELL");
+
+          return (
+            <div className="border border-border bg-card p-4 space-y-2">
+              <div className="text-accent text-xs tracking-wide mb-3">
+                {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-CA", {
+                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                }).toUpperCase()}
               </div>
-            ))}
-          </div>
-        )}
+              {/* Dividend events + received on one line per ticker */}
+              {[...tickerMap.entries()].map(([ticker, entry]) => {
+                const e = entry.divEvent;
+                const t = entry.divTxn;
+                const cur = e ? (e.currency === "CAD" ? "C$" : "$") : (t ? (t.currency === "CAD" ? "C$" : "$") : "$");
+                return (
+                  <div key={ticker} className="flex items-start justify-between text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    <span className="font-medium">{ticker}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {e && (
+                        <span
+                          className="text-[10px] tracking-wide px-1 py-0.5 border"
+                          style={{
+                            color: e.type === "exdiv" ? "hsl(var(--accent))" : "hsl(var(--primary))",
+                            borderColor: e.type === "exdiv" ? "hsl(var(--accent) / 0.4)" : "hsl(var(--primary) / 0.4)",
+                          }}
+                        >
+                          {e.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
+                        </span>
+                      )}
+                      {e?.amount && (
+                        <span className="text-muted-foreground text-[10px] tabular-nums">
+                          {cur}{fmt2(e.amount)}/sh
+                        </span>
+                      )}
+                      {t && (
+                        <span className="text-[10px] tracking-wide px-1 py-0.5 border text-primary border-primary/40">
+                          RECEIVED
+                        </span>
+                      )}
+                      {t && (
+                        <span className="text-primary text-[10px] tabular-nums">
+                          {cur}{fmt2(t.total)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* BUY / SELL transactions */}
+              {buySellTxns.map((t) => {
+                const cur = t.currency === "CAD" ? "C$" : "$";
+                return (
+                  <div key={t.id} className="flex items-start justify-between text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    <span className="font-medium">{t.ticker}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <span className={`text-[10px] tracking-wide px-1 py-0.5 border ${
+                        t.action === "BUY" ? "text-positive border-positive/40" : "text-negative border-negative/40"
+                      }`}>
+                        {t.action}
+                      </span>
+                      <span className="text-muted-foreground text-[10px] tabular-nums">
+                        {t.quantity % 1 === 0 ? t.quantity.toFixed(0) : t.quantity.toFixed(4)}sh @ {cur}{fmt2(t.price)}
+                      </span>
+                      <span className="tabular-nums text-[10px]">
+                        {cur}{fmt2(t.total + t.commission)}
+                        {t.commission > 0 && <span className="text-muted-foreground/60 ml-1">(+{cur}{fmt2(t.commission)})</span>}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Right column: upcoming events + holdings summary */}
@@ -424,7 +513,7 @@ export function CalendarClient() {
                     const ev = events.find((e) => e.ticker === u.event.ticker);
                     const portfolio = ev?.portfolios.join(", ") ?? "";
                     return (
-                      <tr key={i} className={u.event.predicted ? "opacity-50" : ""}>
+                      <tr key={i}>
                         <td className="font-medium">{u.event.ticker}</td>
                         <td>
                           <span
@@ -436,7 +525,6 @@ export function CalendarClient() {
                             }}
                           >
                             {u.event.type === "exdiv" ? "EX-DIV" : "PAYMENT"}
-                            {u.event.predicted && <span className="text-muted-foreground ml-1">*</span>}
                           </span>
                         </td>
                         <td className="tabular-nums">

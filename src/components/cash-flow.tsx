@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { fmt } from "@/lib/utils";
 
@@ -100,8 +100,9 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
       .catch(() => {});
   }, []);
 
-  const toCAD = (amount: number, currency: "CAD" | "USD") =>
-    currency === "USD" ? amount * fxRate : amount;
+  const toCAD = useCallback((amount: number, currency: "CAD" | "USD") =>
+    currency === "USD" ? amount * fxRate : amount,
+  [fxRate]);
 
   const byAccount = useMemo(() => {
     const map = new Map<string, { name: string; items: CashItem[] }>();
@@ -120,7 +121,7 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
         return { id, name: data.name, items: data.items, netCAD };
       })
       .sort((a, b) => b.netCAD - a.netCAD);
-  }, [items, fxRate]);
+  }, [items, toCAD]);
 
   const totalDepositCAD = items
     .filter((i) => i.action === "DEPOSIT")
@@ -133,7 +134,11 @@ export function CashFlow({ fxRate }: { fxRate: number }) {
   const toggleAccount = (id: string) => {
     setExpandedAccounts((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };

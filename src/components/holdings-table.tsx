@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { AddHoldingDialog } from "./add-holding-dialog";
 import { HoldingDetailPanel } from "./holding-detail-panel";
-import { StrategyStatusPanel } from "./strategy-status-panel";
+// StrategyStatusPanel was removed — its data (QLD core weight, SGOV buffer,
+// trigger status) now lives authoritatively in the AI Assistance page
+// (TopSummary 4-stat + RulebookStatus component). Removing the duplicate avoids
+// redundant rendering and stale rulebook phrasing on the Holdings page.
 import { mergeHoldings } from "@/lib/utils";
 import { buildAllocationPlan } from "@/lib/investment-allocation";
-import { getOverrideTargets, type NdxTier } from "@/lib/investment-triggers";
+// NDX-tier override / upper-trigger logic was removed from this page.
+// Rulebook v4.1.8 forbids NDX-based triggers; all rebalance/trigger surfaces
+// now live in the AI Assistance page (see RulebookStatus + ProjectionCard).
 import { HoldingsTableHeader } from "./holdings-table/holdings-table-header";
 import { HoldingsTableRow } from "./holdings-table/holdings-table-row";
 import { HoldingsTableSummary } from "./holdings-table/holdings-table-summary";
@@ -81,12 +85,11 @@ export function HoldingsTable({
     Record<string, "not_found" | "network">
   >({});
   const [loadingPrices, setLoadingPrices] = useState(true);
-  const [streaks, setStreaks] = useState<Record<string, number>>({});
-  const [dividendCuts, setDividendCuts] = useState<Set<string>>(new Set());
-  const [dividendCutPcts, setDividendCutPcts] = useState<Record<string, number>>({});
-  const [dividendHistory, setDividendHistory] = useState<Set<string>>(new Set());
   const [investTargets, setInvestTargets] = useState<Record<string, number>>({});
   const [excludedTickers, setExcludedTickers] = useState<Set<string>>(new Set());
+  // Non-Core CAD (parallel contribution stream): { ticker → CAD per Contribution Plan period }.
+  // Sourced from target.nonCorePlan.cad. Frequency is implicit (current Contribution Plan period).
+  const [nonCoreCAD, setNonCoreCAD] = useState<Record<string, number>>({});
   const [investContrib, setInvestContrib] = useState<{
     amount: number;
     currency: "USD" | "CAD";
@@ -94,8 +97,6 @@ export function HoldingsTable({
   } | null>(null);
   const [fxRate, setFxRate] = useState(1.35);
   const [accountMapping, setAccountMapping] = useState<Record<string, string>>({});
-  const [upperTriggerPct, setUpperTriggerPct] = useState(33);
-  const [ndxTier, setNdxTier] = useState<NdxTier>(0);
   const [longPressInfo, setLongPressInfo] = useState<{
     ticker: string;
     currency: "USD" | "CAD";
@@ -116,13 +117,6 @@ export function HoldingsTable({
   const dayMode = useHoldingsStore((s) => s.dayMode);
   const setSelectedRowId = useHoldingsStore((s) => s.setSelectedRowId);
 
-  const toDisp = useCallback(
-    (value: number, holdingCurrency: "USD" | "CAD") => {
-      if (!displayCurrency || displayCurrency === holdingCurrency) return value;
-      return displayCurrency === "CAD" ? value * fxRate : value / fxRate;
-    },
-    [displayCurrency, fxRate]
-  );
   const dispSym = displayCurrency === "CAD" ? "C$" : displayCurrency === "USD" ? "$" : null;
 
   useEffect(() => {
@@ -131,8 +125,22 @@ export function HoldingsTable({
       .then((d) => {
         const targets: Record<string, number> = {};
         const excluded = new Set<string>();
+        const nonCore: Record<string, number> = {};
+        const isNonCoreSym = (t: string) => {
+          const u = t.toUpperCase();
+          return u === "SGOV" || u === "QQQI" || u === "IAUM";  // v4.4.2: QQQI is satellite; IAUM kept for legacy holdings.
+        };
         for (const [ticker, val] of Object.entries(d.targets ?? {})) {
-          const v = val as { pct: number; excluded?: boolean };
+          const v = val as { pct: number; excluded?: boolean; nonCorePlan?: { cad?: number } };
+          // Non-Core: never participates in % targets. Always excluded from shortfall
+          // calculation, but contributes via nonCorePlan.cad when not EXCL'd.
+          if (isNonCoreSym(ticker)) {
+            excluded.add(ticker);
+            if (!v.excluded && typeof v.nonCorePlan?.cad === "number" && v.nonCorePlan.cad > 0) {
+              nonCore[ticker] = v.nonCorePlan.cad;
+            }
+            continue;
+          }
           if (v.excluded) {
             excluded.add(ticker);
             continue;
@@ -141,6 +149,7 @@ export function HoldingsTable({
         }
         setInvestTargets(targets);
         setExcludedTickers(excluded);
+        setNonCoreCAD(nonCore);
         if (d.contribution)
           setInvestContrib({
             amount: d.contribution.amount,
@@ -148,41 +157,12 @@ export function HoldingsTable({
             frequency: d.contribution.frequency,
           });
         if (d.accountMapping) setAccountMapping(d.accountMapping);
-        if (d.triggerParams?.upperTriggerPct)
-          setUpperTriggerPct(d.triggerParams.upperTriggerPct);
       })
       .catch(() => {});
     fetch("/api/fx")
       .then((r) => r.json())
       .then((d) => {
         if (d.rate) setFxRate(d.rate);
-      })
-      .catch(() => {});
-    fetch("/api/market/ndx")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && typeof d.tier === "number") setNdxTier(d.tier as NdxTier);
-      })
-      .catch(() => {});
-    fetch("/api/dividend-growth")
-      .then((r) => r.json())
-      .then((d) => {
-        const map: Record<string, number> = {};
-        const cutPcts: Record<string, number> = {};
-        const history = new Set<string>();
-        const cutsSet = new Set<string>(d.cuts ?? []);
-        for (const t of d.tickers ?? []) {
-          map[t.ticker] = t.streak ?? 0;
-          history.add(t.ticker);
-          if (cutsSet.has(t.ticker)) {
-            const last = t.history?.[t.history.length - 1];
-            if (last?.growthPct != null) cutPcts[t.ticker] = last.growthPct;
-          }
-        }
-        setStreaks(map);
-        setDividendCuts(cutsSet);
-        setDividendCutPcts(cutPcts);
-        setDividendHistory(history);
       })
       .catch(() => {});
   }, []);
@@ -422,7 +402,7 @@ export function HoldingsTable({
       .map(([t]) => t),
   ];
 
-  const effectiveTargets = getOverrideTargets(ndxTier, investTargets);
+  const effectiveTargets = investTargets;
   const allocPlan = buildAllocationPlan({
     holdings: rows.map((r) => ({
       ticker: r.holding.ticker,
@@ -436,22 +416,14 @@ export function HoldingsTable({
     excludedTickers: allExcludedForAlloc,
   });
 
-  const qldRow = rows.find((r) => r.holding.ticker === "QLD");
-  const sgovRow = rows.find((r) => r.holding.ticker === "SGOV");
-  const qldValueCAD = qldRow
-    ? toCADValue(qldRow.marketValue, qldRow.holding.currency)
-    : 0;
-  const sgovValueCAD = sgovRow
-    ? toCADValue(sgovRow.marketValue, sgovRow.holding.currency)
-    : 0;
-  const qldPct =
-    totalAllMarketValueCAD > 0
-      ? (qldValueCAD / totalAllMarketValueCAD) * 100
-      : 0;
-  const sgovPct =
-    totalAllMarketValueCAD > 0
-      ? (sgovValueCAD / totalAllMarketValueCAD) * 100
-      : 0;
+  // Overlay Non-Core CAD as a parallel contribution stream (does NOT subtract from Core %).
+  // Frequency follows Contribution Plan implicitly — value is per the same period as contribCAD.
+  for (const [ticker, cad] of Object.entries(nonCoreCAD)) {
+    if (cad > 0) {
+      allocPlan.allocCADByTicker[ticker] = (allocPlan.allocCADByTicker[ticker] ?? 0) + cad;
+    }
+  }
+
 
   const allocMap: Record<string, number> = {};
   const gapAmountMap: Record<string, number> = {};
@@ -497,18 +469,6 @@ export function HoldingsTable({
   return (
     <div>
       <div>
-        {!readOnly &&
-          investTargets &&
-          Object.keys(investTargets).length > 0 &&
-          rows.length > 0 && (
-            <StrategyStatusPanel
-              qldPct={qldPct}
-              sgovPct={sgovPct}
-              upperTriggerPct={upperTriggerPct}
-              qldTargetPct={investTargets["QLD"] ?? 30}
-            />
-          )}
-
         <HoldingsTableHeader
           rowsLength={rows.length}
           readOnly={readOnly}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/db";
+import { deleteUserAiCache } from "@/lib/ai-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -9,20 +9,14 @@ export async function DELETE() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const userId = session.user.id;
+  await deleteUserAiCache(session.user.id);
+  return NextResponse.json({ ok: true });
+}
 
-  await prisma.setting.deleteMany({
-    where: {
-      key: {
-        in: [
-          `${userId}:ai_cache:ai_briefing`,
-          `${userId}:ai_cache_ts:ai_briefing`,
-          `${userId}:ai_cache:ai_insights`,
-          `${userId}:ai_cache_ts:ai_insights`,
-        ],
-      },
-    },
-  });
-
+// Self-service refresh: any authenticated user clears their own AI cache.
+export async function POST() {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await deleteUserAiCache(session.user.id);
   return NextResponse.json({ ok: true });
 }

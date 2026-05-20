@@ -3,14 +3,13 @@ import { getPrice, getFxRate } from "@/lib/price";
 import { decrypt, isEncrypted } from "@/lib/crypto";
 import {
   computeRulebookWeights,
-  computeMethodBAllocation,
-  computeIaumWeeklyPlan,
+  computeStaticCoreAllocation,
+  computeJepqWeeklyPlan,
   computeTqqqHardExitPlan,
   RULEBOOK_TARGETS,
 } from "@/lib/rulebook";
 
 const AI_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const AI_MAX_CALLS_PER_DAY = 100;
 const DEFAULT_FX_RATE = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
 
 // ── AI provider call ─────────────────────────────────────────────────────────
@@ -121,6 +120,160 @@ export async function callOpenAIWithFallback(
   }
 }
 
+// ── Meta-rich call (Phase 1 — Slice 1.5) ─────────────────────────────────────
+// callOpenAI returns the assistant content only. callOpenAIWithMeta preserves
+// provider / model / HTTP status / upstream duration / token usage so audit
+// writers (AiCallLog) can record an accurate row. Non-breaking: the existing
+// callOpenAI / callOpenAIWithFallback exports remain unchanged so the other
+// AI routes that have not yet been migrated keep working without edits.
+
+export interface AiCallMeta {
+  /** Resolved provider key, e.g. "hermes" / "openrouter" / "openai" / "github". */
+  provider: string;
+  /** Resolved model identifier, e.g. "hermes-agent". */
+  model: string;
+  /** Resolved upstream endpoint URL. Recorded for diagnostics; never logged. */
+  endpoint: string;
+  /** HTTP status from the upstream fetch. 0 when the request never produced a status. */
+  httpStatus: number;
+  /** Wall-clock milliseconds spent in the fetch() call (network + upstream processing). */
+  upstreamDurationMs: number;
+  /** Token usage echoed back by OpenAI-compatible servers (Hermes included). */
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+}
+
+export interface AiCallSuccess {
+  ok: true;
+  /** Trimmed assistant content. Matches what callOpenAI used to return. */
+  content: string;
+  /** Untrimmed assistant content. Stored only when AI_AUDIT_STORE_RAW=true (recordAiCall enforces this). */
+  rawResponse: string;
+  meta: AiCallMeta;
+}
+
+export interface AiCallFailure {
+  ok: false;
+  error: {
+    message: string;
+    httpStatus: number | null;
+    provider: string;
+    model: string;
+  };
+  meta: AiCallMeta;
+}
+
+export type AiCallResult = AiCallSuccess | AiCallFailure;
+
+/**
+ * Issue an OpenAI-compatible Chat Completions call against the configured
+ * provider and return a discriminated union of success/failure with full
+ * metadata. Throws are caught internally so callers can branch on `ok`.
+ */
+export async function callOpenAIWithMeta(
+  messages: { role: string; content: string }[],
+  options: { maxTokens?: number } = {},
+): Promise<AiCallResult> {
+  const maxTokens = options.maxTokens ?? 400;
+  const config = resolveAiProviderConfig();
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (config.token) headers["Authorization"] = `Bearer ${config.token}`;
+  if (config.provider === "openrouter") {
+    headers["HTTP-Referer"] =
+      process.env.NEXTAUTH_URL ?? "https://dividend.buildwith.work";
+    headers["X-Title"] = "DividendTracker";
+  }
+
+  const baseMeta = {
+    provider: config.provider,
+    model: config.model,
+    endpoint: config.endpoint,
+  };
+
+  const started = Date.now();
+  let httpStatus = 0;
+  try {
+    const res = await fetch(config.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        max_tokens: maxTokens,
+      }),
+    });
+    httpStatus = res.status;
+    const upstreamDurationMs = Date.now() - started;
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "<no body>");
+      return {
+        ok: false,
+        error: {
+          message: `${config.provider} AI API error ${res.status}: ${errText}`,
+          httpStatus: res.status,
+          provider: config.provider,
+          model: config.model,
+        },
+        meta: {
+          ...baseMeta,
+          httpStatus,
+          upstreamDurationMs,
+          promptTokens: null,
+          completionTokens: null,
+          totalTokens: null,
+        },
+      };
+    }
+
+    const body = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+      };
+    };
+    const rawContent = body.choices?.[0]?.message?.content ?? "";
+    const content = rawContent.trim();
+    const usage = body.usage ?? {};
+    return {
+      ok: true,
+      content,
+      rawResponse: rawContent,
+      meta: {
+        ...baseMeta,
+        httpStatus,
+        upstreamDurationMs,
+        promptTokens: usage.prompt_tokens ?? null,
+        completionTokens: usage.completion_tokens ?? null,
+        totalTokens: usage.total_tokens ?? null,
+      },
+    };
+  } catch (err) {
+    const upstreamDurationMs = Date.now() - started;
+    return {
+      ok: false,
+      error: {
+        message: err instanceof Error ? err.message : String(err),
+        httpStatus: httpStatus || null,
+        provider: config.provider,
+        model: config.model,
+      },
+      meta: {
+        ...baseMeta,
+        httpStatus,
+        upstreamDurationMs,
+        promptTokens: null,
+        completionTokens: null,
+        totalTokens: null,
+      },
+    };
+  }
+}
+
 // ── Portfolio context builder ─────────────────────────────────────────────────
 
 function inferAccountType(name: string | null | undefined): string {
@@ -207,7 +360,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   }
 
   // Parse target allocations: { "AAPL": 10, "VFV.TO": 20, ... }
-  // Also capture Non-Core CAD plan for SGOV/IAUM (user-set, overrides rulebook defaults).
+  // Also capture Non-Core CAD plan for SGOV/QQQI (user-set, overrides rulebook defaults).
   const targetAlloc: Record<string, number> = {};
   const targetExcluded: Record<string, boolean> = {};
   const nonCoreCADByTicker: Record<string, number> = {};
@@ -404,7 +557,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     ? Math.round(((totalValueCAD - totalCostCAD) / totalCostCAD) * 1000) / 10
     : 0;
 
-  // ── RULEBOOK v4.1.10 weights & Method B (no-sell) allocation ──
+  // ── RULEBOOK v4.4.2 weights & static 70/30 core allocation ──
   // Aggregate ticker values across all accounts for rulebook calc.
   const tickerValueCAD = new Map<string, number>();
   for (const acct of accountSummaries) {
@@ -416,7 +569,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     Array.from(tickerValueCAD.entries()).map(([ticker, valueCAD]) => ({ ticker, valueCAD })),
   );
 
-  // Weekly contribution → CAD for Method B preview
+  // Weekly contribution → CAD for core allocation preview
   let weeklyContribCAD = 0;
   if (contribPlanSetting?.value) {
     try {
@@ -427,25 +580,22 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     } catch { /* ignore */ }
   }
 
-  // Weekly contribution split — Core → SGOV → IAUM (사용자 확정 순서):
-  //   1) Core Method B with the FULL weekly contribution → fills SCHD/QLD shortfall first.
-  //   2) §8 SGOV refill from Core leftover. Cap = user-set Settings CAD (SGOV) if present, else rulebook 50.
-  //      Activates only when SGOV<8% AND no Hard Exit.
-  //   3) §3 IAUM from leftover. Cap = user-set Settings CAD (IAUM) if present, else rulebook 25.
-  //      Activates only when (TFSA room) AND (IAUM<5%).
-  //   4) Anything still leftover = unallocated (carries to next week).
+  // Weekly contribution split (v4.4.2):
+  //   1) Core STATIC 70/30 with the FULL weekly contribution. Overlay (TQQQ>0) ⇒ SCHD 70 / TQQQ 30 / QLD 0.
+  //   2) §8 SGOV non-core stream: 50 CAD when SGOV<8% AND no Hard Exit (or user override).
+  //   3) §4 QQQI non-core stream: 25 CAD when (TFSA room) AND (QQQI<5%) (or user override). Sangbong TFSA only.
   const tfsaRoomTotal = tfsaCarryover + TFSA_ANNUAL_2026;
   const tfsaRoomRemaining = Math.max(0, tfsaRoomTotal - tfsaDepositedThisYear);
   const tfsaRoomExists = tfsaRoomRemaining > 0;
 
-  // Core Method B: full weekly contribution → SCHD/QLD shortfall (no carve-out).
-  const methodB = computeMethodBAllocation(rulebookWeights.schdCAD, rulebookWeights.qldCAD, weeklyContribCAD);
-  const coreContribCAD = methodB.schdBuyCAD + methodB.qldBuyCAD;
-  const finalUnallocatedCAD = methodB.unallocatedCAD;
+  // Core static 70/30: full weekly contribution → SCHD 70 / QLD 30 (or overlay SCHD 70 / TQQQ 30).
+  const overlayActive = rulebookWeights.tqqqCAD > 0;
+  const core = computeStaticCoreAllocation(weeklyContribCAD, overlayActive);
+  const coreContribCAD = core.schdBuyCAD + core.qldBuyCAD + core.tqqqBuyCAD;
 
   // Non-Core CAD: user Settings is a SEPARATE additive stream — not subtracted from weekly contribution,
   // not gated by rulebook conditions. If user hasn't set their own value, fall back to rulebook defaults
-  // (still gated by §8 SGOV<8% / §3 TFSA room+IAUM<5%) — preserves prior behavior for non-configured users.
+  // (still gated by §8 SGOV<8% / §4 TFSA room+QQQI<5%) — preserves prior behavior for non-configured users.
   const sgovUserCAD = nonCoreCADByTicker["SGOV"];
   const sgovUserSet = !!(sgovUserCAD && sgovUserCAD > 0);
   const sgovActiveByRulebook = !rulebookWeights.hardExit && rulebookWeights.sgovBelowTarget;
@@ -456,31 +606,30 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     ? "user-settings"
     : (sgovActiveByRulebook ? "rulebook-default" : "rulebook-inactive");
 
-  const iaumUserCAD = nonCoreCADByTicker["IAUM"];
-  const iaumUserSet = !!(iaumUserCAD && iaumUserCAD > 0);
-  const iaumPlan = computeIaumWeeklyPlan(tfsaRoomExists, rulebookWeights.iaumTotalWeightPct);
-  const iaumRuleAllowed = iaumPlan.iaumBuyCAD > 0;
-  const iaumActualCAD = iaumUserSet
-    ? iaumUserCAD!
-    : (iaumRuleAllowed ? RULEBOOK_TARGETS.IAUM_WEEKLY_BUY_CAD : 0);
-  const iaumSourceLabel = iaumUserSet
+  const jepqUserCAD = nonCoreCADByTicker["QQQI"];
+  const jepqUserSet = !!(jepqUserCAD && jepqUserCAD > 0);
+  const jepqPlan = computeJepqWeeklyPlan(tfsaRoomExists, rulebookWeights.jepqTotalWeightPct);
+  const jepqRuleAllowed = jepqPlan.jepqBuyCAD > 0;
+  const jepqActualCAD = jepqUserSet
+    ? jepqUserCAD!
+    : (jepqRuleAllowed ? RULEBOOK_TARGETS.QQQI_WEEKLY_BUY_CAD : 0);
+  const jepqSourceLabel = jepqUserSet
     ? "user-settings"
-    : (iaumRuleAllowed ? "rulebook-default" : "rulebook-inactive");
-  const iaumDeferred = false; // additive stream — never deferred by Core consumption
+    : (jepqRuleAllowed ? "rulebook-default" : "rulebook-inactive");
 
-  const iaumApplyReason = iaumUserSet
-    ? `사용자 Settings 별도 스트림 적용: $${Math.round(iaumActualCAD)} CAD/period`
-    : iaumActualCAD > 0
-      ? `룰북 default 적용: $${Math.round(iaumActualCAD)} CAD (TFSA room + IAUM<5%)`
-      : iaumPlan.reason;
+  const jepqApplyReason = jepqUserSet
+    ? `사용자 Settings 별도 스트림 적용: $${Math.round(jepqActualCAD)} CAD/period (Sangbong TFSA only)`
+    : jepqActualCAD > 0
+      ? `룰북 default 적용: $${Math.round(jepqActualCAD)} CAD (TFSA room + QQQI<5%)`
+      : jepqPlan.reason;
 
   // Total weekly outflow: Plan + Non-Core additive streams.
-  const totalWeeklyOutCAD = weeklyContribCAD + sgovAllocCAD + iaumActualCAD;
+  const totalWeeklyOutCAD = weeklyContribCAD + sgovAllocCAD + jepqActualCAD;
 
   // §6.2 Hard Exit (growth bucket ≥ 38%). Surface only when triggered.
-  // Replaces v4.1.8 §10 QLD emergency cap — the closest v4.1.10 equivalent that
-  // unwinds QLD to 30% of core. Soft Exit / Crisis Trigger / Annual Rebal are
-  // covered separately by the Rulebook Status panel and trigger summary route.
+  // v4.4.2: §6.2 Soft Exit (34% sell-half) + §10 Emergency cap (38% full unwind).
+  // Both judged on DAILY close. Emergency cap unwinds QLD to 30% of core,
+  // refills SGOV to 8%, remainder to SCHD.
   const hardExitPlan = computeTqqqHardExitPlan({
     schdCAD:  rulebookWeights.schdCAD,
     qldCAD:   rulebookWeights.qldCAD,
@@ -491,62 +640,68 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   });
 
   const rulebookSummary = {
-    version: "v4.1.10",
+    version: "v4.4.2",
     coreCAD: Math.round(rulebookWeights.coreCAD),
     schdCAD: Math.round(rulebookWeights.schdCAD),
     qldCAD:  Math.round(rulebookWeights.qldCAD),
     sgovCAD: Math.round(rulebookWeights.sgovCAD),
-    iaumCAD: Math.round(rulebookWeights.iaumCAD),
+    jepqCAD: Math.round(rulebookWeights.jepqCAD),
     qldCoreWeightPct:   Math.round(rulebookWeights.qldCoreWeightPct  * 10) / 10,
     schdCoreWeightPct:  Math.round(rulebookWeights.schdCoreWeightPct * 10) / 10,
     sgovTotalWeightPct: Math.round(rulebookWeights.sgovTotalWeightPct * 10) / 10,
-    iaumTotalWeightPct: Math.round(rulebookWeights.iaumTotalWeightPct * 10) / 10,
+    jepqTotalWeightPct: Math.round(rulebookWeights.jepqTotalWeightPct * 10) / 10,
     flags: {
-      hardExit:        rulebookWeights.hardExit,         // growth bucket ≥ 38 → all TQQQ + QLD to 30
-      softExit:        rulebookWeights.softExit,         // growth bucket ≥ 34 → half of TQQQ
-      crisisT1:        rulebookWeights.crisisT1,         // core W ≤ 25
-      crisisT2:        rulebookWeights.crisisT2,         // core W ≤ 20
+      hardExit:        rulebookWeights.hardExit,         // growth bucket ≥ 38 → §10 Emergency cap (daily close)
+      softExit:        rulebookWeights.softExit,         // growth bucket ≥ 34 → §6.2 Soft Exit sell-half TQQQ (daily close)
+      crisisT1:        rulebookWeights.crisisT1,         // core W ≤ 25 (month-end close)
+      crisisT2:        rulebookWeights.crisisT2,         // core W ≤ 20 (month-end close)
       sgovBelowTarget: rulebookWeights.sgovBelowTarget,  // SGOV total W < 8 (refill needed)
       sgovBelowFloor:  rulebookWeights.sgovBelowFloor,   // SGOV total W < 5 (warning)
-      iaumAtCap:       rulebookWeights.iaumAtCap,        // ≥ 5% of total
+      jepqAtCap:       rulebookWeights.jepqAtCap,        // ≥ 5% of total (hard cap)
       caseAEligible:   rulebookWeights.caseAEligible,    // §5 Case A: W > 31
       caseBEligible:   rulebookWeights.caseBEligible,    // §5 Case B: W < 29 AND TQQQ = 0
       cycleArmable:    rulebookWeights.cycleArmable,     // §6.1 cycle re-arm gate
+      overlayActive,                                     // TQQQ > 0 → Core split SCHD 70 / TQQQ 30 / QLD 0
     },
     targets: {
       schdOfCorePct: RULEBOOK_TARGETS.SCHD_OF_CORE_PCT,
       qldOfCorePct:  RULEBOOK_TARGETS.QLD_OF_CORE_PCT,
       sgovOfTotalPct: RULEBOOK_TARGETS.SGOV_TARGET_PCT,
-      iaumMaxOfTotalPct: RULEBOOK_TARGETS.IAUM_MAX_PCT,
+      sgovFloorPct:  RULEBOOK_TARGETS.SGOV_FLOOR_PCT,
+      sgovDeployableBufferPct: RULEBOOK_TARGETS.SGOV_DEPLOYABLE_BUFFER_PCT,
+      jepqMaxOfTotalPct: RULEBOOK_TARGETS.QQQI_MAX_PCT,
+      softExitGrowthBucketPct: RULEBOOK_TARGETS.SOFT_EXIT_GROWTH_BUCKET_PCT,
+      hardExitGrowthBucketPct: RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT,
       // Effective per-period CAD (already user-Settings-vs-rulebook-resolved).
-      iaumWeeklyBuyCAD:    iaumActualCAD,
+      jepqWeeklyBuyCAD:    jepqActualCAD,
       sgovWeeklyRefillCAD: sgovAllocCAD,
-      iaumWeeklyBuySource: iaumSourceLabel,   // "user-settings" / "rulebook-default" / "rulebook-inactive"
+      jepqWeeklyBuySource: jepqSourceLabel,
       sgovWeeklyRefillSource: sgovSourceLabel,
-      iaumRulebookDefaultCAD: RULEBOOK_TARGETS.IAUM_WEEKLY_BUY_CAD,
+      jepqRulebookDefaultCAD: RULEBOOK_TARGETS.QQQI_WEEKLY_BUY_CAD,
       sgovRulebookDefaultCAD: RULEBOOK_TARGETS.SGOV_WEEKLY_REFILL_CAD,
     },
-    iaumWeeklyPlan: {
-      iaumRuleBuyCAD:       iaumPlan.iaumBuyCAD,    // 룰 자체가 요구하는 금액 (25 또는 0)
-      iaumActualBuyCAD:     Math.round(iaumActualCAD), // 이번 주 실제 매수 (Core 충당 후 잔액에서)
-      redirectedToCoreCAD:  iaumPlan.redirectedToCoreCAD,
-      reason:               iaumApplyReason,
-      tfsaRoomExists:       iaumPlan.tfsaRoomExists,
-      iaumBelowCap:         iaumPlan.iaumBelowCap,
-      account:              "TFSA",
+    jepqWeeklyPlan: {
+      jepqRuleBuyCAD:       jepqPlan.jepqBuyCAD,
+      jepqActualBuyCAD:     Math.round(jepqActualCAD),
+      redirectedToCoreCAD:  jepqPlan.redirectedToCoreCAD,
+      reason:               jepqApplyReason,
+      tfsaRoomExists:       jepqPlan.tfsaRoomExists,
+      jepqBelowCap:         jepqPlan.jepqBelowCap,
+      account:              "Sangbong TFSA",
     },
-    methodBPlan: {
-      weeklyContribCAD: Math.round(weeklyContribCAD),  // Plan amount → 100% goes to Core Method B
-      coreContribCAD:   Math.round(coreContribCAD),    // Core 매수 합계 = SCHD + QLD
-      schdBuyCAD:       Math.round(methodB.schdBuyCAD),
-      qldBuyCAD:        Math.round(methodB.qldBuyCAD),
-      unallocatedCAD:   Math.round(finalUnallocatedCAD),  // Core leftover (Method B 잔액)
-      // Non-Core: SEPARATE/ADDITIVE streams — not subtracted from weeklyContribCAD.
+    coreAllocationPlan: {
+      weeklyContribCAD: Math.round(weeklyContribCAD),
+      coreContribCAD:   Math.round(coreContribCAD),
+      schdBuyCAD:       Math.round(core.schdBuyCAD),
+      qldBuyCAD:        Math.round(core.qldBuyCAD),
+      tqqqBuyCAD:       Math.round(core.tqqqBuyCAD),
+      overlayActive,
+      // Satellite: SEPARATE/ADDITIVE streams — not subtracted from weeklyContribCAD.
       sgovReserveCAD:   Math.round(sgovAllocCAD),
-      iaumBuyCAD:       Math.round(iaumActualCAD),
-      sgovSource:       sgovSourceLabel,   // "user-settings" / "rulebook-default" / "rulebook-inactive"
-      iaumSource:       iaumSourceLabel,
-      totalWeeklyOutCAD: Math.round(totalWeeklyOutCAD),  // weekly + sgov + iaum
+      jepqBuyCAD:       Math.round(jepqActualCAD),
+      sgovSource:       sgovSourceLabel,
+      jepqSource:       jepqSourceLabel,
+      totalWeeklyOutCAD: Math.round(totalWeeklyOutCAD),
     },
     hardExitPlan: hardExitPlan.active ? {
       active:                true,
@@ -558,14 +713,14 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
       proceedsOrder:         "1) sell all TQQQ + QLD to 30% core, 2) SGOV refill to 8% of total, 3) remainder to SCHD",
     } : { active: false },
     constraints: [
-      "§5 Method B: SCHD/QLD never sell — buy shortfall only",
-      "QLD weight basis = core (QLD/(SCHD+QLD)); growth bucket = (QLD+TQQQ)/Total drives Soft/Hard exits",
-      "§8 SGOV: reserve only, total-portfolio basis, weekly refill up to 50 CAD when SGOV<8% AND no Hard Exit (5% floor — only §6.1 may pierce)",
-      "§3 IAUM: TFSA only, weekly 25 CAD when (TFSA room exists) AND (IAUM<5%); else redirect 25 CAD to Core Method B; never forced 5% target; never used for crisis buying",
-      "§5 annual rebalance Dec 31 (±1% deadband): W>31 Case A (QLD→30) / W<29 AND TQQQ=0 Case B (SGOV→QLD, capped at SGOV 5% floor)",
-      "§6.1 Crisis Trigger: core W≤25 → sell SGOV 2.5% total → buy TQQQ (T1); core W≤20 → +2.5% (T2). Cycle re-arms when TQQQ=0 AND growth bucket≥30",
-      "§6.2 TQQQ Exit Ladder: growth bucket≥34 Soft (sell half TQQQ) / ≥38 Hard (sell all TQQQ + QLD→30); proceeds → SGOV 8% → SCHD",
-      "Forbidden: NDX-based trigger, optimistic scenario, sell SCHD, sell SCHD to buy IAUM/SGOV, override rulebook with sentiment/news/forecast",
+      "§5 Static 70/30: every contribution AND every SCHD dividend splits SCHD 70% / QLD 30%. Overlay (TQQQ>0) ⇒ SCHD 70% / TQQQ 30% / QLD 0%. SCHD/QLD never sold (Method B 폐지).",
+      "QLD weight basis = core (QLD/(SCHD+QLD)); growth bucket = (QLD+TQQQ)/Total drives Soft Exit / Emergency cap.",
+      "§8 SGOV: target 8%, floor 5%, deployable buffer 3% (= target − floor). Weekly refill 50 CAD when SGOV<8% AND no Hard Exit. SGOV ≥ 8% ⇒ redirect 50 CAD to Core static 70/30. SCHD 배당으로 SGOV 보충 금지.",
+      "§4 QQQI: Sangbong TFSA only, hard cap 5%. Weekly 25 CAD when (TFSA room exists) AND (QQQI<5%); else redirect to Core static 70/30. QQQI never used as crisis / rebalance / SGOV refill funding. QQQI distribution: TFSA USD cash, no auto-routing.",
+      "§5 annual rebalance Dec 31 (±1% deadband): W>31 Case A (QLD→30, SGOV refill to 8%, remainder SCHD). E = Q − 0.30·(S+Q); H = max(0, 0.08·T − G0); Gmax = E/0.70; G = min(H, Gmax); X = E + 0.30·G. W<29 AND TQQQ=0 ⇒ no action (SCHD 매도 금지).",
+      "§6.1 Crisis Trigger — MONTH-END close only: core W≤25 → sell SGOV 2.5% total → buy TQQQ (T1); core W≤20 → +2.5% (T2). Cannot breach SGOV 5% floor. Each tier fires once per cycle. Cycle re-arms when TQQQ=0 AND growth bucket≥30.",
+      "§6.2 TQQQ Soft Exit (34% sell half) + §10 Emergency cap (38% all TQQQ + QLD→30) — DAILY close. Proceeds order SGOV refill to 8% → SCHD.",
+      "Forbidden: NDX trigger, optimistic scenario, sell SCHD, sell SCHD/QLD/TQQQ to buy QQQI, route SCHD dividends to SGOV/QQQI, QQQI as funding source, IAUM (deprecated in v4.4.2), Method B, measure QLD on total basis, treat SGOV as return asset, treat QQQI as fixed target, override rulebook with sentiment/news/forecast, 수익률 보장 표현.",
     ],
   };
 
@@ -676,22 +831,6 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   };
 
   return JSON.stringify(context);
-}
-
-export async function getRemainingAiCalls(userId: string): Promise<number> {
-  const today = new Date().toISOString().split("T")[0];
-  const dateKey = `${userId}:ai_calls_date`;
-  const countKey = `${userId}:ai_calls_count`;
-
-  const [dateSetting, countSetting] = await Promise.all([
-    prisma.setting.findUnique({ where: { key: dateKey } }),
-    prisma.setting.findUnique({ where: { key: countKey } }),
-  ]);
-
-  const storedDate = dateSetting?.value ?? "";
-  const storedCount = storedDate === today ? parseInt(countSetting?.value ?? "0", 10) : 0;
-
-  return Math.max(0, AI_MAX_CALLS_PER_DAY - storedCount);
 }
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────

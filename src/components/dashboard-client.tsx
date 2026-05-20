@@ -2,62 +2,33 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { HoldingsTable } from "./holdings-table";
-import { PortfolioCharts } from "./portfolio-charts";
 import { AllocationBars } from "./allocation-bars";
 import { DividendIncomeChart } from "./dividend-income-chart";
 import { PerformanceChart } from "./performance-chart";
-import { AiPanel } from "./ai-panel";
-import { ProjectionCard } from "./projection-card";
 import { UpcomingDividends } from "./upcoming-dividends";
 import { SkeletonBlock } from "./skeleton";
+import { Card } from "./ui-card";
 import { fmt, mergeHoldings } from "@/lib/utils";
+import { CurrencyProvider, useCurrency } from "@/lib/currency-context";
 import type { Portfolio, HoldingSummary } from "@/lib/types";
-import {
-  getNdxTierAction,
-  getUpperTriggerStatus,
-  type NdxTier,
-} from "@/lib/investment-triggers";
+// Trigger / NDX-based recommendation banner was removed from Overview by user
+// request — Overview is a summary screen, not an execution-recommendation
+// surface. The actual rulebook trigger calculations still live in
+// src/lib/rulebook.ts and are surfaced through AI Assistance / Rulebook Status.
 
-function ChartTabs({
-  tabs,
-  performanceContent,
-  equityContent,
-}: {
-  tabs: readonly ["PERFORMANCE", "EQUITY"];
-  performanceContent: React.ReactNode;
-  equityContent: React.ReactNode | null;
-}) {
-  const [tab, setTab] = useState<"PERFORMANCE" | "EQUITY">("PERFORMANCE");
+export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
   return (
-    <div className="mb-6 w-full overflow-hidden">
-      <div className="flex border-b border-border">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`btn-retro text-[10px] px-4 py-3 border-0 border-r border-b-0 border-border ${tab === t ? "btn-retro-primary" : ""}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-      <div className="w-full overflow-hidden">
-        {tab === "PERFORMANCE" && performanceContent}
-        {tab === "EQUITY" && (equityContent ?? (
-          <div className="border border-border bg-card p-8 text-center text-xs text-muted-foreground">NO DATA</div>
-        ))}
-      </div>
-    </div>
+    <CurrencyProvider initialFxRate={initialFxRate}>
+      <DashboardContent initialPortfolios={initialPortfolios} />
+    </CurrencyProvider>
   );
 }
 
-export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { initialPortfolios: Portfolio[]; fxRate: number }) {
+function DashboardContent({ initialPortfolios }: { initialPortfolios: Portfolio[] }) {
   const [portfolios] = useState(initialPortfolios);
   const [holdingSummaries, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
-  const [fxRate, setFxRate] = useState(initialFxRate);
-  const [fxFallback, setFxFallback] = useState(false);
+  const { displayCurrency, setDisplayCurrency, fxRate, setFxRate, fxFallback, setFxFallback, fxSource, setFxSource, currencySymbol, convertAmount } = useCurrency();
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<"all" | string>("all");
   const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);
@@ -89,60 +60,20 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [divAnnual, setDivAnnual] = useState<number | null>(null);
   const [divMonthly, setDivMonthly] = useState<number | null>(null);
   const [divViewMode, setDivViewMode] = useState<0 | 1 | 2 | 3>(0); // 0=annual$, 1=annual%, 2=monthly$, 3=monthly%
-  const divShowMonthly = divViewMode >= 2;
   const [openPnLShowPct, setOpenPnLShowPct] = useState(false);
   const [todayPnLShowPct, setTodayPnLShowPct] = useState(false);
   const [incomeGoal, setIncomeGoal] = useState<{ annualTarget: number; currency: "CAD" | "USD" } | null>(null);
-  const [divPortfolioCagr, setDivPortfolioCagr] = useState<number | null>(null);
-  const [growthTickers, setGrowthTickers] = useState<Array<{ ticker: string; history: Array<{ year: number; annualDPS: number }> }>>([]);
-  const [ndxTier, setNdxTier] = useState<NdxTier>(0);
-  const [upperTriggerPct, setUpperTriggerPct] = useState(33);
-  const [dismissedAlerts, setDismissedAlerts] = useState(false);
-
   useEffect(() => {
     Promise.all([
       fetch("/api/settings/investment").then(r => r.json()).catch(() => ({})),
       fetch("/api/fx").then(r => r.json()).catch(() => ({ fallback: true })),
-      fetch("/api/dividend-growth").then(r => r.json()).catch(() => ({ tickers: [] })),
-      fetch("/api/market/ndx").then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([inv, fx, growth, ndx]) => {
+    ]).then(([inv, fx]) => {
       if (inv.incomeGoal) setIncomeGoal(inv.incomeGoal);
-      if (inv.triggerParams?.upperTriggerPct) setUpperTriggerPct(inv.triggerParams.upperTriggerPct);
-      if (fx.rate) setFxRate(fx.rate);
-      if (fx.fallback) setFxFallback(true);
-      setGrowthTickers(growth.tickers ?? []);
-      if (ndx && typeof ndx.tier === "number") setNdxTier(ndx.tier as NdxTier);
+      if (typeof fx.rate === "number" && Number.isFinite(fx.rate) && fx.rate > 0) setFxRate(fx.rate);
+      setFxFallback(Boolean(fx.fallback));
+      if (typeof fx.source === "string" && fx.source.trim()) setFxSource(fx.source);
     }).catch(() => {});
-  }, []);
-
-  // Compute market-value-weighted portfolio dividend CAGR
-  // Only runs after prices are loaded so weights reflect actual position sizes (not equal-weight)
-  useEffect(() => {
-    if (!growthTickers.length || loadingData) return;
-
-    const cadValueByTicker: Record<string, number> = {};
-    for (const s of holdingSummaries) {
-      cadValueByTicker[s.ticker] = s.currency === "USD" ? s.marketValue * fxRate : s.marketValue;
-    }
-
-    let weightedSum = 0;
-    let totalWeight = 0;
-    for (const t of growthTickers) {
-      const h = t.history.filter((r: { annualDPS: number }) => r.annualDPS > 0);
-      if (h.length < 3) continue;
-      const first = h[0];
-      const last = h[h.length - 1];
-      const years = last.year - first.year;
-      if (years <= 0 || first.annualDPS <= 0) continue;
-      const cagr = (Math.pow(last.annualDPS / first.annualDPS, 1 / years) - 1) * 100;
-      const weight = cadValueByTicker[t.ticker] ?? 1; // equal weight fallback before prices load
-      weightedSum += cagr * weight;
-      totalWeight += weight;
-    }
-    if (totalWeight > 0) {
-      setDivPortfolioCagr(weightedSum / totalWeight);
-    }
-  }, [growthTickers, holdingSummaries, fxRate]);
+  }, [setFxRate, setFxFallback, setFxSource]);
 
   useEffect(() => {
     setHoldingSummaries([]);
@@ -157,14 +88,8 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const allHoldings = useMemo(() => mergeHoldings(displayPortfolios), [displayPortfolios]);
 
   const toDisplay = useCallback((value: number, currency: "USD" | "CAD") => {
-    if (displayCurrency === "CAD") {
-      return currency === "USD" ? value * fxRate : value;
-    } else {
-      return currency === "CAD" ? value / fxRate : value;
-    }
-  }, [displayCurrency, fxRate]);
-
-  const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
+    return convertAmount(value, currency);
+  }, [convertAmount]);
 
   const totalCash = useMemo(() => {
     return displayPortfolios.reduce((sum, p) => {
@@ -173,14 +98,6 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
       return sum + toDisplay(cad, "CAD") + toDisplay(usd, "USD");
     }, 0);
   }, [displayPortfolios, toDisplay]);
-
-  const totalCashCAD = useMemo(() => {
-    return displayPortfolios.reduce((sum, p) => {
-      const cad = parseFloat(p.cashCAD ?? "0") || 0;
-      const usd = parseFloat(p.cashUSD ?? "0") || 0;
-      return sum + cad + usd * fxRate;
-    }, 0);
-  }, [displayPortfolios, fxRate]);
 
   const holdingsValue = holdingSummaries.reduce((s, h) => s + toDisplay(h.marketValue, h.currency), 0);
   const totalValue = holdingsValue + totalCash;
@@ -200,102 +117,41 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
     setLoadingData(false);
   }, []);
 
-  // Compute QLD current weight (CAD-based) for trigger alerts
-  const qldPct = useMemo(() => {
-    const totalCAD = holdingSummaries.reduce(
-      (s, h) => s + (h.currency === "USD" ? h.marketValue * fxRate : h.marketValue),
-      0
-    );
-    if (totalCAD <= 0) return 0;
-    const qld = holdingSummaries.find((h) => h.ticker === "QLD");
-    if (!qld) return 0;
-    const qldCAD = qld.currency === "USD" ? qld.marketValue * fxRate : qld.marketValue;
-    return (qldCAD / totalCAD) * 100;
-  }, [holdingSummaries, fxRate]);
-
-  const triggerAlerts = useMemo(() => {
-    const alerts: Array<{ level: "warn" | "danger"; msg: string }> = [];
-    if (ndxTier >= 1) {
-      alerts.push({
-        level: ndxTier >= 2 ? "danger" : "warn",
-        msg: `NDX Tier ${ndxTier} 활성: ${getNdxTierAction(ndxTier)}`,
-      });
-    }
-    // QLD 상단 트리거 — target 30% 가정
-    const qldStatus = getUpperTriggerStatus(qldPct, 30, upperTriggerPct);
-    if (qldStatus === "TRIGGER" && qldPct > 0) {
-      alerts.push({
-        level: "danger",
-        msg: "QLD 상단 트리거 도달: QLD 매도 → SCHD 매수로 30% 복귀 권장",
-      });
-    }
-    return alerts;
-  }, [ndxTier, qldPct, upperTriggerPct]);
-
   return (
     <div>
-      {/* Trigger alerts banner */}
-      {!dismissedAlerts && triggerAlerts.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {triggerAlerts.map((a, i) => (
-            <div
-              key={i}
-              className={`flex items-start gap-2 border px-3 py-2 text-xs rounded ${
-                a.level === "danger"
-                  ? "border-red-500/40 bg-red-900/20 text-red-300"
-                  : "border-yellow-600/40 bg-yellow-900/20 text-yellow-300"
-              }`}
-            >
-              <span className="font-bold mt-0.5" aria-hidden>!</span>
-              <span className="flex-1">{a.msg}</span>
-              {i === 0 && (
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground px-1 -mt-0.5"
-                  onClick={() => setDismissedAlerts(true)}
-                  aria-label="Dismiss alerts"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Account selector + currency toggle — full width above grid */}
-      <div className="flex items-center gap-2 mb-6 border-b border-border pb-3">
+      {/* Account selector + currency toggle */}
+      <div className="flex items-center gap-2 mb-5">
         <div className="relative" ref={acctDropdownRef}>
           <button
-            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            className="rounded-full bg-card border border-border text-xs px-3.5 py-1.5 flex items-center gap-1.5 hover:bg-muted/40 transition-colors"
             onClick={() => setAcctDropdownOpen((v) => !v)}
             aria-label="Select portfolio"
             aria-haspopup="listbox"
             aria-expanded={acctDropdownOpen}
           >
-            <span className="flex-1 text-left">
+            <span className="text-left">
               {selectedPortfolioId === "all"
-                ? "ALL"
-                : portfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "ALL"}
+                ? "All accounts"
+                : portfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "All accounts"}
             </span>
             <span className="text-muted-foreground" aria-hidden="true">▾</span>
           </button>
           {acctDropdownOpen && (
-            <div className="absolute top-full left-0 mt-0.5 z-50 bg-card border border-border min-w-full" role="listbox" aria-label="Portfolio">
+            <div className="absolute top-full left-0 mt-1.5 z-50 rounded-lg bg-card border border-border shadow-sm overflow-hidden min-w-full" role="listbox" aria-label="Portfolio">
               <button
                 role="option"
                 aria-selected={selectedPortfolioId === "all"}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === "all" ? "text-accent" : ""}`}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-muted/40 ${selectedPortfolioId === "all" ? "text-accent" : ""}`}
                 onClick={() => { setSelectedPortfolioId("all"); setAcctDropdownOpen(false); }}
               >
-                ALL
+                All accounts
               </button>
               {portfolios.map((p) => (
                 <button
                   key={p.id}
                   role="option"
                   aria-selected={selectedPortfolioId === p.id}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${selectedPortfolioId === p.id ? "text-accent" : ""}`}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-muted/40 ${selectedPortfolioId === p.id ? "text-accent" : ""}`}
                   onClick={() => { setSelectedPortfolioId(p.id); setAcctDropdownOpen(false); }}
                 >
                   {p.name}
@@ -304,25 +160,29 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
             </div>
           )}
         </div>
-        <div className="ml-auto relative" ref={curDropdownRef}>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="hidden sm:inline-flex rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            FX: {fxFallback ? "fallback" : fxSource.replace(/\s+USD\/CAD$/i, "")}
+          </span>
+          <div className="relative" ref={curDropdownRef}>
           <button
-            className="btn-retro btn-retro-primary text-xs flex items-center gap-1.5"
+            className="rounded-full bg-card border border-border text-xs px-3.5 py-1.5 flex items-center gap-1.5 hover:bg-muted/40 transition-colors"
             onClick={() => setCurDropdownOpen((v) => !v)}
             aria-label="Select display currency"
             aria-haspopup="listbox"
             aria-expanded={curDropdownOpen}
           >
-            <span className="flex-1 text-left">{displayCurrency}</span>
+            <span className="text-left">{displayCurrency}</span>
             <span className="text-muted-foreground" aria-hidden="true">▾</span>
           </button>
           {curDropdownOpen && (
-            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full" role="listbox" aria-label="Display currency">
+            <div className="absolute top-full right-0 mt-1.5 z-50 rounded-lg bg-card border border-border shadow-sm overflow-hidden min-w-full" role="listbox" aria-label="Display currency">
               {(["CAD", "USD"] as const).map((c) => (
                 <button
                   key={c}
                   role="option"
                   aria-selected={displayCurrency === c}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-border/30 ${displayCurrency === c ? "text-accent" : ""}`}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-muted/40 ${displayCurrency === c ? "text-accent" : ""}`}
                   onClick={() => { setDisplayCurrency(c); setCurDropdownOpen(false); }}
                 >
                   {c}
@@ -330,11 +190,12 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
       {fxFallback && (
-        <div className="flex items-center gap-2 border border-yellow-600/40 bg-yellow-900/10 text-yellow-500 text-[10px] px-3 py-2 mb-3">
-          <span className="font-bold">!</span>
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-600/30 bg-yellow-900/5 text-yellow-500/90 text-xs px-3.5 py-2.5 mb-4">
+          <span aria-hidden="true">⚠</span>
           <span>FX rate unavailable — using fallback rate. Currency conversions may be inaccurate.</span>
         </div>
       )}
@@ -342,77 +203,92 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
       {/* 2-col grid on lg+ */}
       <div className="lg:grid lg:grid-cols-[2fr_1fr] lg:gap-6 lg:items-start">
         {/* Left column */}
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Loading skeleton */}
           {loadingData && holdingSummaries.length === 0 && (
-            <div className="grid grid-cols-3 gap-px bg-border border border-border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-card p-3 space-y-2">
-                  <SkeletonBlock className="h-2.5 w-16" />
-                  <SkeletonBlock className="h-4 w-20" />
-                </div>
+                <Card key={i} className="space-y-2.5">
+                  <SkeletonBlock className="h-3 w-20" />
+                  <SkeletonBlock className="h-5 w-24" />
+                </Card>
               ))}
             </div>
           )}
 
           {/* Empty state — no holdings loaded yet */}
           {!loadingData && holdingSummaries.length === 0 && allHoldings.length === 0 && (
-            <div className="border border-dashed border-border p-8 text-center">
-              <div className="text-accent text-xs tracking-wide mb-3">▶ GETTING STARTED</div>
-              <div className="text-xs text-muted-foreground space-y-1.5">
-                <div>1. Go to <span className="text-foreground">SETTINGS</span> → create a portfolio</div>
-                <div>2. Add stocks via the <span className="text-foreground">HOLDINGS</span> tab</div>
-                <div>3. Or import automatically via <span className="text-foreground">SETTINGS → BROKER SYNC</span></div>
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 sm:p-10 text-center">
+              <div className="text-sm font-medium mb-4">Getting started</div>
+              <div className="text-xs text-muted-foreground space-y-2 max-w-xs mx-auto text-left">
+                <div className="flex gap-2"><span className="text-muted-foreground/60">1.</span><span>Go to <span className="text-foreground">Settings</span> → create a portfolio</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground/60">2.</span><span>Add stocks via the <span className="text-foreground">Holdings</span> tab</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground/60">3.</span><span>Or import automatically via <span className="text-foreground">Settings → Broker Sync</span></span></div>
               </div>
             </div>
           )}
 
-          {/* Summary grid */}
+          {/* Summary grid — Claude-style soft cards */}
           {holdingSummaries.length > 0 && (
-            <div className="grid grid-cols-3 gap-px border border-border bg-border">
-              <div className="bg-card p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TOTAL ASSETS</div>
-                <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(totalValue)} <span className="text-[9px] font-normal text-muted-foreground/60">{displayCurrency}</span></div>
-              </div>
-              <div className="bg-card p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MARKET VALUE</div>
-                <div className="text-xs font-medium tabular-nums truncate">{currencySymbol}{fmt(holdingsValue)}</div>
-              </div>
-              <div className="bg-card p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CASH</div>
-                <div className={`text-xs font-medium tabular-nums truncate ${totalCash <= 0 ? "text-muted-foreground/40" : ""}`}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+              <Card>
+                <div className="text-[11px] text-muted-foreground mb-1.5">Total assets</div>
+                <div className="text-base sm:text-lg font-medium tabular-nums truncate">
+                  {currencySymbol}{fmt(totalValue)}
+                  <span className="text-[10px] font-normal text-muted-foreground/60 ml-1">{displayCurrency}</span>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-[11px] text-muted-foreground mb-1.5">Market value</div>
+                <div className="text-base sm:text-lg font-medium tabular-nums truncate">{currencySymbol}{fmt(holdingsValue)}</div>
+              </Card>
+              <Card>
+                <div className="text-[11px] text-muted-foreground mb-1.5">Cash</div>
+                <div className={`text-base sm:text-lg font-medium tabular-nums truncate ${totalCash <= 0 ? "text-muted-foreground/40" : ""}`}>
                   {currencySymbol}{fmt(totalCash)}
                 </div>
-              </div>
-              <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors border-l-2 border-primary/40" onClick={() => setOpenPnLShowPct((v) => !v)} role="button">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">OPEN P&amp;L</div>
-                <div className={`text-xs font-medium tabular-nums truncate ${openPnL >= 0 ? "text-positive" : "text-negative"}`}>
+              </Card>
+              <button
+                type="button"
+                onClick={() => setOpenPnLShowPct((v) => !v)}
+                className="rounded-lg border border-border bg-card p-4 text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+              >
+                <div className="text-[11px] text-muted-foreground mb-1.5">Open P&amp;L</div>
+                <div className={`text-base sm:text-lg font-medium tabular-nums truncate ${openPnL >= 0 ? "text-positive" : "text-negative"}`}>
                   {openPnLShowPct
                     ? `${openPnL >= 0 ? "+" : ""}${openPnLPct.toFixed(2)}%`
                     : `${openPnL >= 0 ? "+" : ""}${currencySymbol}${fmt(Math.abs(openPnL))}`}
                 </div>
-              </div>
-              <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors border-l-2 border-primary/40" onClick={() => setTodayPnLShowPct((v) => !v)} role="button">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">TODAY&apos;S P&amp;L</div>
-                <div className={`text-xs font-medium tabular-nums truncate ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTodayPnLShowPct((v) => !v)}
+                className="rounded-lg border border-border bg-card p-4 text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+              >
+                <div className="text-[11px] text-muted-foreground mb-1.5">Today&apos;s P&amp;L</div>
+                <div className={`text-base sm:text-lg font-medium tabular-nums truncate ${todayPnL >= 0 ? "text-positive" : "text-negative"}`}>
                   {todayPnLShowPct
                     ? `${todayPnL >= 0 ? "+" : ""}${todayPnLPct.toFixed(2)}%`
                     : `${todayPnL >= 0 ? "+" : ""}${currencySymbol}${fmt(Math.abs(todayPnL))}`}
                 </div>
-              </div>
-              <div className="bg-card p-3 cursor-pointer select-none hover:bg-border/20 active:bg-border/40 transition-colors border-l-2 border-primary/40" onClick={() => setDivViewMode((v) => ((v + 1) % 4) as 0 | 1 | 2 | 3)} role="button">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-1">
-                  {divViewMode >= 2 ? "DIV / MONTH" : "DIV / YEAR"}
-                  <span className="text-muted-foreground text-[9px] ml-1">▾</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDivViewMode((v) => ((v + 1) % 4) as 0 | 1 | 2 | 3)}
+                className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-left hover:bg-primary/10 active:bg-primary/15 transition-colors"
+              >
+                <div className="text-[11px] text-muted-foreground mb-1.5 flex items-center gap-1">
+                  {divViewMode >= 2 ? "Monthly dividend" : "Annual dividend"}
+                  <span aria-hidden="true">▾</span>
                 </div>
-                <div className="text-sm font-bold tabular-nums truncate text-primary">
+                <div className="text-base sm:text-lg font-semibold tabular-nums truncate text-primary">
                   {divAnnual === null ? "—"
                     : divViewMode === 0 ? `${currencySymbol}${fmt(divAnnual)}`
                     : divViewMode === 1 ? `${holdingsValue > 0 ? ((divAnnual / holdingsValue) * 100).toFixed(2) : "0.00"}% yield`
                     : divViewMode === 2 ? `${currencySymbol}${fmt(divMonthly ?? 0)}`
                     : `${holdingsValue > 0 ? ((divAnnual / holdingsValue) * 100 / 12).toFixed(2) : "0.00"}%`}
                 </div>
-              </div>
+              </button>
             </div>
           )}
 
@@ -420,69 +296,44 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           {incomeGoal && divAnnual !== null && (() => {
             const goalInDisplay = toDisplay(incomeGoal.annualTarget, incomeGoal.currency);
             const pct = Math.min((divAnnual / goalInDisplay) * 100, 100);
-            const currentYear = new Date().getFullYear();
-            const yearsToGoal = (divPortfolioCagr !== null && divPortfolioCagr > 0
-              && divAnnual > 0 && divAnnual < goalInDisplay)
-              ? Math.ceil(Math.log(goalInDisplay / divAnnual) / Math.log(1 + divPortfolioCagr / 100))
-              : null;
-            const targetYear = yearsToGoal !== null ? currentYear + yearsToGoal : null;
 
             return (
-              <div className="border border-border bg-card p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-2">INCOME GOAL</div>
+              <Card>
+                <div className="text-[11px] text-muted-foreground mb-2.5">Income goal</div>
                 <div
                   role="progressbar"
                   aria-valuenow={Math.round(pct)}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label="Income goal progress"
-                  className="h-1 bg-border rounded-full overflow-hidden mb-1.5"
+                  className="h-1.5 bg-muted/50 rounded-full overflow-hidden mb-2"
                 >
                   <div className={`h-full rounded-full transition-all ${pct >= 100 ? "bg-positive" : "bg-primary"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[10px] tabular-nums text-muted-foreground">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <div className="text-xs tabular-nums text-muted-foreground">
                     {currencySymbol}{fmt(divAnnual)} / {currencySymbol}{fmt(goalInDisplay)}
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] tabular-nums min-w-0">
+                  <div className="flex items-center gap-2 text-[11px] tabular-nums min-w-0">
                     {pct >= 100 ? (
-                      <span className="text-positive shrink-0 font-medium">GOAL REACHED</span>
+                      <span className="text-positive shrink-0 font-medium">Goal reached</span>
                     ) : (
                       <>
-                        <span className="text-primary/80 shrink-0">{pct.toFixed(0)}%</span>
-                        {yearsToGoal !== null && divPortfolioCagr !== null && (
-                          <span className="text-muted-foreground truncate min-w-0">
-                            · ≈ {yearsToGoal} yrs at {divPortfolioCagr.toFixed(1)}% div CAGR → {targetYear}
-                          </span>
-                        )}
+                        <span className="text-primary/80 shrink-0 font-medium">{pct.toFixed(0)}%</span>
                       </>
                     )}
                   </div>
                 </div>
-              </div>
+              </Card>
             );
           })()}
 
-          {/* Charts: PERFORMANCE | EQUITY tabs */}
-          <ChartTabs
-            tabs={["PERFORMANCE", "EQUITY"] as const}
-            performanceContent={<PerformanceChart />}
-            equityContent={
-              holdingSummaries.length > 0 ? (
-                <PortfolioCharts
-                  holdings={holdingSummaries}
-                  holdingsWithTransactions={allHoldings}
-                  fxRate={fxRate}
-                  totalCashCAD={totalCashCAD}
-                  displayCurrency={displayCurrency}
-                />
-              ) : null
-            }
-          />
+          {/* Performance chart */}
+          <PerformanceChart />
         </div>
 
         {/* Right column */}
-        <div className="space-y-4 mt-4 lg:mt-0">
+        <div className="space-y-5 mt-5 lg:mt-0">
           {/* Allocation + Dividend Distribution horizontal bars */}
           {holdingSummaries.length > 0 && (
             <AllocationBars
@@ -504,12 +355,6 @@ export function DashboardClient({ initialPortfolios, fxRate: initialFxRate }: { 
           {holdingSummaries.length > 0 && (
             <UpcomingDividends fxRate={fxRate} displayCurrency={displayCurrency} />
           )}
-
-          {/* AI Assistant Panel */}
-          <AiPanel />
-
-          {/* AI Projection */}
-          <ProjectionCard />
         </div>
       </div>
 

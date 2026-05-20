@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { sanitizeAiOutput } from "@/lib/ai-output-rules";
+import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
 
 type Tab = "BRIEFING" | "INSIGHTS";
 
@@ -15,19 +17,15 @@ const INITIAL_STATE: AiState = { result: null, cached: false, loading: false, er
 
 export function AiPanel() {
   const [tab, setTab] = useState<Tab>("BRIEFING");
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [maxCalls, setMaxCalls] = useState<number>(2);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [clearingCache, setClearingCache] = useState(false);
   const [briefing, setBriefing] = useState<AiState>(INITIAL_STATE);
   const [insights, setInsights] = useState<AiState>(INITIAL_STATE);
 
-  async function fetchBriefing() {
+  async function fetchBriefing(opts: { force?: boolean } = {}) {
     setBriefing((s) => ({ ...s, loading: true, error: null }));
     try {
-      const res = await fetch("/api/ai/briefing", { method: "POST" });
-      const data = await res.json() as { result?: string; cached?: boolean; remaining?: number; error?: string };
-      if (data.remaining !== undefined) setRemaining(data.remaining);
+      const url = opts.force ? "/api/ai/briefing?force=1" : "/api/ai/briefing";
+      const res = await fetch(url, { method: "POST" });
+      const data = (await res.json()) as { result?: string; cached?: boolean; error?: string };
       if (!res.ok) {
         setBriefing({ result: null, cached: false, loading: false, error: data.error ?? "Failed" });
       } else {
@@ -38,12 +36,12 @@ export function AiPanel() {
     }
   }
 
-  async function fetchInsights() {
+  async function fetchInsights(opts: { force?: boolean } = {}) {
     setInsights((s) => ({ ...s, loading: true, error: null }));
     try {
-      const res = await fetch("/api/ai/insights", { method: "POST" });
-      const data = await res.json() as { result?: string; cached?: boolean; remaining?: number; error?: string };
-      if (data.remaining !== undefined) setRemaining(data.remaining);
+      const url = opts.force ? "/api/ai/insights?force=1" : "/api/ai/insights";
+      const res = await fetch(url, { method: "POST" });
+      const data = (await res.json()) as { result?: string; cached?: boolean; error?: string };
       if (!res.ok) {
         setInsights({ result: null, cached: false, loading: false, error: data.error ?? "Failed" });
       } else {
@@ -54,43 +52,26 @@ export function AiPanel() {
     }
   }
 
-  // Auto-load both on mount (24h cache — real AI call only once per day)
   useEffect(() => {
-    fetch("/api/ai/status")
-      .then((r) => r.json())
-      .then((d: { isAdmin?: boolean; remaining?: number; maxCalls?: number }) => {
-        setIsAdmin(d.isAdmin ?? false);
-        if (d.remaining !== undefined) setRemaining(d.remaining);
-        if (d.maxCalls !== undefined) setMaxCalls(d.maxCalls);
-      })
-      .catch(() => {});
     fetchBriefing();
     fetchInsights();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handler = () => {
+      fetchBriefing({ force: true });
+      fetchInsights({ force: true });
+    };
+    window.addEventListener(AI_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(AI_REFRESH_EVENT, handler);
+     
   }, []);
-
-  async function clearCache() {
-    setClearingCache(true);
-    await fetch("/api/ai/cache", { method: "DELETE" });
-    setClearingCache(false);
-    setBriefing(INITIAL_STATE);
-    setInsights(INITIAL_STATE);
-    fetchBriefing();
-    fetchInsights();
-  }
 
   const tabs: Tab[] = ["BRIEFING", "INSIGHTS"];
   const current = tab === "BRIEFING" ? briefing : insights;
-  const onRefresh = tab === "BRIEFING" ? fetchBriefing : fetchInsights;
 
   return (
     <div className="border border-border bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <div className="text-accent text-xs tracking-wide">&#9654; AI ASSISTANT</div>
-        <div className="text-[10px] text-muted-foreground tabular-nums">
-          {remaining !== null ? `${remaining}/${maxCalls} CALLS TODAY` : ""}
-        </div>
+      <div className="px-4 py-2 border-b border-border text-accent text-xs tracking-wide truncate">
+        &#9654; AI ASSISTANT
       </div>
 
       {/* Tab bar */}
@@ -119,30 +100,15 @@ export function AiPanel() {
 
         {current.result && !current.loading && (
           <div className="text-xs whitespace-pre-wrap break-words leading-relaxed text-foreground border border-border bg-background p-3 overflow-hidden">
-            {current.result}
+            {sanitizeAiOutput(current.result)}
           </div>
         )}
 
-        {/* Footer row: status badges + admin button — single line */}
-        {(!current.loading && (current.cached || remaining === 0 || isAdmin)) && (
-          <div className="flex items-center gap-2 pt-1">
-            {current.cached && (
-              <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5">
-                CACHED
-              </span>
-            )}
-            {remaining === 0 && (
-              <span className="text-[10px] text-negative">DAILY LIMIT REACHED</span>
-            )}
-            {isAdmin && (
-              <button
-                onClick={clearCache}
-                disabled={clearingCache}
-                className="btn-retro text-[10px] px-2 py-0.5 text-negative border-negative/30 hover:border-negative disabled:opacity-30 ml-auto"
-              >
-                {clearingCache ? "CLEARING..." : "[ CLEAR CACHE ]"}
-              </button>
-            )}
+        {!current.loading && current.cached && (
+          <div className="pt-1">
+            <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5">
+              CACHED
+            </span>
           </div>
         )}
       </div>

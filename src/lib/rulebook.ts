@@ -1,18 +1,23 @@
-// SANGBONG INVESTMENT RULEBOOK v4.1.10 calculation helpers.
+// SANGBONG INVESTMENT RULEBOOK v4.4.2 calculation helpers.
 // Pure functions; all CAD-normalized inputs; all output is JSON-serializable.
 //
-// Rule references (v4.1.10):
-//  - Core         = SCHD + QLD (excluding SGOV, IAUM, TQQQ)
+// Rule references (v4.4.2):
+//  - Core         = SCHD + QLD
+//  - Satellite    = SGOV + QQQI (IAUM retired in v4.4.2)
+//  - Overlay      = TQQQ (crisis-only)
 //  - QLD weight   = QLD / (SCHD + QLD)            ← Core basis
-//  - Growth bucket= (QLD + TQQQ) / TotalPortfolio ← Total basis
-//  - SGOV weight  = SGOV / TotalPortfolio         ← Total basis (target 8%, crisis floor 5%)
-//  - IAUM weight  = IAUM / TotalPortfolio         ← Total basis (cap 5%)
+//  - Growth bucket= (QLD + TQQQ) / TotalPortfolio ← Total basis (Soft 34%, Hard/Emergency 38%)
+//  - SGOV weight  = SGOV / TotalPortfolio         ← Total basis (target 8%, crisis floor 5%, buffer 3%)
+//  - QQQI weight  = QQQI / TotalPortfolio         ← Total basis (cap 5%, TFSA-only)
 //  - Scenarios    : Base 6%, Pessimistic 4%, Worst 2%  (no optimistic)
-//  - TQQQ         : Overlay-only (per §15). Starts at 0; bought via §6.1 crisis trigger, sold via §6.2 exit ladder.
+//  - Contribution : STATIC 70/30 SCHD/QLD. During TQQQ overlay (TQQQ > 0): SCHD 70 / TQQQ 30 / QLD 0.
+//  - SCHD dividend reinvestment: 70/30 SCHD/QLD (overlay-aware). NEVER routed to SGOV or QQQI.
+//  - Crisis (§6.1) judged on MONTH-END close. Emergency cap (§10) and TQQQ exit ladder (§6.2) judged on DAILY close.
+//  - No Method B. No NDX trigger. QQQI never funds crisis / rebalance / SGOV refill / QLD or TQQQ buys.
 
 export const RULEBOOK_TICKERS = {
   CORE: ["SCHD", "QLD"] as const,
-  RESERVE: ["SGOV", "IAUM"] as const,
+  RESERVE: ["SGOV", "QQQI"] as const,
   OVERLAY: ["TQQQ"] as const,
 } as const;
 
@@ -34,16 +39,17 @@ export const RULEBOOK_TARGETS = {
   CRISIS_T1_BUY_PCT_OF_TOTAL: 2.5,
   CRISIS_T2_BUY_PCT_OF_TOTAL: 2.5,
   CYCLE_RESET_GROWTH_BUCKET_PCT: 30,  // TQQQ=0 AND growth bucket ≥ 30% → cycle re-armed
-  // §6.2 TQQQ exit ladder (growth-bucket basis)
-  SOFT_EXIT_GROWTH_BUCKET_PCT: 34,    // sell HALF of TQQQ
-  HARD_EXIT_GROWTH_BUCKET_PCT: 38,    // sell ALL TQQQ + QLD to 30%
-  // SGOV
-  SGOV_TARGET_PCT: 8,                 // §8 normal target / Soft & Hard Exit refill ceiling
+  // §6.2 TQQQ exit ladder (v4.4.2: 34% Soft Exit reintroduced; 38% Emergency cap retained)
+  SOFT_EXIT_GROWTH_BUCKET_PCT: 34,    // sell HALF of TQQQ (proceeds: SGOV 8% → SCHD)
+  HARD_EXIT_GROWTH_BUCKET_PCT: 38,    // §10 Emergency cap: sell ALL TQQQ + QLD to 30%
+  // SGOV (v4.4.2)
+  SGOV_TARGET_PCT: 8,                 // §8 normal target / Hard Exit + rebalance refill ceiling
   SGOV_FLOOR_PCT:  5,                 // §8 crisis floor — only §6.1 may pierce
-  // IAUM
-  IAUM_MAX_PCT: 5,
-  // Weekly contributions ([3])
-  IAUM_WEEKLY_BUY_CAD: 25,
+  SGOV_DEPLOYABLE_BUFFER_PCT: 3,      // §8 deployable buffer = target − floor
+  // QQQI (v4.4.2 — replaces legacy IAUM slot)
+  QQQI_MAX_PCT: 5,
+  // Weekly contributions
+  QQQI_WEEKLY_BUY_CAD: 25,
   SGOV_WEEKLY_REFILL_CAD: 50,
   CORE_WEEKLY_CAD: 350,
   // Retirement phase (rulebook [10] / [11] / [16])
@@ -74,7 +80,7 @@ export interface RulebookWeights {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;             // v4.4.2 (replaces IAUM)
   tqqqCAD: number;             // overlay asset; 0 when no holding
   // Core basis
   qldCoreWeightPct: number;    // QLD / (SCHD + QLD) × 100
@@ -82,20 +88,20 @@ export interface RulebookWeights {
   // Total basis
   growthBucketPct: number;     // (QLD + TQQQ) / Total × 100
   sgovTotalWeightPct: number;
-  iaumTotalWeightPct: number;
+  jepqTotalWeightPct: number;
   tqqqTotalWeightPct: number;
   // Trigger flags
   inDeadband: boolean;          // 29 ≤ QLD core W ≤ 31 → no annual rebal action
   caseAEligible: boolean;       // QLD core W > 31 (regardless of overlay)
   caseBEligible: boolean;       // QLD core W < 29 AND TQQQ = 0
-  hardExit: boolean;            // growth bucket ≥ 38
-  softExit: boolean;            // growth bucket ≥ 34 (and not hard)
-  crisisT1: boolean;            // 20 < core W ≤ 25
-  crisisT2: boolean;            // core W ≤ 20
+  hardExit: boolean;            // growth bucket ≥ 38 → Emergency cap (daily close)
+  softExit: boolean;            // growth bucket ≥ 34 (and not hard) → sell half TQQQ (v4.4.2 reintroduced)
+  crisisT1: boolean;            // 20 < core W ≤ 25 (month-end close gate)
+  crisisT2: boolean;            // core W ≤ 20      (month-end close gate)
   cycleArmable: boolean;        // TQQQ=0 AND growth bucket ≥ 30  (cycle reset condition met)
   sgovBelowTarget: boolean;     // SGOV total W < 8
   sgovBelowFloor: boolean;      // SGOV total W < 5  (warning state)
-  iaumAtCap: boolean;
+  jepqAtCap: boolean;           // QQQI total W ≥ 5 (hard cap)
 }
 
 function pct(numerator: number, denominator: number): number {
@@ -114,7 +120,7 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   const schdCAD = findValue(holdings, "SCHD");
   const qldCAD  = findValue(holdings, "QLD");
   const sgovCAD = findValue(holdings, "SGOV");
-  const iaumCAD = findValue(holdings, "IAUM");
+  const jepqCAD = findValue(holdings, "QQQI");
   const tqqqCAD = findValue(holdings, "TQQQ");
   const allCAD  = holdings.reduce((s, h) => s + (isFinite(h.valueCAD) ? h.valueCAD : 0), 0);
   const coreCAD = schdCAD + qldCAD;
@@ -123,7 +129,7 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   const schdCoreWeightPct = pct(schdCAD, coreCAD);
   const growthBucketPct   = pct(qldCAD + tqqqCAD, allCAD);
   const sgovTotalWeightPct = pct(sgovCAD, allCAD);
-  const iaumTotalWeightPct = pct(iaumCAD, allCAD);
+  const jepqTotalWeightPct = pct(jepqCAD, allCAD);
   const tqqqTotalWeightPct = pct(tqqqCAD, allCAD);
 
   const hardExit = growthBucketPct >= RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT;
@@ -156,13 +162,13 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
     schdCAD,
     qldCAD,
     sgovCAD,
-    iaumCAD,
+    jepqCAD,
     tqqqCAD,
     qldCoreWeightPct,
     schdCoreWeightPct,
     growthBucketPct,
     sgovTotalWeightPct,
-    iaumTotalWeightPct,
+    jepqTotalWeightPct,
     tqqqTotalWeightPct,
     inDeadband,
     caseAEligible,
@@ -174,81 +180,78 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
     cycleArmable,
     sgovBelowTarget: sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_TARGET_PCT,
     sgovBelowFloor:  sgovTotalWeightPct < RULEBOOK_TARGETS.SGOV_FLOOR_PCT,
-    iaumAtCap:       iaumTotalWeightPct >= RULEBOOK_TARGETS.IAUM_MAX_PCT,
+    jepqAtCap:       jepqTotalWeightPct >= RULEBOOK_TARGETS.QQQI_MAX_PCT,
   };
 }
 
-// ── Method B (no-sell) Core allocation ───────────────────────────────────────
-export interface MethodBAllocation {
+// ── Static Core allocation (v4.3.1) ──────────────────────────────────────────
+// Fixed 70/30 split. No Method B, no shortfall logic, no no-sell carry-over.
+// During TQQQ overlay (tqqqActive=true → TQQQ > 0), QLD allocation moves to TQQQ:
+//   normal : SCHD 70 / QLD 30
+//   overlay: SCHD 70 / TQQQ 30 / QLD 0
+export interface StaticCoreAllocation {
   contributionCAD: number;
-  schdValueCAD: number;
-  qldValueCAD: number;
-  targetCoreCAD: number;
-  targetSchdCAD: number;
-  targetQldCAD: number;
-  schdShortCAD: number;        // never negative (no-sell)
-  qldShortCAD: number;         // never negative (no-sell)
+  overlayActive: boolean;
   schdBuyCAD: number;
   qldBuyCAD: number;
-  unallocatedCAD: number;      // when both at/above target → carries to next week
+  tqqqBuyCAD: number;
 }
 
-export function computeMethodBAllocation(
-  schdValueCAD: number,
-  qldValueCAD: number,
+export function computeStaticCoreAllocation(
   contributionCAD: number,
-): MethodBAllocation {
+  overlayActive: boolean,
+): StaticCoreAllocation {
   const C = Math.max(0, isFinite(contributionCAD) ? contributionCAD : 0);
-  const S = Math.max(0, isFinite(schdValueCAD) ? schdValueCAD : 0);
-  const Q = Math.max(0, isFinite(qldValueCAD) ? qldValueCAD : 0);
-  const targetCore = S + Q + C;
-  const targetSchd = (RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100) * targetCore;
-  const targetQld  = (RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100) * targetCore;
-  const schdShort = Math.max(0, targetSchd - S);   // no-sell clamp
-  const qldShort  = Math.max(0, targetQld  - Q);
-  const totalShort = schdShort + qldShort;
-
-  let schdBuy = 0;
-  let qldBuy = 0;
-  let unallocated = 0;
-
-  if (totalShort <= 0 || C <= 0) {
-    unallocated = C;
-  } else if (totalShort >= C) {
-    // proportional shortfall
-    schdBuy = (schdShort / totalShort) * C;
-    qldBuy  = (qldShort  / totalShort) * C;
-  } else {
-    // contribution exceeds total shortfall — fill shortfalls, leave the rest unallocated
-    schdBuy = schdShort;
-    qldBuy  = qldShort;
-    unallocated = C - totalShort;
-  }
-
+  const schdPct = RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100;
+  const qldPct  = RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100;
+  const schdBuy = C * schdPct;
+  const growthBuy = C * qldPct;
   return {
     contributionCAD: C,
-    schdValueCAD: S,
-    qldValueCAD: Q,
-    targetCoreCAD: targetCore,
-    targetSchdCAD: targetSchd,
-    targetQldCAD:  targetQld,
-    schdShortCAD: schdShort,
-    qldShortCAD:  qldShort,
+    overlayActive,
     schdBuyCAD: schdBuy,
-    qldBuyCAD:  qldBuy,
-    unallocatedCAD: unallocated,
+    qldBuyCAD:  overlayActive ? 0 : growthBuy,
+    tqqqBuyCAD: overlayActive ? growthBuy : 0,
   };
 }
 
-// ── §6.2 Soft Exit — growth bucket ≥ 34% → sell HALF of TQQQ ─────────────────
-// Proceeds order (rulebook [6.2]):
-//   1) SGOV refill up to 8% of total
-//   2) remainder → SCHD
-// SCHD is never sold.
-export interface TqqqExitPlan {
+// ── SCHD dividend reinvestment (v4.4.2) ─────────────────────────────────────
+// Rulebook §5 — every SCHD dividend must reinvest as 70/30 static.
+//   dividend × 0.70 → SCHD
+//   dividend × 0.30 → QLD  (or TQQQ when overlay active)
+// Routing to SGOV / QQQI is strictly forbidden.
+export interface SchdDividendReinvestPlan {
+  dividendCAD: number;
+  overlayActive: boolean;
+  schdBuyCAD: number;
+  qldBuyCAD: number;
+  tqqqBuyCAD: number;
+}
+
+export function computeSchdDividendReinvest(
+  dividendCAD: number,
+  overlayActive: boolean,
+): SchdDividendReinvestPlan {
+  const D = Math.max(0, isFinite(dividendCAD) ? dividendCAD : 0);
+  const schdPct = RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100;
+  const qldPct  = RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100;
+  const schdBuy = D * schdPct;
+  const growthBuy = D * qldPct;
+  return {
+    dividendCAD: D,
+    overlayActive,
+    schdBuyCAD: schdBuy,
+    qldBuyCAD:  overlayActive ? 0 : growthBuy,
+    tqqqBuyCAD: overlayActive ? growthBuy : 0,
+  };
+}
+
+// ── §6.2 Soft Exit — growth bucket ≥ 34% → sell HALF of TQQQ (v4.4.2 reintroduced) ───
+// Proceeds order: SGOV refill up to 8% of total, remainder → SCHD. SCHD never sold.
+// Soft Exit is judged on the SAME daily-close basis as the §10 Emergency cap.
+export interface TqqqSoftExitPlan {
   active: boolean;
   tqqqSaleCAD: number;
-  qldSaleCAD: number;          // 0 for Soft, > 0 for Hard
   sgovRefillCAD: number;
   schdBuyCAD: number;
   postGrowthBucketPct: number;
@@ -261,9 +264,9 @@ export function computeTqqqSoftExitPlan(args: {
   sgovCAD: number;
   totalCAD: number;
   softExit: boolean;
-}): TqqqExitPlan {
-  const inactive: TqqqExitPlan = {
-    active: false, tqqqSaleCAD: 0, qldSaleCAD: 0, sgovRefillCAD: 0, schdBuyCAD: 0, postGrowthBucketPct: 0,
+}): TqqqSoftExitPlan {
+  const inactive: TqqqSoftExitPlan = {
+    active: false, tqqqSaleCAD: 0, sgovRefillCAD: 0, schdBuyCAD: 0, postGrowthBucketPct: 0,
   };
   if (!args.softExit || args.tqqqCAD <= 0) return inactive;
   const sale = args.tqqqCAD / 2;
@@ -271,18 +274,31 @@ export function computeTqqqSoftExitPlan(args: {
   const sgovRefill = Math.min(sale, sgovGap);
   const schdBuy = Math.max(0, sale - sgovRefill);
   const postTqqq = args.tqqqCAD - sale;
-  const postTotal = args.totalCAD;  // proceeds reinvested → total unchanged
-  const postGrowthBucketPct = postTotal > 0 ? ((args.qldCAD + postTqqq) / postTotal) * 100 : 0;
-  return { active: true, tqqqSaleCAD: sale, qldSaleCAD: 0, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
+  const postGrowthBucketPct = args.totalCAD > 0
+    ? ((args.qldCAD + postTqqq) / args.totalCAD) * 100
+    : 0;
+  return { active: true, tqqqSaleCAD: sale, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
 }
 
 // ── §6.2 Hard Exit — growth bucket ≥ 38% → all TQQQ + QLD to 30% core ───────
-// Sequence (rulebook [6.2]):
+// v4.3.1: the 34% Soft Exit was removed. Hard Exit at 38% is the only TQQQ exit.
+// Proceeds order:
 //   1) Sell all TQQQ
 //   2) Sell QLD down to 30% of core
 //   3) Refill SGOV to 8% of total (combined proceeds)
 //   4) Remainder → SCHD
-// SCHD never sold. With TQQQ=0 this degrades to a Case-A-style QLD unwind.
+// SCHD is never sold.
+export interface TqqqExitPlan {
+  active: boolean;
+  tqqqSaleCAD: number;
+  qldSaleCAD: number;
+  sgovRefillCAD: number;
+  schdBuyCAD: number;
+  postGrowthBucketPct: number;
+}
+
+// ── §6.2 Hard Exit (continued) ───────────────────────────────────────────────
+// With TQQQ=0 this degrades to a Case-A-style QLD unwind.
 export function computeTqqqHardExitPlan(args: {
   schdCAD: number;
   qldCAD: number;
@@ -421,24 +437,11 @@ export function computeAnnualRebalancePlan(args: {
     };
   }
 
-  // Case B
-  const eUnder = Math.max(0, (RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100) * coreCAD - args.qldCAD);
-  if (eUnder <= 0) return noop;
-  const xNeed = eUnder / (1 - RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100);
-  const sgovFloorCAD = (RULEBOOK_TARGETS.SGOV_FLOOR_PCT / 100) * Math.max(0, args.totalCAD);
-  const xAvail = Math.max(0, args.sgovCAD - sgovFloorCAD);
-  if (xAvail <= 0) return { ...noop, action: "case_b_no_room" };
-  const x = Math.min(xNeed, xAvail);
-  const postQld = args.qldCAD + x;
-  const postCore = coreCAD + x;  // SGOV moves into core
-  return {
-    action: "case_b",
-    qldSaleCAD: 0,
-    qldBuyCAD: x,
-    sgovDeltaCAD: -x,
-    schdBuyCAD: 0,
-    postQldCoreWeightPct: postCore > 0 ? (postQld / postCore) * 100 : 0,
-  };
+  // Case B (v4.4.2 — NO ACTION). Earlier rulebook versions sold SGOV to buy QLD;
+  // v4.4.2 explicitly says QLD < 29% → no action (SCHD/QLD long-term protection).
+  // Returns "deadband" so downstream consumers treat it as no-op while UI can
+  // still surface caseBEligible flag for awareness.
+  return noop;
 }
 
 // ── §11 RRSP Meltdown — SCHD-first withdrawal helper ─────────────────────────
@@ -472,34 +475,57 @@ export function computeMeltdownAllocation(
   };
 }
 
-// ── §7 IAUM weekly buy (carve-out from weekly contribution) ─────────────────
-// Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (IAUM < 5% of total) 일 때만.
-// 조건 미충족이면 25 CAD는 IAUM이 아니라 Core Method B로 redirect.
-// IAUM은 forced allocation이 아니므로 5% 보정 매수도 절대 금지.
-export interface IaumWeeklyPlan {
-  iaumBuyCAD: number;          // 0 또는 25
-  redirectedToCoreCAD: number; // IAUM 미적용 시 25 (Method B로 재투입)
-  reason: string;              // 한국어 사유 ("적용" / "TFSA room 없음" / "IAUM ≥ 5%")
+// ── §4 QQQI weekly buy (v4.4.2 — replaces legacy IAUM slot) ─────────────────
+// Rule: 주간 25 CAD, 단 (TFSA room 존재) AND (QQQI < 5% of total) 일 때만.
+// 조건 미충족이면 25 CAD는 QQQI이 아니라 Core (static 70/30) 로 redirect.
+// QQQI는 hard cap 5%만 존재 (target 0–5%). 보정 매수 금지. crisis/rebalance/SGOV refill 자금원 사용 금지.
+// QQQI distribution은 자동 라우팅 없음 — 기본은 TFSA USD cash 누적 (수동 처리).
+export interface JepqWeeklyPlan {
+  jepqBuyCAD: number;          // 0 또는 25
+  redirectedToCoreCAD: number; // QQQI 미적용 시 25 (Core static 70/30 으로 재투입)
+  reason: string;              // 한국어 사유 ("적용" / "TFSA room 없음" / "QQQI ≥ 5%")
   tfsaRoomExists: boolean;
-  iaumBelowCap: boolean;
+  jepqBelowCap: boolean;
 }
 
-export function computeIaumWeeklyPlan(
+export interface QqqiWeeklyPlan {
+  qqqiBuyCAD: number;
+  redirectedToCoreCAD: number;
+  reason: string;
+  tfsaRoomExists: boolean;
+  qqqiBelowCap: boolean;
+}
+
+export function computeJepqWeeklyPlan(
   tfsaRoomExists: boolean,
-  iaumTotalWeightPct: number,
-): IaumWeeklyPlan {
-  const cap = RULEBOOK_TARGETS.IAUM_WEEKLY_BUY_CAD;
-  const iaumBelowCap = iaumTotalWeightPct < RULEBOOK_TARGETS.IAUM_MAX_PCT;
-  const conditionsMet = tfsaRoomExists && iaumBelowCap;
+  jepqTotalWeightPct: number,
+): JepqWeeklyPlan {
+  const cap = RULEBOOK_TARGETS.QQQI_WEEKLY_BUY_CAD;
+  const jepqBelowCap = jepqTotalWeightPct < RULEBOOK_TARGETS.QQQI_MAX_PCT;
+  const conditionsMet = tfsaRoomExists && jepqBelowCap;
   let reason = "적용";
-  if (!tfsaRoomExists) reason = "TFSA 잔여한도 없음 → Method B로 재투입";
-  else if (!iaumBelowCap) reason = "IAUM 전체 비중 ≥ 5% (상한 도달) → Method B로 재투입";
+  if (!tfsaRoomExists) reason = "TFSA 잔여한도 없음 → Core (70/30) 로 재투입";
+  else if (!jepqBelowCap) reason = "QQQI 전체 비중 ≥ 5% (hard cap 도달) → Core (70/30) 로 재투입";
   return {
-    iaumBuyCAD:           conditionsMet ? cap : 0,
+    jepqBuyCAD:           conditionsMet ? cap : 0,
     redirectedToCoreCAD:  conditionsMet ? 0   : cap,
     reason,
     tfsaRoomExists,
-    iaumBelowCap,
+    jepqBelowCap,
+  };
+}
+
+export function computeQqqiWeeklyPlan(
+  tfsaRoomExists: boolean,
+  qqqiTotalWeightPct: number,
+): QqqiWeeklyPlan {
+  const p = computeJepqWeeklyPlan(tfsaRoomExists, qqqiTotalWeightPct);
+  return {
+    qqqiBuyCAD: p.jepqBuyCAD,
+    redirectedToCoreCAD: p.redirectedToCoreCAD,
+    reason: p.reason,
+    tfsaRoomExists: p.tfsaRoomExists,
+    qqqiBelowCap: p.jepqBelowCap,
   };
 }
 
@@ -520,46 +546,45 @@ export interface ProjectionScenario {
   points: ProjectionYearPoint[];
 }
 
-// ── Rulebook-based per-asset projection (v2) ───────────────────────────────────
-// Year-by-year simulation that actually applies §5 Method B, §6 SGOV refill,
-// §7 IAUM gating, §10 emergency cap, §9 annual rebalance, and the age-65
-// IAUM exit. Per-asset CAD evolves over time so that QLD core weight, SGOV
-// total weight, and IAUM total weight can be tracked against the rulebook
+// ── Rulebook-based per-asset projection (v2 — v4.4.2) ───────────────────────
+// Year-by-year simulation that applies §5 static 70/30 contribution, §6 SGOV
+// refill, §4 QQQI gating, §9 annual rebalance, §6.2 Soft Exit (34%), §10 Emergency
+// cap (38%). Per-asset CAD evolves over time so that QLD core weight, SGOV
+// total weight, and QQQI total weight can be tracked against the rulebook
 // thresholds in every projected year.
 //
 // Per-asset CAGR model (assumption — document as 모델 한계):
 //   SCHD CAGR = scenario CAGR (0.06 / 0.04 / 0.02)
 //   QLD  CAGR = scenario CAGR × 1.5 (rough leverage proxy; 2x daily-reset decays)
 //   SGOV CAGR = 0.04 (T-bill / cash-equivalent)
-//   IAUM CAGR = 0.02 (long-term real gold)
+//   QQQI CAGR = scenario CAGR (TFSA covered-call ETF, similar to broad equity)
 //
 // Yields (annual dividend / price) for each asset are caller-provided, then
 // SCHD yield grows by safeDivGrowth each year (dividend growth assumption).
-// QLD / SGOV / IAUM yields stay flat in this simple model.
+// QLD / SGOV / QQQI yields stay flat in this simple model.
 export interface ProjectionStartStateV2 {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;        // v4.4.2 (replaces IAUM)
   tqqqCAD: number;        // overlay; typically 0 outside crisis cycle
   schdYieldPct: number;   // e.g. 3.5
   qldYieldPct: number;    // e.g. 0.5
   sgovYieldPct: number;   // e.g. 4.5
-  // IAUM yield = 0 (gold pays no dividend)
-  // TQQQ yield ≈ 0 (leveraged ETF; effectively no dividend)
+  jepqYieldPct: number;   // e.g. 8.0 (covered-call yield; modelled constant)
 }
 
 export interface ProjectionInputV2 {
   start: ProjectionStartStateV2;
-  /** Plan amount (Core only) per week, CAD. Distributed via Method B to SCHD/QLD. */
+  /** Plan amount (Core only) per week, CAD. Distributed static 70/30 to SCHD/QLD (overlay: SCHD/TQQQ). */
   coreWeeklyCAD: number;
   /** Settings nonCorePlan.cad for SGOV (per Plan period). 0 if not set. */
   sgovWeeklyCAD: number;
-  /** Settings nonCorePlan.cad for IAUM (per Plan period). 0 if not set. */
-  iaumWeeklyCAD: number;
+  /** Settings nonCorePlan.cad for QQQI (per Plan period). 0 if not set. */
+  jepqWeeklyCAD: number;
   /** Whether TFSA room remains; assumed constant for projection horizon (model 한계). */
   tfsaRoomExists: boolean;
-  /** User's current age, for age-65 IAUM exit. Null → no exit modelled. */
+  /** User's current age; used by §11 RRSP meltdown / §10 dividend consumption / §16 pension. */
   currentAge: number | null;
   /** Annual dividend growth rate %, capped 0-20. */
   divGrowthPct: number;
@@ -568,7 +593,7 @@ export interface ProjectionInputV2 {
   /** Maximum projection horizon in years. */
   maxYears: number;
   // ── Optional refinements (defaults match prior behaviour) ────────────────
-  /** When SGOV/IAUM gating fails, redirect that contribution into Core Method B. Default: true (rulebook §7). */
+  /** When SGOV/QQQI gating fails, redirect that contribution into Core static 70/30 (overlay-aware). Default: true. */
   redirectGatedToCore?: boolean;
   /** Effective dividend-growth factor applied to QLD yield each year (multiplied by safeDivGrowth). Default 0.5. */
   qldDivGrowthFactor?: number;
@@ -584,27 +609,26 @@ export interface ProjectionYearPointV2 {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;             // v4.4.2
   tqqqCAD: number;
   totalCAD: number;
   qldCoreWeightPct: number;
   growthBucketPct: number;     // (QLD + TQQQ) / Total × 100
   sgovTotalWeightPct: number;
-  iaumTotalWeightPct: number;
+  jepqTotalWeightPct: number;
   /** Net-of-withholding-tax annual dividend (taxWithholdPct subtracted). */
   annualDivCAD: number;
   /** Gross annual dividend (before withholding tax). */
   annualDivGrossCAD: number;
   monthlyDivCAD: number;
   totalContribCAD: number;
-  // v4.1.10 priority-order event flags
+  // v4.4.2 priority-order event flags
   hardExitApplied: boolean;
-  softExitApplied: boolean;
+  softExitApplied: boolean;    // §6.2 sell-half TQQQ (reintroduced)
   crisisT1Applied: boolean;
   crisisT2Applied: boolean;
   caseAApplied: boolean;
   caseBApplied: boolean;
-  iaumExited: boolean;
   // Retirement phase fields ([10] / [11] / [16])
   withdrawalCAD: number;
   dividendConsumedCAD: number;
@@ -625,25 +649,21 @@ export interface ProjectionScenarioV2 {
     crisisT2: number;
     caseA: number;
     caseB: number;
-    iaumExited: boolean;
   };
 }
 
 const SGOV_FIXED_CAGR = 0.04;
-const IAUM_FIXED_CAGR = 0.02;
 const QLD_LEVERAGE_FACTOR = 1.5;
 const TQQQ_LEVERAGE_FACTOR = 3;   // 3× SCHD CAGR proxy for leveraged Nasdaq overlay
 
 export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionScenarioV2[] {
   const startYear = new Date().getFullYear();
-  const safeDivGrowth = Math.max(0, Math.min(20, input.divGrowthPct)) / 100;
   const yearPointsClean = Array.from(new Set(
     input.yearPoints.filter(y => Number.isFinite(y) && y > 0 && y <= input.maxYears),
   )).sort((a, b) => a - b);
 
   // Optional knobs with defaults preserving prior behaviour where useful.
   const redirectGated = input.redirectGatedToCore ?? true;
-  const qldDgFactor = Math.max(0, Math.min(1, input.qldDivGrowthFactor ?? 0.5));
   const dcaFactor = Math.max(0, Math.min(1, input.dcaContributionFactor ?? 0.5));
   const taxWithhold = Math.max(0, Math.min(50, input.taxWithholdPct ?? 0)) / 100;
 
@@ -654,11 +674,12 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
     let schdCAD = Math.max(0, input.start.schdCAD);
     let qldCAD  = Math.max(0, input.start.qldCAD);
     let sgovCAD = Math.max(0, input.start.sgovCAD);
-    let iaumCAD = Math.max(0, input.start.iaumCAD);
+    let jepqCAD = Math.max(0, input.start.jepqCAD);
     let tqqqCAD = Math.max(0, input.start.tqqqCAD ?? 0);
-    let schdYld = Math.max(0, input.start.schdYieldPct) / 100;
-    let qldYld  = Math.max(0, input.start.qldYieldPct)  / 100;
+    const schdYld = Math.max(0, input.start.schdYieldPct) / 100;
+    const qldYld  = Math.max(0, input.start.qldYieldPct)  / 100;
     const sgovYld = Math.max(0, input.start.sgovYieldPct) / 100;
+    const jepqYld = Math.max(0, input.start.jepqYieldPct) / 100;
     let cumContrib = 0;
 
     // Cycle gating state (in-memory; per scenario)
@@ -666,7 +687,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
     let t1Fired = false;
     let t2Fired = false;
     const counts = { hardExit: 0, softExit: 0, crisisT1: 0, crisisT2: 0, caseA: 0, caseB: 0 };
-    let iaumExitedEver = false;
 
     const points: ProjectionYearPointV2[] = [];
 
@@ -677,7 +697,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       let crisisT2Applied = false;
       let caseAApplied = false;
       let caseBApplied = false;
-      let iaumExited = false;
       let withdrawalCAD = 0;
       let dividendConsumedCAD = 0;
       let pensionCAD = 0;
@@ -694,65 +713,50 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         withdrawalCAD = m.totalWithdrawn;
       }
 
-      // (1) Annual contribution amounts — SGOV gated by 8% target (v4.1.10), IAUM by TFSA + 5% cap
+      // (1) Annual contribution amounts — SGOV gated by 8% target (§8), QQQI by TFSA + 5% cap (§4)
       let annualCore = Math.max(0, input.coreWeeklyCAD * 52);
-      const totalForGate = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
+      const totalForGate = schdCAD + qldCAD + sgovCAD + jepqCAD + tqqqCAD;
       const sgovPctOfTotal = totalForGate > 0 ? sgovCAD / totalForGate : 1;
-      const iaumPctOfTotal = totalForGate > 0 ? iaumCAD / totalForGate : 1;
+      const jepqPctOfTotal = totalForGate > 0 ? jepqCAD / totalForGate : 1;
       const sgovPlanned = Math.max(0, input.sgovWeeklyCAD * 52);
-      const iaumPlanned = Math.max(0, input.iaumWeeklyCAD * 52);
+      const jepqPlanned = Math.max(0, input.jepqWeeklyCAD * 52);
       const sgovGated = !(sgovPctOfTotal < RULEBOOK_TARGETS.SGOV_TARGET_PCT / 100);
-      const iaumGated = !(iaumPctOfTotal < RULEBOOK_TARGETS.IAUM_MAX_PCT / 100 && input.tfsaRoomExists);
+      const jepqGated = !(jepqPctOfTotal < RULEBOOK_TARGETS.QQQI_MAX_PCT / 100 && input.tfsaRoomExists);
       const annualSGOV = sgovGated ? 0 : sgovPlanned;
-      const annualIAUM = iaumGated ? 0 : iaumPlanned;
+      const annualQQQI = jepqGated ? 0 : jepqPlanned;
       if (redirectGated) {
         if (sgovGated) annualCore += sgovPlanned;
-        if (iaumGated) annualCore += iaumPlanned;
+        if (jepqGated) annualCore += jepqPlanned;
       }
-      cumContrib += annualCore + annualSGOV + annualIAUM;
+      cumContrib += annualCore + annualSGOV + annualQQQI;
 
-      // (2) Method B — Core only
-      const postCorePool = schdCAD + qldCAD + annualCore;
-      const targetSchd = postCorePool * 0.70;
-      const targetQld  = postCorePool * 0.30;
-      const schdShort = Math.max(0, targetSchd - schdCAD);
-      const qldShort  = Math.max(0, targetQld  - qldCAD);
-      const totalShort = schdShort + qldShort;
-      let schdBuy = 0;
-      let qldBuy = 0;
-      if (totalShort >= annualCore && totalShort > 0) {
-        schdBuy = annualCore * (schdShort / totalShort);
-        qldBuy  = annualCore * (qldShort  / totalShort);
-      } else if (totalShort > 0) {
-        schdBuy = schdShort;
-        qldBuy  = qldShort;
-        const leftover = annualCore - schdShort - qldShort;
-        schdBuy += leftover * 0.70;
-        qldBuy  += leftover * 0.30;
-      } else {
-        schdBuy = annualCore * 0.70;
-        qldBuy  = annualCore * 0.30;
-      }
+      // (2) Static 70/30 — overlay-aware (TQQQ > 0 at start of year ⇒ SCHD 70 / TQQQ 30 / QLD 0).
+      const overlayActive = tqqqCAD > 0;
+      const schdBuy  = annualCore * (RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100);
+      const growthBuy = annualCore * (RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100);
+      const qldBuy  = overlayActive ? 0 : growthBuy;
+      const tqqqBuy = overlayActive ? growthBuy : 0;
 
       // (3) DCA growth (mid-year average by default)
       schdCAD = schdCAD * (1 + SCHD_CAGR) + schdBuy * (1 + SCHD_CAGR * dcaFactor);
       qldCAD  = qldCAD  * (1 + QLD_CAGR)  + qldBuy  * (1 + QLD_CAGR  * dcaFactor);
       sgovCAD = sgovCAD * (1 + SGOV_FIXED_CAGR) + annualSGOV * (1 + SGOV_FIXED_CAGR * dcaFactor);
-      iaumCAD = iaumCAD * (1 + IAUM_FIXED_CAGR) + annualIAUM * (1 + IAUM_FIXED_CAGR * dcaFactor);
-      // TQQQ: grow at 3× SCHD CAGR proxy (leveraged Nasdaq); contributions are NOT scheduled — only crisis-trigger buys.
-      tqqqCAD = tqqqCAD * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR);
+      // QQQI: covered-call ETF; proxy growth = scenario CAGR (held in TFSA so no withholding model needed).
+      jepqCAD = jepqCAD * (1 + SCHD_CAGR) + annualQQQI * (1 + SCHD_CAGR * dcaFactor);
+      // TQQQ: leveraged-Nasdaq proxy growth + overlay contributions (if any).
+      tqqqCAD = tqqqCAD * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR) + tqqqBuy * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR * dcaFactor);
 
       // (4) Recompute weights for rulebook decisions
-      const totalNow = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
+      const totalNow = schdCAD + qldCAD + sgovCAD + jepqCAD + tqqqCAD;
       const w = computeRulebookWeights([
         { ticker: "SCHD", valueCAD: schdCAD },
         { ticker: "QLD",  valueCAD: qldCAD },
         { ticker: "SGOV", valueCAD: sgovCAD },
-        { ticker: "IAUM", valueCAD: iaumCAD },
+        { ticker: "QQQI", valueCAD: jepqCAD },
         { ticker: "TQQQ", valueCAD: tqqqCAD },
       ]);
 
-      // (5) Priority order per rulebook [14]: Hard Exit → Soft Exit → Crisis → Annual Rebal
+      // (5) Priority order per rulebook v4.4.2: Emergency cap (38%) → Soft Exit (34%) → Crisis → Annual Rebal
       if (w.hardExit) {
         const plan = computeTqqqHardExitPlan({
           schdCAD, qldCAD, tqqqCAD, sgovCAD, totalCAD: totalNow, hardExit: true,
@@ -803,18 +807,18 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         }
       }
 
-      // Annual rebalance (Dec 31) — only when no Hard/Soft fired this year
+      // Annual rebalance (Dec 31) — only when no Emergency cap / Soft Exit fired this year
       if (!hardExitApplied && !softExitApplied) {
         const w2 = computeRulebookWeights([
           { ticker: "SCHD", valueCAD: schdCAD },
           { ticker: "QLD",  valueCAD: qldCAD },
           { ticker: "SGOV", valueCAD: sgovCAD },
-          { ticker: "IAUM", valueCAD: iaumCAD },
+          { ticker: "QQQI", valueCAD: jepqCAD },
           { ticker: "TQQQ", valueCAD: tqqqCAD },
         ]);
         const reb = computeAnnualRebalancePlan({
           schdCAD, qldCAD, tqqqCAD, sgovCAD,
-          totalCAD: schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD,
+          totalCAD: schdCAD + qldCAD + sgovCAD + jepqCAD + tqqqCAD,
           caseAEligible: w2.caseAEligible,
           caseBEligible: w2.caseBEligible,
         });
@@ -832,22 +836,15 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         }
       }
 
-      // (6) 65 IAUM exit → QLD
-      const ageThisYear = input.currentAge != null ? input.currentAge + y : null;
-      if (ageThisYear === 65 && iaumCAD > 0) {
-        qldCAD += iaumCAD;
-        iaumCAD = 0;
-        iaumExited = true;
-        iaumExitedEver = true;
-      }
+      // (6) v4.4.2: no age-based QQQI exit. Legacy age-65 IAUM → QLD exit removed.
 
       // (7) Dividend snapshot (TQQQ pays effectively 0).
       // Yield is held CONSTANT — dividend dollars grow via balance × yield (CAGR captures
       // total return; multiplying yield by (1+divGrowth) on top compounds with CAGR and
       // produces unrealistic 90%+ yield-of-balance figures in 20yr horizons.
       const coreCAD = schdCAD + qldCAD;
-      const totalCAD = schdCAD + qldCAD + sgovCAD + iaumCAD + tqqqCAD;
-      const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld;
+      const totalCAD = schdCAD + qldCAD + sgovCAD + jepqCAD + tqqqCAD;
+      const annualDivGross = schdCAD * schdYld + qldCAD * qldYld + sgovCAD * sgovYld + jepqCAD * jepqYld;
       const annualDivNet = annualDivGross * (1 - taxWithhold);
 
       // §10 65+ Dividend Consumption Mode — disable reinvestment, track as cashflow only.
@@ -882,13 +879,13 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
           schdCAD: Math.round(schdCAD),
           qldCAD:  Math.round(qldCAD),
           sgovCAD: Math.round(sgovCAD),
-          iaumCAD: Math.round(iaumCAD),
+          jepqCAD: Math.round(jepqCAD),
           tqqqCAD: Math.round(tqqqCAD),
           totalCAD: Math.round(totalCAD),
           qldCoreWeightPct:   coreCAD > 0 ? Math.round((qldCAD / coreCAD) * 1000) / 10 : 0,
           growthBucketPct:    Math.round(growthBucketPctNow * 10) / 10,
           sgovTotalWeightPct: totalCAD > 0 ? Math.round((sgovCAD / totalCAD) * 1000) / 10 : 0,
-          iaumTotalWeightPct: totalCAD > 0 ? Math.round((iaumCAD / totalCAD) * 1000) / 10 : 0,
+          jepqTotalWeightPct: totalCAD > 0 ? Math.round((jepqCAD / totalCAD) * 1000) / 10 : 0,
           annualDivCAD:       Math.round(annualDivNet),
           annualDivGrossCAD:  Math.round(annualDivGross),
           monthlyDivCAD:      Math.round(annualDivNet / 12),
@@ -899,7 +896,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
           crisisT2Applied,
           caseAApplied,
           caseBApplied,
-          iaumExited,
           withdrawalCAD: Math.round(withdrawalCAD),
           dividendConsumedCAD: Math.round(dividendConsumedCAD),
           pensionCAD: Math.round(pensionCAD),
@@ -920,7 +916,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         crisisT2: counts.crisisT2,
         caseA: counts.caseA,
         caseB: counts.caseB,
-        iaumExited: iaumExitedEver,
       },
     };
   });

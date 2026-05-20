@@ -14,22 +14,22 @@ export interface ProjectionYear {
   totalContribCAD: number;
 }
 
-// Rulebook-based projection point (v4.1.10). Per-asset CAD evolves year-by-year
-// through Method B / SGOV refill / IAUM gating / Hard/Soft Exit / Crisis (SGOV→TQQQ) /
-// Case A/B annual rebal / age-65 IAUM exit.
+// Rulebook-based projection point (v4.4.2). Per-asset CAD evolves year-by-year
+// through static 70/30 contribution / SGOV refill (8% target) / QQQI gating (TFSA+5%) /
+// Soft Exit (34%) / Emergency cap (38%) / Crisis (SGOV→TQQQ, month-end) / Case A/B annual rebal.
 export interface ProjectionYearV2 {
   year: number;
   yearsFromNow: number;
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;
   tqqqCAD: number;
   totalCAD: number;
   qldCoreWeightPct: number;
   growthBucketPct: number;
   sgovTotalWeightPct: number;
-  iaumTotalWeightPct: number;
+  jepqTotalWeightPct: number;
   annualDivCAD: number;
   monthlyDivCAD: number;
   totalContribCAD: number;
@@ -39,7 +39,6 @@ export interface ProjectionYearV2 {
   crisisT2Applied: boolean;
   caseAApplied: boolean;
   caseBApplied: boolean;
-  iaumExited: boolean;
   // Retirement phase ([10] / [11] / [16])
   withdrawalCAD: number;
   dividendConsumedCAD: number;
@@ -59,7 +58,6 @@ export interface ProjectionScenario {
     crisisT2: number;
     caseA: number;
     caseB: number;
-    iaumExited: boolean;
   };
 }
 
@@ -69,6 +67,7 @@ export interface ProjectionAssumptions {
   divYieldPct: number;
   divGrowthPct: number;
   annualContribCAD: number;
+  weeklyContribCAD?: number;
   contribFrequency: string;
   currentValueCAD: number;
   currentAnnualDivCAD: number;
@@ -82,13 +81,13 @@ export interface CurrentState {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;
   tqqqCAD: number;
   qldCoreWeightPct: number;
   schdCoreWeightPct: number;
   growthBucketPct: number;
   sgovTotalWeightPct: number;
-  iaumTotalWeightPct: number;
+  jepqTotalWeightPct: number;
   tqqqTotalWeightPct: number;
   flags: {
     hardExit: boolean;
@@ -101,40 +100,44 @@ export interface CurrentState {
     cycleArmable: boolean;
     sgovBelowTarget: boolean;
     sgovBelowFloor: boolean;
-    iaumAtCap: boolean;
+    jepqAtCap: boolean;
+    overlayActive: boolean;
   };
 }
 
 export type NonCoreSource = "user-settings" | "rulebook-default" | "rulebook-inactive";
 
-export interface MethodBPlan {
+// v4.4.2 — Static 70/30 Core allocation. Overlay (TQQQ > 0) moves the 30% to TQQQ.
+// Satellite streams: SGOV (8% target) + QQQI (TFSA only, 5% cap).
+export interface CoreAllocationPlan {
   weeklyContribCAD: number;
   coreContribCAD: number;
   schdBuyCAD: number;
   qldBuyCAD: number;
-  unallocatedCAD: number;
+  tqqqBuyCAD: number;
+  overlayActive: boolean;
   sgovReserveCAD: number;
-  iaumBuyCAD: number;
+  jepqBuyCAD: number;
   sgovSource?: NonCoreSource;
-  iaumSource?: NonCoreSource;
+  jepqSource?: NonCoreSource;
   totalWeeklyOutCAD?: number;
 }
 
-export interface IaumWeeklyPlan {
-  iaumRuleBuyCAD: number;
-  iaumActualBuyCAD: number;
+export interface JepqWeeklyPlan {
+  jepqRuleBuyCAD: number;
+  jepqActualBuyCAD: number;
   redirectedToCoreCAD: number;
   reason: string;
   tfsaRoomExists: boolean;
-  iaumBelowCap: boolean;
+  jepqBelowCap: boolean;
   account: string;
   capCAD: number;
 }
 
-// v4.1.10 — three event-driven plans replacing the legacy QldEmergencyPlan.
+// v4.4.2 — three event-driven plans.
 //
-// TqqqExitPlanOut: §6.2 Soft (growth bucket ≥34, half TQQQ) / Hard
-// (growth bucket ≥38, all TQQQ + QLD to 30% core). Proceeds order: SGOV → 8% of total → SCHD.
+// TqqqExitPlanOut: §6.2 Soft (growth bucket ≥ 34%, half TQQQ) / §10 Emergency cap (≥ 38%, all TQQQ + QLD to 30% core).
+// Proceeds order: SGOV → 8% of total → SCHD.
 export interface TqqqExitPlanOut {
   active: boolean;
   variant?: "soft" | "hard";
@@ -175,8 +178,8 @@ export interface ProjectionApiResponse {
   scenarios?: ProjectionScenario[];
   assumptions?: ProjectionAssumptions;
   currentState?: CurrentState;
-  methodBPlan?: MethodBPlan;
-  iaumWeeklyPlan?: IaumWeeklyPlan;
+  coreAllocationPlan?: CoreAllocationPlan;
+  jepqWeeklyPlan?: JepqWeeklyPlan;
   tqqqExitPlan?: TqqqExitPlanOut;
   crisisTriggerPlan?: CrisisTriggerPlanOut;
   annualRebalancePlan?: AnnualRebalancePlanOut;

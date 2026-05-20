@@ -101,22 +101,35 @@ test("does not mangle text containing single pipes", () => {
   assert.equal(sanitizeAiOutput(input), input);
 });
 
-test("RULEBOOK_GUARDRAILS encodes the v4.1.10 hard rules", () => {
-  // IAUM weekly buy rule (effective CAD = user Settings or rulebook default 25)
+test("RULEBOOK_GUARDRAILS encodes the v4.4.2 hard rules", () => {
+  // QQQI weekly buy rule (v4.4.2 — replaces IAUM)
   assert.ok(
-    RULEBOOK_GUARDRAILS.includes("IAUM 주간 매수") || RULEBOOK_GUARDRAILS.includes("IAUM 매수"),
-    "IAUM weekly buy rule missing",
+    RULEBOOK_GUARDRAILS.includes("QQQI 주간 매수") || RULEBOOK_GUARDRAILS.includes("QQQI 매수"),
+    "QQQI weekly buy rule missing",
   );
-  assert.ok(RULEBOOK_GUARDRAILS.includes("nonCorePlan.cad"), "user nonCorePlan.cad reference missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("TFSA 잔여한도"), "TFSA room condition missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Core Method B로 redirect"), "redirect to Method B missing");
-  // v4.1.10 proceeds order — Soft/Hard exit + annual rebal
-  assert.ok(RULEBOOK_GUARDRAILS.includes("8% → SCHD"), "Soft/Hard exit proceeds order missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Sangbong TFSA"), "QQQI Sangbong TFSA account constraint missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("TFSA 잔여"), "TFSA room condition missing");
+  // Static 70/30 (Method B 폐지)
+  assert.ok(
+    RULEBOOK_GUARDRAILS.includes("Core 정적 70/30") || RULEBOOK_GUARDRAILS.includes("정적 70/30"),
+    "Core static 70/30 wording missing",
+  );
+  // v4.4.2: BOTH Soft Exit (34%) AND Emergency cap (38%) present
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Growth bucket ≥ 34%"), "34% Soft Exit threshold required in v4.4.2");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Growth bucket ≥ 38%"), "38% Hard/Emergency threshold missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Soft Exit"), "Soft Exit reference missing");
+  // SCHD dividend reinvestment must be specified as 70/30
+  assert.ok(RULEBOOK_GUARDRAILS.includes("SCHD 배당"), "SCHD dividend reinvestment rule missing");
+  // SGOV 8/5/3 split
+  assert.ok(RULEBOOK_GUARDRAILS.includes("가용 버퍼"), "deployable buffer description missing");
+  // Annual rebalance
   assert.ok(RULEBOOK_GUARDRAILS.includes("Case A"), "annual rebal Case A missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("Case B"), "annual rebal Case B missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("성장 버킷"), "growth bucket reference missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.1.10"), "rulebook version stamp missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("SGOV는 return-maximizing"), "SGOV purpose note missing");
+  // Version
+  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.4.2"), "rulebook version stamp must be v4.4.2");
+  assert.ok(!RULEBOOK_GUARDRAILS.includes("v4.3.1"), "stale v4.3.1 stamp must be removed");
+  assert.ok(!RULEBOOK_GUARDRAILS.includes("v4.1.10"), "stale v4.1.10 stamp must be removed");
   // AI override block
   assert.ok(RULEBOOK_GUARDRAILS.includes("시장 전망"), "sentiment override block missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("override 금지"), "override prohibition missing");
@@ -126,9 +139,12 @@ test("RULEBOOK_GUARDRAILS encodes the v4.1.10 hard rules", () => {
   assert.ok(RULEBOOK_GUARDRAILS.includes("Modify"));
   // Prohibitions
   assert.ok(RULEBOOK_GUARDRAILS.includes("NDX 기반 trigger 재도입 금지"));
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Method B"), "Method B prohibition statement must be present");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("QQQI"), "QQQI rule presence required");
   assert.ok(RULEBOOK_GUARDRAILS.includes("Optimistic"));
-  // Output dimensions
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Contribution source"));
+  // Daily vs month-end close
+  assert.ok(RULEBOOK_GUARDRAILS.includes("MONTH-END") || RULEBOOK_GUARDRAILS.includes("Month-end"),
+    "Crisis trigger month-end close requirement missing");
   // 확인 필요 tag
   assert.ok(RULEBOOK_GUARDRAILS.includes("확인 필요"));
 });
@@ -162,15 +178,15 @@ test("PROJECTION_STRUCTURE: future-focused, no execution + no current-state dupl
   assert.ok(!PROJECTION_STRUCTURE.includes("1. 현재 포트폴리오 상태"), "PROJECTION narrative should not duplicate current-state table content");
 });
 
-test("RULEBOOK_GUARDRAILS [K] forbids re-explaining authoritative tables", () => {
-  assert.ok(RULEBOOK_GUARDRAILS.includes("[K]"), "guardrails must include section [K]");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("PROJECTION"));
-  assert.ok(RULEBOOK_GUARDRAILS.includes("표를 다시 풀어 쓰지"), "must forbid table re-explanation");
+test("RULEBOOK_GUARDRAILS forbids re-explaining authoritative tables", () => {
+  assert.ok(RULEBOOK_GUARDRAILS.includes("화면에 이미 표시되는 표"), "guardrails must mention displayed tables");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("표를 텍스트로 재작성 금지"), "must forbid table re-explanation");
 });
 
-test("v4.1.10-2: [L] 수치 인용 금지 section is enforced", () => {
-  assert.ok(RULEBOOK_GUARDRAILS.includes("[L] 수치 인용 절대 금지"), "Section L missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("화면 표에 이미 모든 CAD"), "Section L body missing");
+test("v4.4.2-2: prompt includes self-check and no table restatement rules", () => {
+  assert.ok(RULEBOOK_GUARDRAILS.includes("[자체 검증"), "self-check section missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("화면에 이미 표시되는 표"), "no table restatement rule missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("매수 CAD 금액을 narrative에서 반복하지"), "action amount repetition guard missing");
 });
 
 test("flags fields are mapped", () => {

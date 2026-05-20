@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtCAD, fmtPct, fmtSignedPct } from "./format";
+import { fmtCAD, fmtSignedPct } from "./format";
 import type { V2AllocationData } from "@/lib/v2-data";
 
 export function V2SummaryCards({ data }: { data: V2AllocationData }) {

@@ -267,33 +267,17 @@ tr.cursor-pointer {
 }
 
 
-/* Chart tooltip: ensure visibility on all themes */
-.recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: hsl(var(--card)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
-}
-.recharts-tooltip-item {
-  color: hsl(var(--foreground)) !important;
-}
-.recharts-tooltip-label {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-/* Mobile: hide chart tooltip by default, show on tap or horizontal scrub */
-@media (hover: none) {
-  .recharts-tooltip-wrapper {
-    display: none !important;
-    pointer-events: none;
-  }
-  .chart-touch-active .recharts-tooltip-wrapper {
-    display: block !important;
-  }
-}
-
 /* Prevent text selection / callout on chart touch zones */
 .chart-touch-zone {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* ECharts canvas: touch-action은 상속 안됨 — canvas에 직접 적용해야 드래그/핀치 작동 */
+.echarts-for-react canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+

@@ -6,15 +6,7 @@ import { AddTransactionDialog } from "./add-transaction-dialog";
 import { X } from "lucide-react";
 import { fmt, fmtPct } from "@/lib/utils";
 import { COLOR_ACTUAL } from "@/lib/chart-tokens";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import ReactECharts from "echarts-for-react";
 
 interface Transaction {
   id: string;
@@ -47,12 +39,13 @@ interface HoldingRow {
   holding: {
     id: string;
     allHoldingIds?: string[];
+    source?: string | null;
     ticker: string;
     name: string | null;
     currency: "USD" | "CAD";
     quantity: string | null;
     avgCost: string | null;
-    transactions: Transaction[];
+    transactions?: Transaction[];
   };
   shares: number;
   avgCost: number;
@@ -64,6 +57,11 @@ interface HoldingRow {
 }
 
 type DetailTab = "transactions" | "dividends";
+
+interface EChartTooltipParam {
+  value?: number | string | Array<number | string>;
+  name?: string;
+}
 
 interface InvestmentSettings {
   contribution: { frequency: "weekly" | "biweekly" | "monthly"; amount: number; currency: "USD" | "CAD" } | null;
@@ -81,7 +79,7 @@ export function HoldingDetailPanel({
   readOnly,
   onClose,
   onRefresh,
-  totalMarketValue = 0,
+  eligibleTotalCAD = 0,
   displayCurrency,
   allocAmount = 0,
   gapAmount = 0,
@@ -91,12 +89,14 @@ export function HoldingDetailPanel({
   allPortfolios,
   selectedPortfolioId,
   onPortfolioChange,
+  recommendedAccount,
 }: {
   row: HoldingRow;
   readOnly: boolean;
   onClose: () => void;
   onRefresh: () => void;
   totalMarketValue?: number;
+  eligibleTotalCAD?: number;
   displayCurrency?: "USD" | "CAD";
   allocAmount?: number;
   gapAmount?: number;
@@ -106,12 +106,14 @@ export function HoldingDetailPanel({
   allPortfolios?: { id: string; name: string }[];
   selectedPortfolioId?: string;
   onPortfolioChange?: (id: string) => void;
+  recommendedAccount?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const curDropdownRef = useRef<HTMLDivElement>(null);
   const acctDropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("transactions");
   const [showHistory, setShowHistory] = useState(false);
+  const [showDangerZone, setShowDangerZone] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [investPlan, setInvestPlan] = useState<InvestmentSettings | null>(null);
@@ -123,12 +125,16 @@ export function HoldingDetailPanel({
   const [txnsLoading, setTxnsLoading] = useState(true);
   const [txnsError, setTxnsError] = useState(false);
   const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
+  const transactionHoldingIds = useMemo(
+    () => row.holding.allHoldingIds ?? [row.holding.id],
+    [row.holding.allHoldingIds, row.holding.id]
+  );
 
   const fetchTxns = useCallback(async () => {
     setTxnsLoading(true);
     setTxnsError(false);
     try {
-      const ids = row.holding.allHoldingIds ?? [row.holding.id];
+      const ids = transactionHoldingIds;
       const param = ids.length > 1 ? `holdingIds=${ids.join(",")}` : `holdingId=${ids[0]}`;
       const res = await fetch(`/api/transactions?${param}`);
       if (!res.ok) throw new Error("fetch failed");
@@ -150,7 +156,7 @@ export function HoldingDetailPanel({
     } finally {
       setTxnsLoading(false);
     }
-  }, [row.holding.id, row.holding.allHoldingIds?.join(",")]);
+  }, [transactionHoldingIds]);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { fetchTxns(); }, [fetchTxns]);
@@ -356,9 +362,21 @@ export function HoldingDetailPanel({
       fetch("/api/settings/investment").then(r => r.json()),
       fetch("/api/fx").then(r => r.json()),
     ]).then(([inv, fx]) => {
+      const allTargets: Record<string, { pct: number; excluded?: boolean }> = inv.targets ?? {};
+      const ticker = row.holding.ticker;
+      const raw = allTargets[ticker];
+      let normalizedPct = raw?.pct ?? 0;
+      if (raw && !raw.excluded) {
+        const totalEligible = Object.values(allTargets)
+          .filter((v) => !v.excluded)
+          .reduce((s, v) => s + v.pct, 0);
+        if (totalEligible > 0 && Math.abs(totalEligible - 100) > 0.01) {
+          normalizedPct = (raw.pct / totalEligible) * 100;
+        }
+      }
       setInvestPlan({
         contribution: inv.contribution ?? null,
-        target: inv.targets?.[row.holding.ticker] ?? null,
+        target: raw ? { pct: normalizedPct } : null,
       });
       if (fx.rate) setFxRate(fx.rate);
     });
@@ -467,28 +485,6 @@ export function HoldingDetailPanel({
               )}
             </div>
           )}
-          <div className="relative" ref={curDropdownRef}>
-            <button
-              className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
-              onClick={() => setCurDropdownOpen((v) => !v)}
-            >
-              <span className="flex-1 text-left">{displayCur}</span>
-              <span className="text-muted-foreground">▾</span>
-            </button>
-            {curDropdownOpen && (
-              <div className="absolute top-full right-0 mt-0.5 z-[60] bg-card border border-border min-w-full">
-                {(["CAD", "USD"] as const).map((c) => (
-                  <button
-                    key={c}
-                    className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${displayCur === c ? "text-accent" : ""}`}
-                    onClick={() => { setDisplayCur(c); setCurDropdownOpen(false); }}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           <button className="btn-retro px-2 py-1 text-[10px] flex items-center gap-1" onClick={onClose}>
             <X size={12} />CLOSE
           </button>
@@ -497,20 +493,62 @@ export function HoldingDetailPanel({
 
       <div className="p-4">
 
-        {/* Price info */}
+        {/* Position Summary — merged price + position card */}
         <div className="border border-border bg-card p-4 mb-3">
-          <div className="text-[10px] text-muted-foreground tracking-wide mb-2">PRICE</div>
+          {/* Hero: MKT VALUE + currency dropdown */}
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MKT VALUE</div>
+              <div className="text-3xl font-medium tabular-nums">
+                {row.marketValue > 0 ? `${sym}${fmt(toDisp(row.marketValue))}` : "—"}
+              </div>
+            </div>
+            {/* Currency dropdown moved here */}
+            <div className="relative" ref={curDropdownRef}>
+              <button
+                className="btn-retro btn-retro-primary text-[10px] px-2 py-0.5 flex items-center gap-1 min-w-[4.5rem]"
+                onClick={() => setCurDropdownOpen((v) => !v)}
+              >
+                <span className="flex-1 text-left">{displayCur}</span>
+                <span className="text-muted-foreground">▾</span>
+              </button>
+              {curDropdownOpen && (
+                <div className="absolute top-full right-0 mt-0.5 z-[60] bg-card border border-border min-w-full">
+                  {(["CAD", "USD"] as const).map((c) => (
+                    <button
+                      key={c}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${displayCur === c ? "text-accent" : ""}`}
+                      onClick={() => { setDisplayCur(c); setCurDropdownOpen(false); }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Unrealized P&L */}
+          {row.marketValue > 0 && (
+            <div className={`text-sm tabular-nums mb-3 ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
+              {row.unrealizedPnL >= 0 ? "+" : ""}{sym}{fmt(Math.abs(toDisp(row.unrealizedPnL)))} ({fmtPct(row.unrealizedPnLPct)}) UNREALIZED
+            </div>
+          )}
+
+          <div className="border-t border-border/50 pt-3 mb-3" />
+
+          {/* Price row + 52W range */}
           {p ? (
             <>
               <div className="flex flex-wrap items-baseline gap-3 mb-3">
-                <span className="text-2xl font-medium tabular-nums">{nativeSym}{fmt(p.price)}</span>
+                <span className="text-xl font-medium tabular-nums">{nativeSym}{fmt(p.price)}</span>
                 <span className={`text-sm tabular-nums ${p.changePercent >= 0 ? "text-positive" : "text-negative"}`}>
                   {p.changePercent >= 0 ? "+" : ""}{nativeSym}{fmt(Math.abs(p.change))} ({fmtPct(p.changePercent)})
                 </span>
+                <span className="text-[10px] text-muted-foreground">PRICE</span>
               </div>
               {/* 52W range bar */}
               {p.week52High > 0 && p.week52Low > 0 && range52WPct != null && (
-                <div className="mb-1">
+                <div className="mb-3">
                   <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                     <span>52W L: {nativeSym}{fmt(p.week52Low)}</span>
                     <span>52W H: {nativeSym}{fmt(p.week52High)}</span>
@@ -526,20 +564,22 @@ export function HoldingDetailPanel({
                     />
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 text-center">
-                    {range52WPct.toFixed(0)}% from low · {fmtPct(p.fromHighPct)} from high
+                    {range52WPct.toFixed(0)}% OF 52W RANGE
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <div className="text-muted-foreground text-xs">LOADING PRICE DATA...</div>
+            <div className="mb-3 space-y-2">
+              <div className="h-4 bg-border/40 rounded animate-pulse w-2/3" />
+              <div className="h-3 bg-border/40 rounded animate-pulse w-1/2" />
+            </div>
           )}
-        </div>
 
-        {/* Position summary */}
-        <div className="border border-border bg-card p-4 mb-3">
-          <div className="text-[10px] text-muted-foreground tracking-wide mb-3">POSITION</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <div className="border-t border-border/50 pt-3" />
+
+          {/* Supporting grid */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mt-3">
             <div>
               <div className="text-[10px] text-muted-foreground">SHARES</div>
               <div className="tabular-nums">{Number.isInteger(row.shares) ? fmt(row.shares, 0) : fmt(row.shares, row.shares < 10 ? 4 : 2)}</div>
@@ -547,7 +587,10 @@ export function HoldingDetailPanel({
             <div>
               <div className="text-[10px] text-muted-foreground">WEIGHT</div>
               <div className="tabular-nums">
-                {totalMarketValue > 0 ? `${((row.marketValue / totalMarketValue) * 100).toFixed(1)}%` : "—"}
+                {(() => {
+                  const holdingCAD = row.holding.currency === "USD" ? row.marketValue * fxRateForAlloc : row.marketValue;
+                  return eligibleTotalCAD > 0 ? `${((holdingCAD / eligibleTotalCAD) * 100).toFixed(1)}%` : "—";
+                })()}
               </div>
             </div>
             <div>
@@ -555,23 +598,13 @@ export function HoldingDetailPanel({
               <div className="tabular-nums">{sym}{fmt(toDisp(row.avgCost))}</div>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground">DAY CHANGE</div>
-              <div className={`tabular-nums ${p ? (p.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
-                {p ? `${p.changePercent >= 0 ? "+" : ""}${sym}${fmt(toDisp(p.change * row.shares))}` : "—"}
-              </div>
-            </div>
-            <div>
               <div className="text-[10px] text-muted-foreground">COST BASIS</div>
               <div className="tabular-nums">{sym}{fmt(toDisp(row.costBasis))}</div>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground">MKT VALUE</div>
-              <div className="tabular-nums">{row.marketValue > 0 ? `${sym}${fmt(toDisp(row.marketValue))}` : "—"}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground">PRICE RETURN</div>
-              <div className={`tabular-nums ${row.unrealizedPnL >= 0 ? "text-positive" : "text-negative"}`}>
-                {row.marketValue > 0 ? `${row.unrealizedPnL >= 0 ? "+" : ""}${sym}${fmt(Math.abs(toDisp(row.unrealizedPnL)))} (${fmtPct(row.unrealizedPnLPct)})` : "—"}
+              <div className="text-[10px] text-muted-foreground">DAY CHANGE</div>
+              <div className={`tabular-nums ${p ? (p.changePercent >= 0 ? "text-positive" : "text-negative") : ""}`}>
+                {p ? `${p.changePercent >= 0 ? "+" : ""}${sym}${fmt(toDisp(p.change * row.shares))}` : "—"}
               </div>
             </div>
             {totalReturn != null && (
@@ -593,9 +626,15 @@ export function HoldingDetailPanel({
 
             {/* Group 1: Rate & Yield */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {estimatedAnnual != null && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground">EST. ANNUAL</div>
+                  <div className="tabular-nums text-primary">{sym}{fmt(toDisp(estimatedAnnual))}</div>
+                </div>
+              )}
               {p?.dividendYield != null && (
                 <div>
-                  <div className="text-[10px] text-muted-foreground">IND. YIELD</div>
+                  <div className="text-[10px] text-muted-foreground">FORWARD YIELD</div>
                   <div className="tabular-nums">{p.dividendYield.toFixed(2)}%</div>
                 </div>
               )}
@@ -606,7 +645,7 @@ export function HoldingDetailPanel({
                 </div>
               ) : p?.trailingAnnualDividendYield != null ? (
                 <div>
-                  <div className="text-[10px] text-muted-foreground">TRAIL. YIELD</div>
+                  <div className="text-[10px] text-muted-foreground">TRAILING YIELD</div>
                   <div className="tabular-nums">{p.trailingAnnualDividendYield.toFixed(2)}%</div>
                 </div>
               ) : null}
@@ -620,12 +659,6 @@ export function HoldingDetailPanel({
                 <div>
                   <div className="text-[10px] text-muted-foreground">FREQUENCY</div>
                   <div className="tabular-nums">{divFrequency}</div>
-                </div>
-              )}
-              {estimatedAnnual != null && (
-                <div>
-                  <div className="text-[10px] text-muted-foreground">EST. ANNUAL</div>
-                  <div className="tabular-nums text-primary">{sym}{fmt(toDisp(estimatedAnnual))}</div>
                 </div>
               )}
             </div>
@@ -647,7 +680,7 @@ export function HoldingDetailPanel({
                 )}
                 {totalDivsAllTime > 0 && row.costBasis > 0 && (
                   <div>
-                    <div className="text-[10px] text-muted-foreground">BASIS REDUCED</div>
+                    <div className="text-[10px] text-muted-foreground">COST RETURNED</div>
                     <div className="tabular-nums text-positive">
                       {((totalDivsAllTime / row.costBasis) * 100).toFixed(1)}%
                     </div>
@@ -655,7 +688,7 @@ export function HoldingDetailPanel({
                 )}
                 {totalDivsAllTime > 0 && row.costBasis > 0 && (
                   <div>
-                    <div className="text-[10px] text-muted-foreground">EFF. COST</div>
+                    <div className="text-[10px] text-muted-foreground">EFF. COST BASIS</div>
                     <div className="tabular-nums">
                       {sym}{fmt(toDisp(Math.max(0, row.costBasis - totalDivsAllTime)))}
                     </div>
@@ -703,7 +736,8 @@ export function HoldingDetailPanel({
           <div className="border border-border bg-card p-4 mb-3">
             <div className="text-[10px] text-muted-foreground tracking-wide mb-3">INVESTMENT PLAN</div>
             {(() => {
-              const currentPct = totalMarketValue > 0 ? (row.marketValue / totalMarketValue) * 100 : 0;
+              const currentValueCAD = row.holding.currency === "USD" ? row.marketValue * fxRateForAlloc : row.marketValue;
+              const currentPct = eligibleTotalCAD > 0 ? (currentValueCAD / eligibleTotalCAD) * 100 : 0;
               const targetPct = investPlan.target!.pct;
               const gapPct = Math.max(0, targetPct - currentPct);
               const gapNative = gapAmount > 0 ? gapAmount : 0;
@@ -712,9 +746,9 @@ export function HoldingDetailPanel({
               const FREQ_LABEL = { weekly: "WK", biweekly: "BW", monthly: "MO" } as const;
               const allocDisplay = convertCurrency(allocAmount, row.holding.currency, displayCur, fxRate);
               const postPct = postAllocationPct ?? (() => {
-                const postMktValue = row.marketValue + allocAmount;
-                const postTotal = totalMarketValue + contribCAD / fxRateForAlloc;
-                return postTotal > 0 ? (postMktValue / postTotal) * 100 : 0;
+                const allocCAD = row.holding.currency === "USD" ? allocAmount * fxRateForAlloc : allocAmount;
+                const postTotal = eligibleTotalCAD + contribCAD;
+                return postTotal > 0 ? ((currentValueCAD + allocCAD) / postTotal) * 100 : 0;
               })();
               const contribDisplay = investPlan.contribution
                 ? convertCurrency(investPlan.contribution.amount, investPlan.contribution.currency, displayCur, fxRate)
@@ -739,6 +773,9 @@ export function HoldingDetailPanel({
                   <div>
                     <div className="text-[10px] text-muted-foreground">FUNDS</div>
                     <div className="tabular-nums text-primary">{sym}{fmt(allocDisplay)}</div>
+                    {recommendedAccount && (
+                      <div className="text-[9px] text-muted-foreground mt-0.5">→ {recommendedAccount}</div>
+                    )}
                   </div>
                   {sharesToBuy != null && sharesToBuy > 0 && (
                     <div>
@@ -749,7 +786,7 @@ export function HoldingDetailPanel({
                     </div>
                   )}
                   <div>
-                    <div className="text-[10px] text-muted-foreground">POST %</div>
+                    <div className="text-[10px] text-muted-foreground">POST-ALLOC WT</div>
                     <div className="tabular-nums">{postPct.toFixed(2)}%</div>
                   </div>
                   {!reached && periods > 0 && (
@@ -766,6 +803,45 @@ export function HoldingDetailPanel({
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* Danger Zone */}
+        {!readOnly && (
+          <div>
+            <button
+              className="w-full text-[10px] text-negative/50 hover:text-negative transition-colors py-1.5 text-center tracking-wide border border-dashed border-negative/20 hover:border-negative/50 mb-3"
+              onClick={() => setShowDangerZone((v) => !v)}
+            >
+              {showDangerZone ? "▴ DANGER ZONE" : "▾ DANGER ZONE"}
+            </button>
+            {showDangerZone && (
+              <div className="mb-3">
+                {!confirmDelete ? (
+                  <button
+                    className="btn-retro text-xs text-negative border-negative/30 hover:border-negative w-full py-2"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    DELETE HOLDING
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-retro text-xs text-negative border-negative/30 hover:border-negative flex-1 py-2"
+                      onClick={deleteHolding}
+                    >
+                      CONFIRM DELETE
+                    </button>
+                    <button
+                      className="btn-retro text-xs flex-1 py-2"
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -831,7 +907,7 @@ export function HoldingDetailPanel({
                 {[...filteredTxns].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).map((txn) => (
                   <div
                     key={txn.id}
-                    className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0 select-none cursor-default"
+                    className="flex items-center justify-between text-xs border-b border-border pb-2 last:border-0 select-none cursor-default min-h-[44px] items-center"
                     onMouseDown={(e) => row.holding.source !== "questrade" && startLongPress(e, txn)}
                     onMouseUp={cancelLongPress}
                     onMouseLeave={cancelLongPress}
@@ -847,12 +923,25 @@ export function HoldingDetailPanel({
                       <span className="text-muted-foreground">@</span>
                       <span className="tabular-nums">{sym}{fmt(toDisp(parseFloat(txn.price)))}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="tabular-nums text-muted-foreground">
-                        {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price)))}
+                    <div className="flex items-center gap-1">
+                      <div className="text-right">
+                        <div className="tabular-nums text-muted-foreground">
+                          {sym}{fmt(toDisp(parseFloat(txn.quantity) * parseFloat(txn.price) + parseFloat(txn.commission || "0")))}
+                        </div>
+                        {parseFloat(txn.commission || "0") > 0 && (
+                          <div className="text-[9px] text-muted-foreground/60">+{sym}{fmt(toDisp(parseFloat(txn.commission)))} comm.</div>
+                        )}
+                        {txn.date && (
+                          <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
+                        )}
                       </div>
-                      {txn.date && (
-                        <div className="text-[10px] text-muted-foreground/60">{txn.date.slice(0, 10)}</div>
+                      {row.holding.source !== "questrade" && (
+                        <button
+                          className="text-muted-foreground hover:text-primary text-sm px-1 ml-1 flex-shrink-0"
+                          onClick={() => setTxnMenu({ txn, y: 0 })}
+                        >
+                          ···
+                        </button>
                       )}
                     </div>
                   </div>
@@ -965,40 +1054,55 @@ export function HoldingDetailPanel({
                   </div>
                 </div>
                 <div className="chart-touch-zone">
-                <ResponsiveContainer width="100%" height={120}>
-                  <BarChart data={divChartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} barSize={14}>
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis hide />
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 0,
-                        fontSize: 11,
-                        fontFamily: "var(--font-mono)",
-                      }}
-                      formatter={(value: number) => [
-                        `${sym}${fmt(toDisp(value))}`,
-                        "DIVIDEND",
-                      ]}
-                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                      cursor={{ fill: "hsl(var(--border) / 0.3)" }}
-                    />
-                    <Bar dataKey="amount" radius={[1, 1, 0, 0]}>
-                      {divChartData.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={COLOR_ACTUAL}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                  <ReactECharts
+                    option={{
+                      backgroundColor: "transparent",
+                      animation: false,
+                      grid: { left: 0, right: 0, top: 0, bottom: 0, containLabel: false },
+                      tooltip: {
+                        trigger: "axis" as const,
+                        backgroundColor: "hsl(var(--card))",
+                        borderColor: "hsl(var(--border))",
+                        borderWidth: 1,
+                        textStyle: {
+                          color: "hsl(var(--foreground))",
+                          fontFamily: "IBM Plex Mono, monospace",
+                          fontSize: 11,
+                        },
+                        extraCssText: "border-radius:0",
+                        axisPointer: { type: "shadow" as const, shadowStyle: { color: "hsl(var(--border) / 0.3)" } },
+                        formatter: (params: EChartTooltipParam | EChartTooltipParam[]) => {
+                          const p = Array.isArray(params) ? params[0] : params;
+                          const rawValue = Array.isArray(p?.value) ? p.value[0] : p?.value;
+                          const val = typeof rawValue === "number" ? rawValue : Number(rawValue ?? 0);
+                          return `<div style="color:hsl(var(--muted-foreground));margin-bottom:4px">${p?.name}</div><div>${sym}${fmt(toDisp(Number.isFinite(val) ? val : 0))} — DIVIDEND</div>`;
+                        },
+                      },
+                      xAxis: {
+                        type: "category" as const,
+                        data: divChartData.map((d) => d.label),
+                        axisLabel: { fontSize: 10, color: "hsl(var(--muted-foreground))" },
+                        axisLine: { show: false },
+                        tickLine: false,
+                      },
+                      yAxis: {
+                        type: "value" as const,
+                        axisLabel: { show: false },
+                        splitLine: { show: false },
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                      },
+                      series: [
+                        {
+                          type: "bar" as const,
+                          data: divChartData.map((d) => d.amount),
+                          itemStyle: { color: COLOR_ACTUAL, borderRadius: [1, 1, 0, 0] },
+                          barWidth: 14,
+                        },
+                      ],
+                    }}
+                    style={{ height: 120, width: "100%" }}
+                  />
                 </div>
               </div>
             )}
@@ -1059,32 +1163,6 @@ export function HoldingDetailPanel({
         )}
         </>)}
 
-        {/* Delete button */}
-        {!readOnly && (
-          !confirmDelete ? (
-            <button
-              className="btn-retro text-xs text-negative border-negative/30 hover:border-negative w-full py-2"
-              onClick={() => setConfirmDelete(true)}
-            >
-              DELETE HOLDING
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                className="btn-retro text-xs text-negative border-negative/30 hover:border-negative flex-1 py-2"
-                onClick={deleteHolding}
-              >
-                CONFIRM DELETE
-              </button>
-              <button
-                className="btn-retro text-xs flex-1 py-2"
-                onClick={() => setConfirmDelete(false)}
-              >
-                CANCEL
-              </button>
-            </div>
-          )
-        )}
       </div>
       </div>
     </div>

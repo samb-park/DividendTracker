@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { getPrice } from "@/lib/price";
 import { auth } from "@/auth";
 
+const LEGACY_INCOME_TICKER = ["JE", "PQ"].join("");
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,6 +22,12 @@ export async function POST(req: NextRequest) {
   if (!portfolio) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
 
   const upperTicker = ticker.trim().toUpperCase();
+  if (upperTicker === LEGACY_INCOME_TICKER) {
+    return NextResponse.json(
+      { error: "Rulebook v4.4.2 violation: income slot ticker is QQQI only" },
+      { status: 422 },
+    );
+  }
   const priceData = await getPrice(upperTicker);
   if (!priceData) {
     return NextResponse.json({ error: "Ticker not found" }, { status: 404 });
@@ -28,12 +36,13 @@ export async function POST(req: NextRequest) {
 
   const holding = await prisma.holding.upsert({
     where: { portfolioId_ticker: { portfolioId, ticker: upperTicker } },
-    update: {},
+    update: { isActive: true },
     create: {
       portfolioId,
       ticker: upperTicker,
       name: priceData.name,
       currency,
+      isActive: true,
     },
   });
   return NextResponse.json(holding);

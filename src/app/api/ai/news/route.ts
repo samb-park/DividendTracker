@@ -116,7 +116,8 @@ ${numbered}`;
       koreanTitle: map.get(i + 1)?.k ?? item.title,
       description: map.get(i + 1)?.d ?? "",
     }));
-  } catch {
+  } catch (err) {
+    console.error("AI news translation error:", err);
     return items.map(item => ({ ...item, koreanTitle: item.title, description: "" }));
   }
 }
@@ -157,7 +158,7 @@ export async function GET() {
 
   // User's top holdings
   const holdings = await prisma.holding.findMany({
-    where: { quantity: { gt: 0 }, portfolio: { userId } },
+    where: { isActive: true, quantity: { gt: 0 }, portfolio: { userId } },
     select: { ticker: true },
     distinct: ["ticker"],
   });
@@ -196,7 +197,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
-  const { source, title, koreanTitle } = await req.json() as { source: string; title: string; koreanTitle?: string };
+  const { source, title } = await req.json() as { source: string; title: string; koreanTitle?: string };
 
   // Update interest profile
   const profile = await getInterestProfile(userId);
@@ -232,7 +233,9 @@ export async function POST(req: Request) {
       { role: "system", content: "캐나다 배당 투자 전문 어시스턴트. 투자자가 실제로 알아야 할 핵심을 분석." },
       { role: "user", content: `뉴스: "${title}"\n종목: ${source}\n\n관련 추가 뉴스:\n${relatedHeadlines}\n\n이 뉴스가 투자자에게 의미하는 바를 분석해주세요:\n1. 핵심 내용 (무슨 일이 일어났나)\n2. 투자 영향 (내 포트폴리오에 어떤 영향인가)\n3. 참고할 점\n각 항목을 1-2줄로 한국어로 설명하세요.` },
     ], 400);
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error("AI news analysis error:", err);
+  }
 
   return NextResponse.json({
     analysis,

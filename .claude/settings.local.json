@@ -37,7 +37,22 @@
       "Bash(source .env)",
       "Bash(psql \"$DATABASE_URL\" -c \"\\\\dT+ \"\"TransactionAction\"\"\")",
       "Bash(1:*)",
-      "Bash(prisma db:*)"
+      "Bash(prisma db:*)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(rm -rf /tmp/dt_workspace/*)",
+      "Read(//tmp/dt_workspace/**)"
     ]
+  },
+  "enabledPlugins": {
+    "harness@harness": true
+  },
+  "extraKnownMarketplaces": {
+    "harness": {
+      "source": {
+        "source": "github",
+        "repo": "revfactory/harness"
+      }
+    }
   }
 }

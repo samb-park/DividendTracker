@@ -2,19 +2,12 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { Card } from "./ui-card";
 import { fmt } from "@/lib/utils";
+import { ALLOCATION_COLORS, GAP_BALANCED_COLOR, GAP_OVERWEIGHT_COLOR, GAP_UNDERWEIGHT_COLOR } from "@/lib/chart-tokens";
 import type { HoldingSummary } from "@/lib/types";
 
-const COLORS = [
-  "hsl(142, 69%, 58%)",
-  "hsl(38, 92%, 55%)",
-  "hsl(196, 80%, 60%)",
-  "hsl(270, 60%, 65%)",
-  "hsl(0, 70%, 70%)",
-  "hsl(180, 60%, 50%)",
-  "hsl(60, 70%, 55%)",
-  "hsl(320, 60%, 65%)",
-];
+const COLORS = ALLOCATION_COLORS;
 
 function tickerColor(ticker: string): string {
   let hash = 0;
@@ -201,7 +194,7 @@ export function AllocationBars({
         ))}
       </div>
 
-      <div className="border border-border border-t-0 bg-card p-4">
+      <Card className="rounded-t-none border-t-0">
         {/* HOLDINGS tab */}
         {activeTab === "HOLDINGS" && (
           <>
@@ -251,7 +244,7 @@ export function AllocationBars({
                     const currentPct = sectorTotal > 0 ? (e.value / sectorTotal) * 100 : 0;
                     const targetPct = gap?.targetPct ?? 0;
                     const gapVal = gap?.gap ?? 0;
-                    const barColor = gapVal > 2 ? "hsl(45,100%,60%)" : gapVal < -2 ? "hsl(210,80%,60%)" : "hsl(142,69%,58%)";
+                    const barColor = gapVal > 2 ? GAP_OVERWEIGHT_COLOR : gapVal < -2 ? GAP_UNDERWEIGHT_COLOR : GAP_BALANCED_COLOR;
                     return (
                       <div key={e.ticker}>
                         <div className="flex items-center justify-between mb-0.5">
@@ -345,7 +338,7 @@ export function AllocationBars({
             </>
           )
         )}
-      </div>
+      </Card>
     </div>
   );
 }

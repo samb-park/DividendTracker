@@ -34,6 +34,9 @@ model Portfolio {
   createdAt        DateTime          @default(now())
   holdings         Holding[]
   cashTransactions CashTransaction[]
+  cashLedgerRows   CashLedger[]
+  externalDeposits ExternalDeposit[]
+  fxConversions    FxConversion[]
 }
 
 model Holding {
@@ -45,6 +48,7 @@ model Holding {
   quantity     Decimal?      @db.Decimal(18, 6)
   avgCost      Decimal?      @db.Decimal(18, 4)
   source       String?       // "questrade" if imported via broker sync
+  isActive     Boolean       @default(true)
   portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   createdAt    DateTime      @default(now())
@@ -61,13 +65,20 @@ model Transaction {
   price      Decimal           @db.Decimal(18, 4)
   commission Decimal           @default(0) @db.Decimal(18, 4)
   fxRateCAD  Decimal?          @db.Decimal(10, 6)  // CAD/USD rate on transaction date (for CRA reporting)
+  exDate     DateTime?
+  payDate    DateTime?
+  amountPerShare Decimal?      @db.Decimal(18, 6)
+  sharesAtRecord Decimal?      @db.Decimal(18, 6)
+  withholdingTax Decimal?      @db.Decimal(18, 4)
   source     String?           // "questrade" if imported via broker sync
   notes      String?
+  externalId String?           // e.g. "qt:2026-04-25:SCHD:Buy:100.00"
   holding    Holding           @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  cashLedgerRows CashLedger[]
   createdAt  DateTime          @default(now())
 
   @@index([holdingId, action, date])
-  @@unique([holdingId, action, date, quantity, price])
+  @@index([holdingId, externalId])
 }
 
 model CashTransaction {
@@ -79,6 +90,8 @@ model CashTransaction {
   currency    Currency   @default(CAD)
   notes       String?
   portfolio   Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  externalDeposit ExternalDeposit?
+  cashLedgerRows CashLedger[]
   createdAt   DateTime   @default(now())
 
   @@index([portfolioId, date])
@@ -109,6 +122,94 @@ enum AccountType {
   CASH
 }
 
+enum CashLedgerEventType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY
+  SELL
+  DIVIDEND
+  DRIP
+  FX_CONVERT
+  FEE
+  ADJUSTMENT
+}
+
+model ExternalDeposit {
+  id                String           @id @default(cuid())
+  portfolioId       String
+  portfolio         Portfolio        @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  date              DateTime
+  amount            Decimal          @db.Decimal(18, 2)
+  currency          Currency
+  source            String?
+  notes             String?
+  cashTransactionId String?          @unique
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id], onDelete: SetNull)
+  ledgerRows        CashLedger[]
+  createdAt         DateTime         @default(now())
+
+  @@index([portfolioId, date])
+  @@unique([portfolioId, date, amount, currency, source])
+}
+
+model FxConversion {
+  id           String       @id @default(cuid())
+  portfolioId  String
+  portfolio    Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  date         DateTime
+  fromCurrency Currency
+  fromAmount   Decimal      @db.Decimal(18, 2)
+  toCurrency   Currency
+  toAmount     Decimal      @db.Decimal(18, 2)
+  fxRateCAD    Decimal?     @db.Decimal(10, 6)
+  source       String?
+  notes        String?
+  ledgerRows   CashLedger[]
+  createdAt    DateTime     @default(now())
+
+  @@index([portfolioId, date])
+}
+
+model FxRateDaily {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  pair      String
+  rate      Decimal  @db.Decimal(10, 6)
+  source    String
+  createdAt DateTime @default(now())
+
+  @@unique([date, pair])
+}
+
+model CashLedger {
+  id                       String              @id @default(cuid())
+  portfolioId              String
+  portfolio                Portfolio           @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  date                     DateTime
+  currency                 Currency
+  amount                   Decimal             @db.Decimal(18, 4)
+  eventType                CashLedgerEventType
+  ticker                   String?
+  notes                    String?
+  source                   String?
+  relatedTransactionId     String?
+  relatedTransaction       Transaction?         @relation(fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+  relatedCashTransactionId String?
+  relatedCashTransaction   CashTransaction?    @relation(fields: [relatedCashTransactionId], references: [id], onDelete: SetNull)
+  externalDepositId        String?
+  externalDeposit          ExternalDeposit?    @relation(fields: [externalDepositId], references: [id], onDelete: SetNull)
+  fxConversionId           String?
+  fxConversion             FxConversion?       @relation(fields: [fxConversionId], references: [id], onDelete: SetNull)
+  createdAt                DateTime            @default(now())
+
+  @@index([portfolioId, date])
+  @@index([portfolioId, currency, date])
+  @@index([relatedTransactionId])
+  @@index([relatedCashTransactionId])
+  @@unique([eventType, relatedTransactionId, currency])
+  @@unique([eventType, relatedCashTransactionId, currency])
+}
+
 // Key-value store for app settings (e.g. Questrade token)
 model Setting {
   key       String   @id
@@ -121,10 +222,152 @@ model PortfolioSnapshot {
   id           String   @id @default(cuid())
   userId       String?
   date         DateTime @db.Date
-  totalCAD     Decimal  @db.Decimal(18, 2)
-  costBasisCAD Decimal  @db.Decimal(18, 2)
-  cashCAD      Decimal  @db.Decimal(18, 2)
-  createdAt    DateTime @default(now())
+  totalCAD       Decimal  @db.Decimal(18, 2)
+  costBasisCAD   Decimal  @db.Decimal(18, 2)
+  cashCAD        Decimal  @db.Decimal(18, 2)
+  driftPct       Decimal? @db.Decimal(10, 6)
+  engineValueCAD Decimal? @db.Decimal(18, 2)
+  legacyValueCAD Decimal? @db.Decimal(18, 2)
+  driftAlertSent Boolean?
+  createdAt      DateTime @default(now())
 
   @@unique([userId, date])
+}
+
+// =============================================================================
+// Observability layer (Phase 1 — Slice 1.1) — additive only.
+//   - No FK to existing tables (audit trails must survive user deletion).
+//   - No updatedAt fields (audit log is immutable by design).
+//   - Phase 2/3 placeholder fields are nullable so later phases need no ALTER.
+// =============================================================================
+
+/// AI call permanent audit log. Every /api/ai/* route writes one row right
+/// before the response is returned (cache hits, throttle rejects, upstream
+/// errors all produce a row — status field discriminates).
+///
+/// rawResponse is only populated when AI_AUDIT_STORE_RAW=true; otherwise NULL.
+/// userQueryHash is populated only for chat-style routes that accept free
+/// user text; for briefing/insights/projection/news it stays NULL.
+/// rulebookVersion is a soft reference to RulebookVersion.version (no hard FK).
+model AiCallLog {
+  id                 String    @id @default(cuid())
+  // — identity (userId is a soft reference; no FK so user deletion never
+  //   cascades into audit history)
+  userId             String
+  route              String                                   // "ai/briefing" | "ai/insights" | "ai/projection" | "ai/chat" | "ai/news"
+  // — model
+  provider           String                                   // "hermes" | "openrouter" | "openai" | "github"
+  model              String                                   // e.g. "hermes-agent"
+  rulebookVersion    String                                   // RULEBOOK_PROMPT_VERSION; soft ref to RulebookVersion
+  systemPromptHash   String                                   // sha256(systemPrompt) — detects guardrail drift
+  // — input (PII-minimised)
+  userQueryHash      String?                                  // chat routes only; NULL elsewhere
+  contextSizeChars   Int?                                     // buildPortfolioContext() length
+  // — outcome
+  cached             Boolean   @default(false)
+  status             String                                   // "ok" | "throttled" | "auth_error" | "upstream_error" | "validation_rejected"
+  httpStatus         Int                                      // 200 / 401 / 429 / 500 / ...
+  durationMs         Int
+  upstreamDurationMs Int?
+  // — token usage (Hermes-reported)
+  promptTokens       Int?
+  completionTokens   Int?
+  totalTokens        Int?
+  // — response payloads
+  rawResponse        String?   @db.Text                       // pre-sanitize; only when AI_AUDIT_STORE_RAW=true
+  sanitizedResponse  String?   @db.Text                       // post sanitizeAiOutput()
+  // — Phase 2 validator placeholders (NULL during Phase 1)
+  validatedAt        DateTime?
+  validationStatus   String?                                  // "pending" | "pass" | "violation"
+  violationCodes     String[]                                 // e.g. ["SCHD_SELL", "OPTIMISTIC_SCENARIO"]
+  // — error
+  errorMessage       String?   @db.Text
+  // — time (immutable; no updatedAt by design)
+  createdAt          DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([route, createdAt])
+  @@index([rulebookVersion, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Daily per-asset weight snapshot. Mirrors computeRulebookWeights() output so
+/// the rulebook can be retrospectively evaluated against any past day.
+/// Slice 1.1 only creates the table; the cron writer arrives in Phase 4.
+model AssetWeightSnapshot {
+  id                  String   @id @default(cuid())
+  userId              String                                  // soft ref
+  date                DateTime @db.Date
+  // — per-asset CAD valuation
+  totalCAD            Decimal  @db.Decimal(18, 2)
+  schdCAD             Decimal  @db.Decimal(18, 2)
+  qldCAD              Decimal  @db.Decimal(18, 2)
+  sgovCAD             Decimal  @db.Decimal(18, 2)
+  iaumCAD             Decimal  @db.Decimal(18, 2)
+  tqqqCAD             Decimal  @db.Decimal(18, 2)
+  otherCAD            Decimal  @db.Decimal(18, 2)             // non-rulebook tickers, reserved
+  cashCAD             Decimal  @db.Decimal(18, 2)
+  // — rulebook weights (snapshot of computeRulebookWeights output)
+  qldCoreWeightPct    Decimal  @db.Decimal(6, 3)
+  schdCoreWeightPct   Decimal  @db.Decimal(6, 3)
+  growthBucketPct     Decimal  @db.Decimal(6, 3)
+  sgovTotalWeightPct  Decimal  @db.Decimal(6, 3)
+  iaumTotalWeightPct  Decimal  @db.Decimal(6, 3)
+  tqqqTotalWeightPct  Decimal  @db.Decimal(6, 3)
+  // — full trigger-flag map (JSONB)
+  triggerFlags        Json
+  // — data provenance
+  fxRateCAD           Decimal  @db.Decimal(10, 6)
+  priceSource         String                                  // "yahoo" | "yahoo-with-fallback"
+  unverifiedItems     String[]                                // e.g. ["fx-fallback", "missing-price:XYZ"]
+  // — version
+  rulebookVersion     String
+  // — time (immutable)
+  createdAt           DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+}
+
+/// Rulebook trigger detection ledger. A new row is created when a trigger
+/// first fires; resolvedAt is updated when it later turns off. computedPlan
+/// stores the matching computeXxxPlan() output captured at detection time so
+/// later retrospectives reflect the rulebook value seen when the alert fired.
+/// Slice 1.1 only creates the table; the cron writer arrives in Phase 4.
+model RulebookTriggerEvent {
+  id                String    @id @default(cuid())
+  userId            String                                    // soft ref
+  // — classification
+  triggerKind       String                                    // "hard_exit" | "soft_exit" | "crisis_t1" | "crisis_t2" | "case_a" | "case_b" | "sgov_below_target" | "sgov_below_floor" | "iaum_at_cap" | "cycle_armable" | "meltdown_phase"
+  severity          String                                    // "info" | "warn" | "action_required"
+  // — time
+  detectedAt        DateTime  @default(now())
+  resolvedAt        DateTime?
+  rulebookVersion   String
+  // — context captured at detection
+  weightsSnapshotId String?                                   // soft ref to AssetWeightSnapshot.id
+  weightsAtDetect   Json                                      // computeRulebookWeights() output
+  computedPlan      Json?                                     // computeXxxPlan() output if applicable
+  // — notification (Phase 4 will populate)
+  notifiedAt        DateTime?
+  notifyChannel     String?                                   // "telegram" | "email"
+  // — Phase 3 resolution placeholders (NULL during Phase 1)
+  resolutionAction  String?                                   // "user_approved" | "user_rejected" | "auto_resolved_by_market"
+  resolutionNotes   String?   @db.Text
+
+  @@index([userId, detectedAt(sort: Desc)])
+  @@index([userId, triggerKind, resolvedAt])
+  @@index([userId, severity, resolvedAt])
+}
+
+/// Rulebook version registry. AiCallLog.rulebookVersion is a soft reference
+/// here (no hard FK so deleting a historical version row will not break logs).
+/// promptHash = sha256(RULEBOOK_GUARDRAILS + AI_OUTPUT_RULES + structure
+/// constants) so silent guardrail edits are detectable.
+model RulebookVersion {
+  version       String   @id                                  // e.g. "v4.1.10-3"
+  promptHash    String
+  effectiveFrom DateTime
+  changelog     String   @db.Text
+  createdAt     DateTime @default(now())
 }

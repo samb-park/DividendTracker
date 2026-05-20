@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "./ui-card";
 
 interface UpcomingItem {
   ticker: string;
@@ -33,7 +34,7 @@ export function UpcomingDividends({
   const sym = displayCurrency === "CAD" ? "C$" : "$";
 
   return (
-    <div className="border border-border bg-card p-4 mb-6">
+    <Card className="mb-6">
       <div className="text-accent text-xs tracking-wide mb-3">&#9654; UPCOMING EX-DIV (30 DAYS)</div>
       <div className="space-y-2">
         {items.map((item) => {
@@ -59,6 +60,6 @@ export function UpcomingDividends({
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }

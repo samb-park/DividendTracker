@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { deleteUserAiCache } from "@/lib/ai-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,17 @@ const contributionSchema = z.object({
   cashAvailableCAD: z.number().finite().min(0).max(99_999_999).optional(),
 });
 
+const nonCorePlanSchema = z.object({
+  frequency: z.enum(["weekly", "biweekly", "monthly"]),
+  cad: z.number().finite().min(0).max(1_000_000),
+}).strict();
+
 const targetSchema = z.object({
   type: z.literal("target"),
   ticker: z.string().regex(TICKER_RE),
   pct: z.number().finite().min(0).max(100),
   excluded: z.boolean().optional(),
+  nonCorePlan: nonCorePlanSchema.nullable().optional(),
 });
 
 const reserveSchema = z.object({
@@ -55,7 +62,7 @@ export async function GET() {
   const [settings, holdings] = await Promise.all([
     prisma.setting.findMany({ where: { key: { startsWith: `${uid}:investment:` } } }),
     prisma.holding.findMany({
-      where: { quantity: { gt: 0 }, portfolio: { userId: uid } },
+      where: { isActive: true, quantity: { gt: 0 }, portfolio: { userId: uid } },
       select: { ticker: true },
       distinct: ["ticker"],
     }),
@@ -132,6 +139,14 @@ export async function POST(req: Request) {
     const key = userKey(uid, `investment:target:${body.ticker.toUpperCase()}`);
     const val: Record<string, unknown> = { pct: body.pct };
     if (body.excluded !== undefined) val.excluded = body.excluded;
+    // nonCorePlan is meaningful only when excluded=true; null/undefined clears it.
+    if (body.nonCorePlan !== undefined) {
+      if (body.nonCorePlan === null) {
+        // explicit clear — leave key out of JSON
+      } else {
+        val.nonCorePlan = body.nonCorePlan;
+      }
+    }
     await prisma.setting.upsert({
       where: { key },
       update: { value: JSON.stringify(val) },
@@ -161,6 +176,11 @@ export async function POST(req: Request) {
       create: { key, value: JSON.stringify(val) },
     });
   }
+
+  // Any successful settings change can affect the AI prompt context (Core %,
+  // Non-Core CAD, contribution amount/frequency, redistribution rule). Invalidate
+  // the user's AI cache so the next AI page load reflects the new settings.
+  await deleteUserAiCache(uid).catch(() => { /* non-fatal */ });
 
   return NextResponse.json({ ok: true });
 }

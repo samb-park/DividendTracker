@@ -21,8 +21,11 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   const [targets, setTargets] = useState(initial.targets);
   const [targetsStatus, setTargetsStatus] = useState<Record<string, SaveStatus>>({});
 
-  const [reserves, setReserves] = useState(initial.reserves);
-  const [reserveStatus, setReserveStatus] = useState<Record<string, SaveStatus>>({});
+  const [reserves] = useState(initial.reserves);
+
+  // Per-Non-Core ticker self-managed budget (frequency + CAD).
+  // Sourced from targets[t].nonCorePlan; saving goes through saveTarget().
+  const [nonCorePlanStatus, setNonCorePlanStatus] = useState<Record<string, SaveStatus>>({});
 
   const [rule, setRule] = useState<"shortfall_proportional" | "even" | "priority">(
     initial.redistribution.rule,
@@ -54,19 +57,6 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
     [allTickers, targets],
   );
 
-  const reservePctSum = useMemo(
-    () => excludedTickers.reduce((s, t) => s + (reserves[t]?.targetPct ?? 0), 0),
-    [excludedTickers, reserves],
-  );
-
-  const plannedSum = useMemo(
-    () =>
-      excludedTickers.reduce(
-        (s, t) => s + (reserves[t]?.active ? reserves[t].plannedWeeklyCAD : 0),
-        0,
-      ),
-    [excludedTickers, reserves],
-  );
 
   const contribAmt = parseFloat(amount) || 0;
 
@@ -94,15 +84,22 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
   async function saveTarget(ticker: string) {
     setTargetsStatus((s) => ({ ...s, [ticker]: "saving" }));
     const t = targets[ticker] ?? { pct: 0 };
+    const body: Record<string, unknown> = {
+      type: "target",
+      ticker,
+      pct: t.pct,
+      excluded: !!t.excluded,
+    };
+    // Persist nonCorePlan only when this ticker is Non-Core; otherwise clear it.
+    if (t.excluded && t.nonCorePlan && t.nonCorePlan.cad > 0) {
+      body.nonCorePlan = { frequency: t.nonCorePlan.frequency, cad: t.nonCorePlan.cad };
+    } else {
+      body.nonCorePlan = null;
+    }
     const r = await fetch("/api/v2/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "target",
-        ticker,
-        pct: t.pct,
-        excluded: !!t.excluded,
-      }),
+      body: JSON.stringify(body),
     });
     if (r.ok) {
       setTargetsStatus((s) => ({ ...s, [ticker]: "saved" }));
@@ -113,28 +110,33 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
     }
   }
 
-  async function saveReserve(ticker: string) {
-    setReserveStatus((s) => ({ ...s, [ticker]: "saving" }));
-    const r = reserves[ticker] ?? { targetPct: 0, plannedWeeklyCAD: 0, active: false };
-    const resp = await fetch("/api/v2/settings", {
+  async function saveNonCorePlan(ticker: string) {
+    setNonCorePlanStatus((s) => ({ ...s, [ticker]: "saving" }));
+    const t = targets[ticker] ?? { pct: 0 };
+    const plan = t.nonCorePlan;
+    const body: Record<string, unknown> = {
+      type: "target",
+      ticker,
+      pct: t.pct,
+      excluded: !!t.excluded,
+      nonCorePlan: plan && plan.cad > 0
+        ? { frequency: plan.frequency, cad: plan.cad }
+        : null,
+    };
+    const r = await fetch("/api/v2/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "reserve",
-        ticker,
-        targetPct: r.targetPct,
-        plannedWeeklyCAD: r.plannedWeeklyCAD,
-        active: r.active,
-      }),
+      body: JSON.stringify(body),
     });
-    if (resp.ok) {
-      setReserveStatus((s) => ({ ...s, [ticker]: "saved" }));
+    if (r.ok) {
+      setNonCorePlanStatus((s) => ({ ...s, [ticker]: "saved" }));
       startTransition(() => router.refresh());
-      setTimeout(() => setReserveStatus((s) => ({ ...s, [ticker]: "idle" })), 1200);
+      setTimeout(() => setNonCorePlanStatus((s) => ({ ...s, [ticker]: "idle" })), 1200);
     } else {
-      setReserveStatus((s) => ({ ...s, [ticker]: "error" }));
+      setNonCorePlanStatus((s) => ({ ...s, [ticker]: "error" }));
     }
   }
+
 
   async function saveRule() {
     setRuleStatus("saving");
@@ -203,8 +205,8 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
       </Section>
 
       <Section
-        title="Ticker Targets"
-        description="Set target % for each ticker. Toggle excluded to move a ticker into the Reserve group (e.g. SGOV, IAUM)."
+        title="Core (Contribution Plan)"
+        description="Tickers whose excl is unchecked are Core — they share the weekly contribution via target % shortfall. Default Core: SCHD, QLD."
         subRight={
           <span
             className="v2-tnum v2-fineprint"
@@ -274,109 +276,106 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
       </Section>
 
       <Section
-        title="Reserve / Excluded Settings"
-        description="For each excluded ticker, set the target reserve %, planned weekly CAD, and whether it's active. Inactive tickers receive no allocation."
+        title="Non-Core (Manual Budget)"
+        description="Tickers whose excl is checked are Non-Core — they are excluded from the main Contribution Plan. Set your own per-asset budget (frequency + CAD) to track planned spend separately. Default Non-Core (v4.4.2): SGOV, QQQI (legacy: IAUM)."
         subRight={
           <div className="text-right v2-fineprint v2-tnum" style={{ lineHeight: 1.4 }}>
-            <div
-              style={{
-                color:
-                  reservePctSum > 100
-                    ? "hsl(var(--negative))"
-                    : "hsl(var(--v2-ink-muted-48))",
-              }}
-            >
-              reserve sum {reservePctSum.toFixed(2)}%
-            </div>
-            <div
-              style={{
-                color:
-                  plannedSum > contribAmt && contribAmt > 0
-                    ? "hsl(var(--negative))"
-                    : "hsl(var(--v2-ink-muted-48))",
-              }}
-            >
-              planned {plannedSum.toFixed(2)} {currency}
+            <div style={{ color: "hsl(var(--v2-ink-muted-48))" }}>
+              {excludedTickers.length} Non-Core
             </div>
           </div>
         }
       >
         {excludedTickers.length === 0 ? (
           <EmptyHint>
-            No excluded tickers yet. Toggle &ldquo;excluded&rdquo; in the Targets section above.
+            No Non-Core tickers yet. Check &ldquo;excluded&rdquo; on a ticker above to make it Non-Core.
           </EmptyHint>
         ) : (
-          <ul className="divide-y" style={{ borderColor: "hsl(var(--v2-divider-soft))" }}>
-            {excludedTickers.map((ticker) => {
-              const r = reserves[ticker] ?? {
-                targetPct: 0,
-                plannedWeeklyCAD: 0,
-                active: true,
-              };
-              const status = reserveStatus[ticker] ?? "idle";
-              return (
-                <li
-                  key={ticker}
-                  className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[6rem_1fr_1fr_auto_auto] sm:items-end"
-                >
-                  <div className="v2-body-strong">{ticker}</div>
-                  <Field label="Target %">
-                    <input
-                      type="number"
-                      value={r.targetPct}
-                      min={0}
-                      max={100}
-                      step={0.1}
-                      onChange={(e) =>
-                        setReserves({
-                          ...reserves,
-                          [ticker]: { ...r, targetPct: parseFloat(e.target.value) || 0 },
-                        })
-                      }
-                      className="v2-input v2-tnum"
-                      style={{ textAlign: "right" }}
-                    />
-                  </Field>
-                  <Field label="Planned (CAD)">
-                    <input
-                      type="number"
-                      value={r.plannedWeeklyCAD}
-                      min={0}
-                      step={0.5}
-                      onChange={(e) =>
-                        setReserves({
-                          ...reserves,
-                          [ticker]: {
-                            ...r,
-                            plannedWeeklyCAD: parseFloat(e.target.value) || 0,
-                          },
-                        })
-                      }
-                      className="v2-input v2-tnum"
-                      style={{ textAlign: "right" }}
-                    />
-                  </Field>
-                  <Toggle
-                    label="active"
-                    checked={r.active}
-                    onChange={(checked) =>
-                      setReserves({
-                        ...reserves,
-                        [ticker]: { ...r, active: checked },
-                      })
-                    }
-                  />
-                  <SaveButton onClick={() => saveReserve(ticker)} status={status} compact />
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {excludedTickers.some((t) => {
+              const r = reserves[t];
+              return r && r.active && r.plannedWeeklyCAD > 0;
+            }) && (
+              <div
+                className="v2-card-soft mb-3 p-3 v2-caption"
+                style={{ background: "hsl(var(--v2-canvas-parchment))" }}
+              >
+                알림: 이전에 설정된 Reserve의 plannedWeeklyCAD는 더 이상 main Contribution Plan에서 자동으로 분배되지 않습니다. 새로운 Non-Core 예산(frequency + CAD)을 아래에서 설정해 주세요. 기존 Reserve 값은 보존됩니다.
+              </div>
+            )}
+            <ul className="divide-y" style={{ borderColor: "hsl(var(--v2-divider-soft))" }}>
+              {excludedTickers.map((ticker) => {
+                const t = targets[ticker] ?? { pct: 0 };
+                const plan = t.nonCorePlan ?? { frequency: "weekly" as const, cad: 0 };
+                const status = nonCorePlanStatus[ticker] ?? "idle";
+                const legacy = reserves[ticker];
+                return (
+                  <li
+                    key={ticker}
+                    className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[6rem_1fr_1fr_auto] sm:items-end"
+                  >
+                    <div className="v2-body-strong">{ticker}</div>
+                    <Field label="Frequency">
+                      <select
+                        value={plan.frequency}
+                        onChange={(e) =>
+                          setTargets({
+                            ...targets,
+                            [ticker]: {
+                              ...t,
+                              nonCorePlan: {
+                                frequency: e.target.value as "weekly" | "biweekly" | "monthly",
+                                cad: plan.cad,
+                              },
+                            },
+                          })
+                        }
+                        className="v2-select"
+                      >
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Biweekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </Field>
+                    <Field label="Amount (CAD)">
+                      <input
+                        type="number"
+                        value={plan.cad}
+                        min={0}
+                        step={1}
+                        onChange={(e) =>
+                          setTargets({
+                            ...targets,
+                            [ticker]: {
+                              ...t,
+                              nonCorePlan: {
+                                frequency: plan.frequency,
+                                cad: parseFloat(e.target.value) || 0,
+                              },
+                            },
+                          })
+                        }
+                        className="v2-input v2-tnum"
+                        style={{ textAlign: "right" }}
+                      />
+                    </Field>
+                    <SaveButton onClick={() => saveNonCorePlan(ticker)} status={status} compact />
+                    {legacy && legacy.active && legacy.plannedWeeklyCAD > 0 && (
+                      <div className="sm:col-span-4 v2-fineprint" style={{ color: "hsl(var(--v2-ink-muted-48))" }}>
+                        legacy reserve: planned {legacy.plannedWeeklyCAD} CAD/week (no longer applied)
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </Section>
 
       <Section
-        title="Redistribution Rule"
-        description="When an excluded ticker reaches its reserve target, where does its planned amount go?"
+        title="Redistribution Rule (legacy)"
+        description="이전 모델 설정. Non-Core가 더 이상 main contribution을 받지 않으므로 현재는 영향 없음. 값은 보존됩니다 (향후 reserve 모드 부활 대비)."
       >
         <div className="space-y-3">
           {(
@@ -442,7 +441,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
                       .filter(Boolean),
                   )
                 }
-                placeholder="e.g. IAUM, SGOV"
+                placeholder="e.g. QQQI, SGOV"
                 className="v2-input"
               />
             </Field>
@@ -527,26 +526,17 @@ function Help() {
       style={{ background: "hsl(var(--v2-canvas-parchment))" }}
     >
       <summary className="cursor-pointer v2-body-strong" style={{ fontSize: 15 }}>
-        How v2 allocation works
+        Core / Non-Core 모델 설명
       </summary>
       <ol
         className="mt-3 space-y-1.5 v2-caption"
         style={{ color: "hsl(var(--v2-ink-muted-80))", paddingLeft: 18, listStyle: "decimal" }}
       >
-        <li>Each period your Weekly Contribution is the total CAD to deploy.</li>
-        <li>
-          Excluded tickers receive their Planned (CAD) first, capped at the gap to their reserve
-          target.
-        </li>
-        <li>
-          If an excluded ticker is already at/above its reserve target, its planned amount is
-          redistributed using your rule.
-        </li>
-        <li>Whatever remains goes to Normal tickers, weighted by their target shortfall.</li>
-        <li>
-          If planned-excluded sum exceeds Weekly Contribution, all planned amounts are scaled down
-          proportionally.
-        </li>
+        <li>excl unchecked = Core. 기본: SCHD, QLD. main Contribution Plan 대상.</li>
+        <li>excl checked = Non-Core. v4.4.2 기본: SGOV, QQQI (legacy: IAUM). main Contribution Plan에서 제외.</li>
+        <li>매 기간 Weekly Contribution은 Core에만 분배 (target % shortfall 기반).</li>
+        <li>Non-Core는 사용자가 자체 budget(frequency + CAD)을 입력해 별도 추적. 자동 매수 대상이 아님.</li>
+        <li>이전 reserve / redistribution 설정은 보존되지만 더 이상 main contribution에 영향을 주지 않음.</li>
       </ol>
     </details>
   );

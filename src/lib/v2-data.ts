@@ -30,7 +30,7 @@ export interface V2AllocationData extends V2AllocationResult {
 export async function fetchV2Allocation(uid: string): Promise<V2AllocationData> {
   const [holdingsRaw, settings, fx] = await Promise.all([
     prisma.holding.findMany({
-      where: { quantity: { gt: 0 }, portfolio: { userId: uid } },
+      where: { isActive: true, quantity: { gt: 0 }, portfolio: { userId: uid } },
       select: { ticker: true, currency: true, quantity: true },
     }),
     prisma.setting.findMany({ where: { key: { startsWith: `${uid}:investment:` } } }),
@@ -144,7 +144,7 @@ export async function fetchV2Settings(uid: string) {
   const [settings, holdings] = await Promise.all([
     prisma.setting.findMany({ where: { key: { startsWith: `${uid}:investment:` } } }),
     prisma.holding.findMany({
-      where: { quantity: { gt: 0 }, portfolio: { userId: uid } },
+      where: { isActive: true, quantity: { gt: 0 }, portfolio: { userId: uid } },
       select: { ticker: true },
       distinct: ["ticker"],
     }),

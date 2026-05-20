@@ -69,13 +69,13 @@ export function RulebookStatus() {
     const handler = () => load({ force: true });
     window.addEventListener(AI_REFRESH_EVENT, handler);
     return () => window.removeEventListener(AI_REFRESH_EVENT, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (
     <div className="border border-border bg-card">
       <div className="px-4 py-2 border-b border-border text-accent text-xs tracking-wide">
-        ▶ RULEBOOK STATUS (트리거 적용 여부)
+        ▶ RULEBOOK STATUS
       </div>
       <div className="p-2">
         {loading && <div className="px-3 py-2 text-[11px] text-muted-foreground">로딩…</div>}
@@ -88,7 +88,8 @@ export function RulebookStatus() {
             tqqqExitActive={data.tqqqExitPlan?.active ? { variant: data.tqqqExitPlan.variant } : null}
             crisisTriggerActive={data.crisisTriggerPlan?.active ? { tier: data.crisisTriggerPlan.tier } : null}
             annualRebalanceAction={data.annualRebalancePlan?.action ?? null}
-            iaumReason={data.iaumWeeklyPlan?.reason}
+            jepqReason={data.jepqWeeklyPlan?.reason}
+            overlayActive={data.coreAllocationPlan?.overlayActive ?? false}
           />
         )}
       </div>
@@ -101,13 +102,15 @@ function Body({
   tqqqExitActive,
   crisisTriggerActive,
   annualRebalanceAction,
-  iaumReason,
+  jepqReason,
+  overlayActive,
 }: {
   cs: CurrentState;
   tqqqExitActive: { variant?: "soft" | "hard" } | null;
   crisisTriggerActive: { tier?: "T1" | "T2" } | null;
   annualRebalanceAction: "deadband" | "case_a" | "case_b" | "case_b_no_room" | null;
-  iaumReason?: string;
+  jepqReason?: string;
+  overlayActive: boolean;
 }) {
   const f = cs.flags;
 
@@ -137,68 +140,77 @@ function Body({
           ? "데드밴드 (29-31%, 무행동)"
           : isYearEnd ? "예정 (12/31)" : "해당 없음 (12/31 외)";
 
-  // IAUM (preserve existing logic from prior version)
-  let iaumStatus: Status;
-  let iaumLabel: string;
-  if (iaumReason && iaumReason.startsWith("적용")) {
-    iaumStatus = "pending"; iaumLabel = "충족";
-  } else if (iaumReason && iaumReason.startsWith("사용자 Settings 별도")) {
-    iaumStatus = "pending"; iaumLabel = "충족 (사용자)";
-  } else if (iaumReason?.includes("TFSA 잔여한도 없음")) {
-    iaumStatus = "inactive"; iaumLabel = "미충족 (TFSA room 없음)";
-  } else if (iaumReason?.includes("IAUM 전체 비중")) {
-    iaumStatus = "inactive"; iaumLabel = "미충족 (IAUM ≥ 5%)";
-  } else if (f.iaumAtCap) {
-    iaumStatus = "inactive"; iaumLabel = "미충족 (상한 도달)";
-  } else if (!iaumReason) {
-    iaumStatus = "unverified"; iaumLabel = "확인 필요";
+  // QQQI (v4.4.2 — Sangbong TFSA only, hard cap 5%)
+  let jepqStatus: Status;
+  let jepqLabel: string;
+  if (jepqReason && jepqReason.startsWith("적용")) {
+    jepqStatus = "pending"; jepqLabel = "충족";
+  } else if (jepqReason && jepqReason.startsWith("사용자 Settings 별도")) {
+    jepqStatus = "pending"; jepqLabel = "충족 (사용자)";
+  } else if (jepqReason?.includes("TFSA 잔여한도 없음")) {
+    jepqStatus = "inactive"; jepqLabel = "미충족 (TFSA room 없음)";
+  } else if (jepqReason?.includes("QQQI 전체 비중")) {
+    jepqStatus = "inactive"; jepqLabel = "미충족 (QQQI ≥ 5%)";
+  } else if (f.jepqAtCap) {
+    jepqStatus = "inactive"; jepqLabel = "미충족 (hard cap 도달)";
+  } else if (!jepqReason) {
+    jepqStatus = "unverified"; jepqLabel = "확인 필요";
   } else {
-    iaumStatus = "inactive"; iaumLabel = "미충족";
+    jepqStatus = "inactive"; jepqLabel = "미충족";
   }
+
+  void tqqqExitActive;
+  void crisisTriggerActive;
 
   return (
     <ul className="divide-y divide-border border border-border">
       <StatusRow
-        title="TQQQ Hard Exit (§6.2)"
+        title="§10 Emergency cap (성장 버킷 ≥ 38%, daily close)"
         status={hardExitStatus}
-        statusLabel={hardExitStatus === "applied" ? "적용 (성장 버킷 ≥ 38%)" : "미적용"}
-        hint="다음 거래일 TQQQ 전량 + QLD 30% → SGOV 8% → SCHD"
+        statusLabel={hardExitStatus === "applied" ? "적용" : "미적용"}
+        hint="TQQQ 전량 + QLD 30% → SGOV 8% → SCHD"
       />
       <StatusRow
-        title="TQQQ Soft Exit (§6.2)"
+        title="§6.2 TQQQ Soft Exit (성장 버킷 ≥ 34%, daily close)"
         status={softExitStatus}
-        statusLabel={softExitStatus === "applied" ? "적용 (성장 버킷 ≥ 34%)" : "미적용"}
+        statusLabel={softExitStatus === "applied" ? "적용" : "미적용"}
         hint="TQQQ 절반 매도 → SGOV 8% → SCHD"
       />
       <StatusRow
-        title="Crisis Trigger (§6.1, SGOV → TQQQ)"
+        title="§6.1 Crisis Trigger (MONTH-END close 만)"
         status={crisisStatus}
         statusLabel={crisisStatus === "applied" ? "적용" : "미적용"}
-        hint={crisisHint}
+        hint={`${crisisHint} · SGOV 5% 바닥 보호`}
       />
       <StatusRow
-        title="SGOV 보충 (§8, 8% 목표)"
+        title="SGOV 보충 (target 8%)"
         status={sgovTargetStatus}
         statusLabel={sgovTargetLabel}
-        hint={`현재 ${cs.sgovTotalWeightPct}% · 위기 바닥 5% 별도`}
+        hint={`현재 ${cs.sgovTotalWeightPct}% · floor 5% · 가용 버퍼 3%`}
       />
       <StatusRow
-        title="SGOV 위기 바닥 (§8, 5%)"
+        title="SGOV 위기 바닥 (5%)"
         status={sgovFloorStatus}
         statusLabel={sgovFloorLabel}
-        hint="§6.1만 침범 허용"
+        hint="위기 트리거만 침범 허용 · 가용 버퍼 = max(0, SGOV − 5%·Total)"
       />
       <StatusRow
-        title="IAUM Buy Condition (§3)"
-        status={iaumStatus}
-        statusLabel={iaumLabel}
-        hint="조건 = TFSA room AND IAUM < 5%"
+        title="TQQQ 오버레이"
+        status={overlayActive ? "applied" : "inactive"}
+        statusLabel={overlayActive ? "활성 (SCHD 70 / TQQQ 30 / QLD 0)" : "비활성 (SCHD 70 / QLD 30)"}
+        hint="TQQQ > 0 시 Core 분배가 오버레이로 전환 · SCHD 배당도 동일 분배"
       />
       <StatusRow
-        title="연말 리밸런스 (§5, ±1% 데드밴드)"
+        title="QQQI Buy Condition (Sangbong TFSA)"
+        status={jepqStatus}
+        statusLabel={jepqLabel}
+        hint="조건 = TFSA room AND QQQI < 5% (hard cap)"
+      />
+      <StatusRow
+        title="연말 리밸런스"
         status={annualStatus}
         statusLabel={annualLabel}
-        hint="29 ≤ W ≤ 31% 무행동 / W > 31% Case A / W < 29% AND TQQQ=0 Case B"
+        hint="29 ≤ W ≤ 31% 무행동 / W > 31% Case A (refill SGOV→8%) / W < 29% 무행동 (SCHD 매도 금지)"
       />
     </ul>
   );

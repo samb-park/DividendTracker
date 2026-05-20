@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { auth } from "@/auth";
 import { SettingsClient } from "@/components/settings-client";
 import { ErrorBoundary } from "@/components/error-boundary";
 
@@ -7,9 +6,6 @@ import { ErrorBoundary } from "@/components/error-boundary";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const session = await auth();
-  const isAdmin = session?.user?.role === "ADMIN";
-
   const portfolios = await prisma.portfolio.findMany({
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true, accountType: true, cashCAD: true, cashUSD: true },
@@ -20,7 +16,7 @@ export default async function SettingsPage() {
   return (
     <div>
       <ErrorBoundary label="SETTINGS">
-        <SettingsClient portfolios={serialized} isAdmin={isAdmin} />
+        <SettingsClient portfolios={serialized} />
       </ErrorBoundary>
     </div>
   );

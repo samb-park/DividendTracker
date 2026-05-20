@@ -2,301 +2,163 @@ import { NextRequest, NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import {
-  buildV0AnchoredBaseRateBenchmark,
-  type BenchmarkPoint,
-  type ContributionEvent,
-} from "@/lib/benchmarks/baseRateBenchmark";
-import {
-  buildV0AnchoredSpyBenchmark,
-  convertUsdToCadByDate,
-  type FxRatePoint,
-  type PricePointUSD,
-} from "@/lib/benchmarks/spyBenchmark";
-import {
-  computeMaxDrawdownPct,
-  computeWindowValueChangePct,
-  computeXirrPct,
-  sumContributionsInWindow,
-  type DatedCashFlow,
-  type PortfolioValuePoint,
-} from "@/lib/metrics/valueChange";
+import { getFxRate } from "@/lib/price";
+import { isSupportedBenchmarkTicker } from "@/lib/performance-benchmark";
+import { computeShadowPortfolio, type ShadowContribution, type ShadowMarketPoint } from "@/lib/performance-shadow";
 
 export const dynamic = "force-dynamic";
 
 const yf = new YahooFinance();
-const TTL = 60 * 60 * 1000;
-const VALID_RANGES = ["1y", "3y", "5y", "all"] as const;
-const VALID_BASE_RATES = [2, 4, 6] as const;
-type Range = (typeof VALID_RANGES)[number];
-type BaseRate = (typeof VALID_BASE_RATES)[number];
 
-interface SnapshotRow {
-  date: Date;
-  totalCAD: { toString(): string } | number;
+const cache = new Map<string, { data: { date: string; value: number }[]; fetchedAt: number }>();
+const TTL = 60 * 60 * 1000; // 1 hour
+const VALID_RANGES = ["3m", "6m", "1y", "3y", "5y", "all"] as const;
+type Range = typeof VALID_RANGES[number];
+
+function rangeToSince(range: Range): Date | undefined {
+  if (range === "all") return undefined;
+  const d = new Date();
+  if (range === "3m") d.setMonth(d.getMonth() - 3);
+  else if (range === "6m") d.setMonth(d.getMonth() - 6);
+  else if (range === "1y") d.setFullYear(d.getFullYear() - 1);
+  else if (range === "3y") d.setFullYear(d.getFullYear() - 3);
+  else if (range === "5y") d.setFullYear(d.getFullYear() - 5);
+  return d;
 }
 
-interface CashTransactionRow {
-  date: Date;
-  action: "DEPOSIT" | "WITHDRAWAL" | string;
-  amount: { toString(): string } | number;
-  currency: "CAD" | "USD" | string;
-}
-
-interface PerformanceBenchmarkResponse {
-  portfolio: PortfolioValuePoint[];
-  spy: BenchmarkPoint[];
-  baseR: BenchmarkPoint[];
-  prices: { date: string; value: number }[];
-  v0: number;
-  t0: string | null;
-  t1: string | null;
-  totalContribInWindow: number;
-  valueChangePct: number | null;
-  xirrPct: number | null;
-  maxDrawdownPct: number | null;
-  ticker: string;
-  ratePercent: BaseRate;
-}
-
-const cache = new Map<string, { data: PerformanceBenchmarkResponse; fetchedAt: number }>();
-
-function dateOnly(date: Date): string {
+function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function parseDate(date: string): Date {
-  return new Date(`${date}T00:00:00.000Z`);
-}
-
-function addDays(date: string, days: number): string {
-  const d = parseDate(date);
-  d.setUTCDate(d.getUTCDate() + days);
-  return dateOnly(d);
-}
-
-function minDate(a: string, b: string): string {
-  return a <= b ? a : b;
-}
-
-function rangeToStartDate(range: Range, now = new Date()): string | null {
-  if (range === "all") return null;
-
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (range === "1y") d.setUTCFullYear(d.getUTCFullYear() - 1);
-  if (range === "3y") d.setUTCFullYear(d.getUTCFullYear() - 3);
-  if (range === "5y") d.setUTCFullYear(d.getUTCFullYear() - 5);
-  return dateOnly(d);
-}
-
-function parseRange(raw: string | null): Range {
-  return VALID_RANGES.includes(raw as Range) ? (raw as Range) : "1y";
-}
-
-function parseBaseRate(raw: string | null): BaseRate {
-  const n = Number(raw ?? "6");
-  return VALID_BASE_RATES.includes(n as BaseRate) ? (n as BaseRate) : 6;
-}
-
-function parseTicker(raw: string | null): string {
-  const ticker = (raw ?? "SPY").trim().toUpperCase().replace(/[^A-Z0-9.=-]/g, "").slice(0, 16);
-  return ticker || "SPY";
-}
-
-function toNumber(value: { toString(): string } | number | null | undefined): number {
-  if (value == null) return 0;
-  if (typeof value === "number") return value;
-  const parsed = Number(value.toString());
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function roundCurrency(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function roundPoint(point: BenchmarkPoint): BenchmarkPoint {
-  return { date: point.date, valueCAD: roundCurrency(point.valueCAD) };
-}
-
-function emptyResponse(ticker: string, ratePercent: BaseRate): PerformanceBenchmarkResponse {
-  return {
-    portfolio: [],
-    spy: [],
-    baseR: [],
-    prices: [],
-    v0: 0,
-    t0: null,
-    t1: null,
-    totalContribInWindow: 0,
-    valueChangePct: null,
-    xirrPct: null,
-    maxDrawdownPct: null,
-    ticker,
-    ratePercent,
-  };
-}
-
-async function fetchHistory(ticker: string, from: string, to: string): Promise<PricePointUSD[]> {
-  const result = await yf.chart(ticker, {
-    period1: parseDate(from),
-    period2: parseDate(addDays(to, 1)),
-    interval: "1d",
-  });
-
-  return (result.quotes ?? [])
-    .filter((quote) => quote.close != null && quote.date != null)
-    .map((quote) => ({
-      date: dateOnly(new Date(quote.date)),
-      close: Number(quote.close),
-    }))
-    .filter((point) => Number.isFinite(point.close) && point.close > 0)
+function normalizeBoCObservations(payload: unknown): ShadowMarketPoint[] {
+  const observations = (payload as { observations?: Array<{ d?: string; FXUSDCAD?: { v?: string } }> }).observations ?? [];
+  return observations
+    .map((observation) => ({ date: observation.d ?? "", value: parseFloat(observation.FXUSDCAD?.v ?? "") }))
+    .filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-async function fetchFxRates(from: string, to: string, fallbackRate: number): Promise<FxRatePoint[]> {
-  try {
-    const history = await fetchHistory("USDCAD=X", from, to);
-    if (history.length > 0) {
-      return history.map((point) => ({ date: point.date, rate: point.close }));
-    }
-  } catch {
-    // Use the configured fallback below when Yahoo FX history is unavailable.
-  }
+async function fetchBoCFxRates(startDate: string, endDate: string): Promise<ShadowMarketPoint[]> {
+  const url = `https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json?start_date=${startDate}&end_date=${endDate}`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) return [];
+  return normalizeBoCObservations(await response.json());
+}
 
-  return [
-    { date: from, rate: fallbackRate },
-    { date: to, rate: fallbackRate },
-  ];
+function fallbackFxSeries(dates: string[], fallbackRate: number): ShadowMarketPoint[] {
+  return dates.map((date) => ({ date, value: fallbackRate }));
 }
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id;
 
   const { searchParams } = new URL(req.url);
-  const userId = session.user.id;
-  const range = parseRange(searchParams.get("range"));
-  const ticker = parseTicker(searchParams.get("ticker"));
-  const ratePercent = parseBaseRate(searchParams.get("rate"));
-  const cacheKey = `${userId}-${range}-${ticker}-${ratePercent}`;
+  const rawRange = searchParams.get("range") ?? "1y";
+  const range = VALID_RANGES.includes(rawRange as Range) ? rawRange as Range : "1y";
+  const rawTicker = (searchParams.get("ticker") ?? "SPY").toUpperCase();
+  if (!isSupportedBenchmarkTicker(rawTicker)) {
+    return NextResponse.json({ prices: [] });
+  }
+  const ticker = rawTicker;
+  const cacheKey = `${userId}:${ticker}-${range}:shadow-v2-contrib-only`;
 
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < TTL) {
-    return NextResponse.json(cached.data);
+    return NextResponse.json({ prices: cached.data, mode: "shadow-dca" });
   }
 
   try {
-    const [snapshotsRaw, cashTxRaw] = await Promise.all([
-      prisma.portfolioSnapshot.findMany({
-        where: { userId },
-        orderBy: { date: "asc" },
-        select: { date: true, totalCAD: true },
-      }),
-      prisma.cashTransaction.findMany({
-        where: { portfolio: { userId } },
-        orderBy: { date: "asc" },
-        select: { date: true, action: true, amount: true, currency: true },
-      }),
-    ]) as [SnapshotRow[], CashTransactionRow[]];
+    const since = rangeToSince(range);
+    const snapshots = await prisma.portfolioSnapshot.findMany({
+      where: {
+        userId,
+        ...(since ? { date: { gte: since } } : {}),
+      },
+      orderBy: { date: "asc" },
+      select: { date: true, totalCAD: true },
+    });
 
-    const snapshots: PortfolioValuePoint[] = snapshotsRaw.map((snapshot: SnapshotRow) => ({
-      date: dateOnly(snapshot.date),
-      valueCAD: toNumber(snapshot.totalCAD),
+    if (snapshots.length === 0) return NextResponse.json({ prices: [], mode: "shadow-dca" });
+
+    const valuationDates = snapshots.map((snapshot) => isoDate(snapshot.date));
+    const firstValuationDate = valuationDates[0];
+    const lastValuationDate = valuationDates[valuationDates.length - 1];
+
+    const cashTransactions = await prisma.cashTransaction.findMany({
+      where: {
+        portfolio: { userId },
+        date: { lte: new Date(`${lastValuationDate}T23:59:59.999Z`) },
+      },
+      select: { date: true, action: true, amount: true, currency: true },
+      orderBy: { date: "asc" },
+    });
+
+    const liveFx = await getFxRate().catch(() => null);
+    const fallbackFxRate = liveFx?.rate && Number.isFinite(liveFx.rate) ? liveFx.rate : 1.38;
+    const rawContributions = cashTransactions.map((tx) => ({
+      date: isoDate(tx.date),
+      signedAmount: parseFloat(tx.amount.toString()) * (tx.action === "WITHDRAWAL" ? -1 : 1),
+      currency: tx.currency,
+    }));
+    const firstContributionDate = rawContributions.map((tx) => tx.date).sort()[0] ?? firstValuationDate;
+    const marketStartDate = firstContributionDate < firstValuationDate ? firstContributionDate : firstValuationDate;
+
+    const chart = await yf.chart(ticker, {
+      period1: marketStartDate,
+      period2: lastValuationDate,
+      interval: "1d",
+    });
+
+    const quotes = chart.quotes ?? [];
+    const prices: ShadowMarketPoint[] = quotes
+      .filter((q) => q.close != null)
+      .map((q) => ({ date: isoDate(new Date(q.date)), value: q.close as number }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (prices.length === 0) {
+      return NextResponse.json({ prices: [], mode: "shadow-dca" });
+    }
+
+    const dividendEvents = Object.values(chart.events?.dividends ?? {})
+      .map((event) => {
+        const item = event as { date: Date | number | string; amount: number };
+        return { date: isoDate(new Date(item.date)), amount: Number(item.amount) };
+      })
+      .filter((event) => Number.isFinite(event.amount) && event.amount > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const bocFx = await fetchBoCFxRates(marketStartDate, lastValuationDate).catch(() => []);
+    const fxRates = bocFx.length > 0 ? bocFx : fallbackFxSeries([...new Set([...valuationDates, ...rawContributions.map((tx) => tx.date)])], fallbackFxRate);
+
+    const fxByDate = new Map(fxRates.map((point) => [point.date, point.value]));
+    const contributions: ShadowContribution[] = rawContributions.map((tx) => {
+      const fx = tx.currency === "USD" ? (fxByDate.get(tx.date) ?? fallbackFxRate) : 1;
+      return {
+        date: tx.date,
+        amountCAD: tx.signedAmount * fx,
+      };
+    });
+
+    const shadow = computeShadowPortfolio({
+      contributions,
+      prices,
+      fxRates,
+      dividends: dividendEvents,
+      valuationDates,
+    });
+
+    const data = shadow.map((point) => ({
+      date: point.date,
+      value: Math.round(point.valueCAD * 100) / 100,
     }));
 
-    if (snapshots.length === 0) {
-      const data = emptyResponse(ticker, ratePercent);
-      cache.set(cacheKey, { data, fetchedAt: Date.now() });
-      return NextResponse.json(data);
-    }
-
-    const requestedStart = rangeToStartDate(range);
-    const latestSnapshot = snapshots.at(-1)!;
-    const firstSnapshot = snapshots[0];
-    let t0: string;
-
-    if (!requestedStart) {
-      t0 = firstSnapshot.date;
-    } else if (latestSnapshot.date < requestedStart) {
-      t0 = latestSnapshot.date;
-    } else {
-      const previousOrExact = snapshots.filter((snapshot: PortfolioValuePoint) => snapshot.date <= requestedStart).at(-1);
-      const firstAfterStart = snapshots.find((snapshot: PortfolioValuePoint) => snapshot.date >= requestedStart);
-      t0 = previousOrExact ? requestedStart : (firstAfterStart?.date ?? firstSnapshot.date);
-    }
-
-    const t1 = latestSnapshot.date;
-    const anchorSnapshot = snapshots.filter((snapshot: PortfolioValuePoint) => snapshot.date <= t0).at(-1) ?? snapshots.find((snapshot: PortfolioValuePoint) => snapshot.date >= t0) ?? firstSnapshot;
-    const portfolio: PortfolioValuePoint[] = [
-      { date: t0, valueCAD: roundCurrency(anchorSnapshot.valueCAD) },
-      ...snapshots
-        .filter((snapshot: PortfolioValuePoint) => snapshot.date > t0 && snapshot.date <= t1)
-        .map((snapshot: PortfolioValuePoint) => ({ date: snapshot.date, valueCAD: roundCurrency(snapshot.valueCAD) })),
-    ];
-
-    const dates = portfolio.map((point) => point.date);
-    const fallbackFxRate = Number(process.env.DEFAULT_FX_RATE ?? "1.35") || 1.35;
-    const earliestCashDate = cashTxRaw[0] ? dateOnly(cashTxRaw[0].date) : t0;
-    const priceStart = addDays(t0, -10);
-    const fxStart = addDays(minDate(t0, earliestCashDate), -10);
-    const [pricesUSD, fxRates] = await Promise.all([
-      fetchHistory(ticker, priceStart, t1).catch(() => []),
-      fetchFxRates(fxStart, t1, fallbackFxRate),
-    ]);
-
-    const allContributions: ContributionEvent[] = cashTxRaw
-      .map((tx: CashTransactionRow) => {
-        const date = dateOnly(tx.date);
-        const sign = tx.action === "WITHDRAWAL" ? -1 : 1;
-        const amount = sign * toNumber(tx.amount);
-        const amountCAD = tx.currency === "USD"
-          ? convertUsdToCadByDate(amount, date, fxRates, fallbackFxRate)
-          : amount;
-        return { date, amountCAD };
-      })
-      .filter((event) => event.date <= t1);
-
-    const windowContributions = allContributions.filter((event: ContributionEvent) => event.date > t0 && event.date <= t1);
-    const spy = buildV0AnchoredSpyBenchmark({
-      v0CAD: anchorSnapshot.valueCAD,
-      dates,
-      contributions: windowContributions,
-      pricesUSD,
-      fxRates,
-    }).map(roundPoint);
-    const baseR = buildV0AnchoredBaseRateBenchmark({
-      v0CAD: anchorSnapshot.valueCAD,
-      dates,
-      contributions: windowContributions,
-      ratePercent,
-    }).map(roundPoint);
-    const terminalValue = latestSnapshot.valueCAD;
-    const xirrCashflows: DatedCashFlow[] = [
-      ...allContributions.map((event) => ({ date: event.date, amountCAD: -event.amountCAD })),
-      { date: t1, amountCAD: terminalValue },
-    ];
-
-    const data: PerformanceBenchmarkResponse = {
-      portfolio,
-      spy,
-      baseR,
-      prices: spy.map((point) => ({ date: point.date, value: point.valueCAD })),
-      v0: roundCurrency(anchorSnapshot.valueCAD),
-      t0,
-      t1,
-      totalContribInWindow: roundCurrency(sumContributionsInWindow(windowContributions, t0, t1)),
-      valueChangePct: computeWindowValueChangePct({ portfolio, contributions: windowContributions, t0, t1 }),
-      xirrPct: computeXirrPct(xirrCashflows),
-      maxDrawdownPct: computeMaxDrawdownPct(portfolio),
-      ticker,
-      ratePercent,
-    };
-
     cache.set(cacheKey, { data, fetchedAt: Date.now() });
-    return NextResponse.json(data);
+    return NextResponse.json({ prices: data, mode: "shadow-dca", fxSource: bocFx.length > 0 ? "BoC FXUSDCAD" : "fallback" });
   } catch {
-    return NextResponse.json(emptyResponse(ticker, ratePercent));
+    return NextResponse.json({ prices: [], mode: "shadow-dca" });
   }
 }

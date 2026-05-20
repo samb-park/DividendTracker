@@ -12,6 +12,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      DATABASE_URL: "postgresql://dividendtracker:XUfjEtPEGC22f0i_GXkZe3dTn-b9@infra-postgres:5432/dividendtracker?schema=public"
       HOME: /app/data
     volumes:
       - app-data:/app/data

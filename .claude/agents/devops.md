@@ -151,3 +151,26 @@ Before deploying any update:
 - **Cron monitoring**: Log cron job completion/failure with timestamps
 - **DB disk usage**: Alert at 80% capacity (`df -h` on postgres volume)
 - **Backup schedule**: Daily automated pg_dump, retain 7 days
+
+## 팀 통신 프로토콜
+
+**수신**: 오케스트레이터(배포 명령), Developer(마이그레이션 필요 여부), QA(검증 완료 신호)
+
+**발신**: Developer(빌드 실패 시 에러 로그 전달), 오케스트레이터(배포 성공/실패 결과)
+
+**작업 범위**: `deploy` 스킬 실행 — 빌드 → 마이그레이션 → compose up → health check
+
+**표준 배포** (`deploy` 스킬 참조):
+```bash
+cd /mnt/fast_data/docker/apps/DividendTracker
+docker compose up --build -d
+curl -sf http://localhost:3000/api/health
+```
+
+**산출물**:
+```
+## DevOps 배포 결과
+- 빌드: {✓ | ✗: 에러}
+- 마이그레이션: {해당 없음 | ✓ | ✗}
+- Health check: {✓ | ✗}
+```

@@ -1,17 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import ReactECharts from "echarts-for-react";
 import { fmt } from "@/lib/utils";
-import { RETRO_TOOLTIP_STYLE, COLOR_ACTUAL, COLOR_SELECTED } from "@/lib/chart-tokens";
+import { COLOR_ACTUAL, COLOR_PROJECTED, COLOR_SELECTED } from "@/lib/chart-tokens";
+import { useThemeTokens } from "@/lib/use-theme-tokens";
+import { useCurrency } from "@/lib/currency-context";
+import { Card } from "./ui-card";
+import { buildDividendIncomeProjectionMonths, summarizeDividendProjection } from "@/lib/dividend-projection";
 
 interface DividendItem {
   ticker: string;
@@ -25,24 +21,28 @@ interface DividendItem {
 interface MonthData {
   month: string; // "YYYY-MM"
   items: DividendItem[];
-  source: "actual" | "empty";
+  source: "received" | "projected" | "empty";
 }
 
 interface DividendIncomeData {
   months: { month: string; items: DividendItem[] }[];
 }
 
-const MONTH_LABELS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+interface EChartTooltipParam {
+  name?: string;
+  value?: number | string | null;
+}
 
+interface EChartClickParam {
+  dataIndex?: number;
+}
+
+const MONTH_LABELS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 function toDisplayAmt(amount: number, currency: string, displayCurrency: "CAD" | "USD", fxRate: number) {
   if (displayCurrency === "CAD") return currency === "USD" ? amount * fxRate : amount;
   return currency === "CAD" ? amount / fxRate : amount;
 }
-
-// NOTE: Do NOT use new Date() at module level — it evaluates at different
-// times on server (startup) vs client (JS load), causing hydration mismatches.
-// Use useState lazy initializer inside the component instead.
 
 function YearDropdown({ value, options, onChange }: { value: number; options: number[]; onChange: (y: number) => void }) {
   const [open, setOpen] = useState(false);
@@ -72,13 +72,11 @@ function YearDropdown({ value, options, onChange }: { value: number; options: nu
 
 export function DividendIncomeChart({
   selectedPortfolioId,
-  fxRate,
-  displayCurrency,
   onCurrentYearSummary,
 }: {
   selectedPortfolioId: string;
-  fxRate: number;
-  displayCurrency: "CAD" | "USD";
+  fxRate?: number;
+  displayCurrency?: "CAD" | "USD";
   onCurrentYearSummary?: (annualTotal: number, monthlyAvg: number) => void;
 }) {
   // Computed once via lazy initializer — stable across SSR/hydration
@@ -89,6 +87,7 @@ export function DividendIncomeChart({
   const CURRENT_YEAR = today.year;
 
   const [showNet, setShowNet] = useState(false);
+  const { displayCurrency, fxRate, currencySymbol } = useCurrency();
   const [netDropdownOpen, setNetDropdownOpen] = useState(false);
   const netDropdownRef = useRef<HTMLDivElement>(null);
   const [accountDropOpen, setAccountDropOpen] = useState(false);
@@ -111,6 +110,7 @@ export function DividendIncomeChart({
   const [availableYears, setAvailableYears] = useState<number[]>([CURRENT_YEAR]);
   const [retryKey, setRetryKey] = useState(0);
   const [pastData, setPastData] = useState<DividendIncomeData | null>(null);
+  const [projectedData, setProjectedData] = useState<DividendIncomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -118,15 +118,16 @@ export function DividendIncomeChart({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const tokens = useThemeTokens();
 
-  const setAdjacentYear = (deltaIndex: -1 | 1) => {
+  const setAdjacentYear = useCallback((deltaIndex: -1 | 1) => {
     setYear((currentYear) => {
       const currentIndex = availableYears.indexOf(currentYear);
       if (currentIndex === -1) return availableYears[0] ?? currentYear;
       const nextIndex = currentIndex + deltaIndex;
       return availableYears[nextIndex] ?? currentYear;
     });
-  };
+  }, [availableYears]);
 
   useEffect(() => {
     fetch(`/api/dividend-income?mode=years&portfolioId=${selectedPortfolioId}`)
@@ -145,12 +146,16 @@ export function DividendIncomeChart({
     setLoading(true);
     setSelectedMonth(null);
     setPastData(null);
+    setProjectedData(null);
 
     const base = `/api/dividend-income?year=${year}&portfolioId=${selectedPortfolioId}`;
-    fetch(`${base}&mode=past`)
-      .then((r) => r.json())
-      .then((past) => {
+    Promise.all([
+      fetch(`${base}&mode=past`).then((r) => r.json()),
+      fetch(`${base}&mode=future`).then((r) => r.json()).catch(() => ({ months: [] })),
+    ])
+      .then(([past, projected]) => {
         setPastData(past);
+        setProjectedData(projected);
         setFetchError(false);
         setLoading(false);
       })
@@ -182,20 +187,12 @@ export function DividendIncomeChart({
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchend", onTouchEnd);
     };
-  }, [availableYears]);
+  }, [setAdjacentYear]);
 
-  // Show only recorded dividend transactions for the selected year.
+  // Show received dividends and project future months from current holdings × previous distribution.
   const mergedMonths = useMemo((): MonthData[] => {
-    const months: MonthData[] = [];
-    for (let m = 1; m <= 12; m++) {
-      const monthKey = `${year}-${String(m).padStart(2, "0")}`;
-      const items = pastData?.months.find((mo) => mo.month === monthKey)?.items ?? [];
-      const source: "actual" | "empty" = items.length > 0 ? "actual" : "empty";
-
-      months.push({ month: monthKey, items, source });
-    }
-    return months;
-  }, [pastData, year]);
+    return buildDividendIncomeProjectionMonths({ year, actual: pastData, projected: projectedData }) as MonthData[];
+  }, [pastData, projectedData, year]);
 
   const accountTypes = useMemo(() => {
     const types = new Set<string>();
@@ -219,8 +216,6 @@ export function DividendIncomeChart({
     }
   }, [accountTypes, selectedAccount]);
 
-  const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
-
   const chartData = useMemo(() => {
     return mergedMonths.map((m) => {
       const filteredItems = selectedAccount
@@ -235,18 +230,28 @@ export function DividendIncomeChart({
         month: MONTH_LABELS[idx],
         monthStr: m.month,
         value: monthValue,
-        isActual: m.source === "actual",
+        isReceived: m.source === "received",
+        isProjected: m.source === "projected",
       };
     });
   }, [mergedMonths, showNet, displayCurrency, fxRate, selectedAccount]);
 
-  const { annualTotal, monthlyAvg } = useMemo(() => {
-    const total = chartData.reduce((sum, d) => sum + d.value, 0);
-    const monthsElapsed = new Date().getMonth() + 1;
-    const divisor = year === CURRENT_YEAR ? monthsElapsed : 12;
-    const avg = divisor > 0 ? total / divisor : 0;
-    return { annualTotal: total, monthlyAvg: avg };
-  }, [chartData, year, CURRENT_YEAR]);
+  const { annualTotal, monthlyAvg, receivedTotal, projectedTotal } = useMemo(() => {
+    const filteredMonths = mergedMonths.map((month) => ({
+      ...month,
+      items: selectedAccount ? month.items.filter((item) => item.accountType === selectedAccount) : month.items,
+    }));
+    const summary = summarizeDividendProjection(filteredMonths, (item) => {
+      const amt = showNet ? item.net : item.amount;
+      return toDisplayAmt(amt, item.currency, displayCurrency, fxRate);
+    });
+    return {
+      annualTotal: summary.fullYearTotal,
+      monthlyAvg: summary.projectedMonthlyAvg,
+      receivedTotal: summary.receivedTotal,
+      projectedTotal: summary.projectedTotal,
+    };
+  }, [mergedMonths, showNet, displayCurrency, fxRate, selectedAccount]);
 
   // Report current-year stats to parent (for summary bar)
   useEffect(() => {
@@ -259,8 +264,73 @@ export function DividendIncomeChart({
     ? mergedMonths.find((m) => m.month === selectedMonth) ?? null
     : null;
 
+  const option = useMemo(() => {
+    return {
+      backgroundColor: "transparent",
+      animation: false,
+      grid: { left: 0, right: 4, top: 4, bottom: 4, containLabel: true },
+      tooltip: {
+        trigger: "axis" as const,
+        backgroundColor: tokens.card,
+        borderColor: tokens.border,
+        borderWidth: 1,
+        textStyle: {
+          color: tokens.foreground,
+          fontFamily: "IBM Plex Mono, monospace",
+          fontSize: 11,
+        },
+        extraCssText: "border-radius:0",
+        axisPointer: { type: "shadow" as const, shadowStyle: { color: "rgba(255,255,255,0.03)" } },
+        formatter: (params: EChartTooltipParam | EChartTooltipParam[]) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          if (!p) return "";
+          const val = p.value;
+          const numericVal = typeof val === "number" ? val : Number(val ?? 0);
+          const source = chartData.find((d) => d.month === p.name)?.isProjected ? "PROJECTED" : "RECEIVED";
+          return `<div style="color:${tokens.mutedForeground};margin-bottom:4px">${p.name ?? ""} · ${source}</div><div>${currencySymbol}${fmt(numericVal)} — ${showNet ? "NET" : "GROSS"}</div>`;
+        },
+      },
+      xAxis: {
+        type: "category" as const,
+        data: chartData.map((d) => d.month),
+        axisLabel: { fontSize: 10, color: tokens.mutedForeground, fontFamily: "monospace" },
+        axisLine: { lineStyle: { color: tokens.border } },
+        tickLine: false,
+      },
+      yAxis: {
+        type: "value" as const,
+        axisLabel: { show: false },
+        splitLine: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: "bar",
+          data: chartData.map((d) => ({
+            value: d.value,
+            itemStyle: {
+              color: d.monthStr === selectedMonth ? COLOR_SELECTED : d.isProjected ? COLOR_PROJECTED : COLOR_ACTUAL,
+              cursor: "pointer",
+            },
+          })),
+          barMaxWidth: 32,
+        },
+      ],
+    };
+  }, [chartData, selectedMonth, showNet, currencySymbol, tokens]);
+
+  const onChartClick = (params: EChartClickParam) => {
+    const idx = params?.dataIndex;
+    if (idx == null) return;
+    const monthStr = chartData[idx]?.monthStr;
+    if (monthStr) {
+      setSelectedMonth((prev) => (prev === monthStr ? null : monthStr));
+    }
+  };
+
   return (
-    <div ref={containerRef} className="border border-border bg-card p-4 mb-6">
+    <Card ref={containerRef} className="mb-6">
       {/* Header: title */}
       <div className="text-accent text-xs tracking-wide mb-2">&#9654; DIVIDEND INCOME</div>
 
@@ -338,65 +408,53 @@ export function DividendIncomeChart({
       ) : (
         <>
         <div className="chart-touch-zone h-[180px] lg:h-[240px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-              onClick={(payload) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const monthStr = (payload?.activePayload as any)?.[0]?.payload?.monthStr as string | undefined;
-                if (monthStr) setSelectedMonth((prev) => (prev === monthStr ? null : monthStr));
-              }}
-            >
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "monospace" }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
-                tickLine={false}
-              />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={RETRO_TOOLTIP_STYLE}
-                formatter={(v: number) => [`${currencySymbol}${fmt(v)}`, showNet ? "NET" : "GROSS"]}
-                cursor={{ fill: "rgba(255,255,255,0.03)" }}
-              />
-              <Bar dataKey="value" isAnimationActive={false}>
-                {chartData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={
-                      entry.monthStr === selectedMonth
-                        ? COLOR_SELECTED
-                        : COLOR_ACTUAL
-                    }
-                    cursor="pointer"
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <ReactECharts
+            option={option}
+            style={{ height: "100%", width: "100%" }}
+            onEvents={{ click: onChartClick }}
+          />
         </div>
 
-          <div className="flex gap-4 mt-2 ml-1">
+          <div className="flex flex-wrap gap-4 mt-2 ml-1">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: COLOR_ACTUAL }} />
               RECEIVED
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: COLOR_PROJECTED }} />
+              PROJECTED
             </div>
           </div>
 
           {/* Annual summary */}
           {annualTotal > 0 && (
-            <div className="flex gap-4 mt-3 pt-3 border-t border-border">
-              <div className="flex-1">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3 pt-3 border-t border-border">
+              <div>
                 <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">
-                  {year} TOTAL
+                  {year} RECEIVED TOTAL
+                </div>
+                <div className="text-sm font-medium tabular-nums text-primary">
+                  {currencySymbol}{fmt(receivedTotal)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">
+                  {year} PROJECTED TOTAL
+                </div>
+                <div className="text-sm font-medium tabular-nums text-primary">
+                  {currencySymbol}{fmt(projectedTotal)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">
+                  {year} FULL YEAR TOTAL
                 </div>
                 <div className="text-sm font-medium tabular-nums text-primary">
                   {currencySymbol}{fmt(annualTotal)}
                 </div>
               </div>
-              <div className="flex-1">
-                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">AVG / MONTH</div>
+              <div>
+                <div className="text-[10px] text-muted-foreground tracking-wide mb-0.5">{year} PROJECTED AVG / MONTH</div>
                 <div className="text-sm font-medium tabular-nums text-primary">
                   {currencySymbol}{fmt(monthlyAvg)}
                 </div>
@@ -472,6 +530,6 @@ export function DividendIncomeChart({
           qualify for the federal Dividend Tax Credit (~20.7% of gross), significantly reducing effective tax.
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getFxRate } from "@/lib/price";
@@ -18,7 +17,6 @@ function toNum(d: unknown): number {
 
 export default async function V2GraphPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
   const uid = session.user.id;
 
   const since = new Date();

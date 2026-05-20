@@ -10,7 +10,7 @@ export function PortfolioClient({ initialPortfolios, fxRate: initialFxRate }: { 
   const [activeTab, setActiveTab] = useState<"all" | string>("all");
   const [, setHoldingSummaries] = useState<HoldingSummary[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<"CAD" | "USD">("CAD");
-  const [fxRate, setFxRate] = useState(initialFxRate);
+  const [, setFxRate] = useState(initialFxRate);
   const [detailOpen, setDetailOpen] = useState(false);
   const [acctDropdownOpen, setAcctDropdownOpen] = useState(false);
   const [curDropdownOpen, setCurDropdownOpen] = useState(false);

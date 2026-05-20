@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { yahooFinance } from "@/lib/price";
 import { detectFrequency } from "@/lib/dividend-utils";
+import { getNasdaqDividend } from "@/lib/nasdaq-dividend";
+import { projectDividendMonthsFromAnchor, toLocalNoonDate } from "@/lib/dividend-date";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 interface DivData {
-  exDivDate: string;
+  anchorDate: string;
   amountPerShare: number;
   frequency: number;
   currency: string;
@@ -16,6 +18,12 @@ interface DivData {
 interface DividendEvent {
   date: string;
   amount: number;
+}
+
+type Currency = "CAD" | "USD";
+
+function normalizeCurrency(value: string | null | undefined, fallback: Currency): Currency {
+  return value === "CAD" || value === "USD" ? value : fallback;
 }
 
 // 1-hour in-memory cache
@@ -196,7 +204,7 @@ export async function GET(req: Request) {
         const sharesHeld = computeSharesHeldAtDate(txn.holding.transactions, new Date(matchedEvent.date));
         if (sharesHeld > 0) {
           grossAmount = matchedEvent.amount * sharesHeld;
-          currency = dividendHistory?.currency ?? currency;
+          currency = normalizeCurrency(dividendHistory?.currency, currency);
         }
       }
 
@@ -253,34 +261,52 @@ export async function GET(req: Request) {
           tickerDataCache.set(ticker, divData);
         } else {
           try {
-            const chart = await yahooFinance.chart(ticker, {
-              period1: period1Str,
-              interval: "1mo",
-            });
-
-            const dividendMap = chart.events?.dividends ?? {};
-            const dividends = Object.values(dividendMap)
-              .map((d) => {
-                const item = d as { date: Date | number | string; amount: number };
-                return { date: new Date(item.date).toISOString(), amount: item.amount };
-              })
-              .sort((a, b) => a.date.localeCompare(b.date));
-
-            if (dividends.length === 0) {
-              tickerDataCache.set(ticker, null);
-              continue;
+            const nasdaq = await getNasdaqDividend(ticker);
+            if (nasdaq && nasdaq.history.length > 0 && nasdaq.amount != null) {
+              const frequency = detectFrequency(nasdaq.history);
+              const anchorDate = nasdaq.paymentDate ?? nasdaq.exDividendDate;
+              if (anchorDate && frequency > 0) {
+                divData = {
+                  anchorDate,
+                  amountPerShare: nasdaq.amount,
+                  frequency,
+                  currency: h.currency,
+                };
+              }
             }
 
-            const frequency = detectFrequency(dividends);
-            const lastDiv = dividends[dividends.length - 1];
-            const currency = chart.meta?.currency ?? "USD";
+            if (!divData) {
+              const chart = await yahooFinance.chart(ticker, {
+                period1: period1Str,
+                interval: "1mo",
+              });
 
-            divData = {
-              exDivDate: lastDiv.date,
-              amountPerShare: lastDiv.amount,
-              frequency,
-              currency,
-            };
+              const dividendMap = chart.events?.dividends ?? {};
+              const dividends = Object.values(dividendMap)
+                .map((d) => {
+                  const item = d as { date: Date | number | string; amount: number };
+                  return { date: new Date(item.date).toISOString(), amount: item.amount };
+                })
+                .sort((a, b) => a.date.localeCompare(b.date));
+
+              if (dividends.length === 0) {
+                tickerDataCache.set(ticker, null);
+                continue;
+              }
+
+              const frequency = detectFrequency(dividends);
+              const lastDiv = dividends[dividends.length - 1];
+              const currency = chart.meta?.currency ?? "USD";
+              const estimatedPayDate = toLocalNoonDate(lastDiv.date);
+              estimatedPayDate.setDate(estimatedPayDate.getDate() + 15);
+
+              divData = {
+                anchorDate: estimatedPayDate.toISOString(),
+                amountPerShare: lastDiv.amount,
+                frequency,
+                currency,
+              };
+            }
 
             cache.set(ticker, { data: divData, fetchedAt: Date.now() });
             tickerDataCache.set(ticker, divData);
@@ -298,35 +324,24 @@ export async function GET(req: Request) {
       const grossAmount = divData.amountPerShare * qty;
       const netAmount = grossAmount * factor;
 
-      // Project payment dates (ex-div + 15 days) for the target year
-      const intervalMonths = 12 / divData.frequency;
-      const base = new Date(divData.exDivDate);
-      base.setDate(base.getDate() + 15); // estimated payment date
+      // Project income months from a payment-date anchor. Nasdaq paymentDate is
+      // preferred so Calendar and Dividend Income use the same SCHD boundary month.
+      const projectedMonthKeys = projectDividendMonthsFromAnchor({
+        anchorDate: divData.anchorDate,
+        frequency: divData.frequency,
+        year,
+      });
 
-      const yearStart = new Date(`${year}-01-01`);
-      const yearEnd = new Date(`${year + 1}-01-01`);
-
-      // Walk back to find first occurrence before yearStart
-      const cur = new Date(base);
-      while (cur >= yearStart) {
-        cur.setMonth(cur.getMonth() - intervalMonths);
-      }
-
-      // Walk forward through the year collecting payment dates
-      while (cur < yearEnd) {
-        cur.setMonth(cur.getMonth() + intervalMonths);
-        if (cur >= yearStart && cur < yearEnd) {
-          const monthKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
-          if (monthMap.has(monthKey)) {
-            monthMap.get(monthKey)!.items.push({
-              ticker,
-              amount: grossAmount,
-              net: netAmount,
-              currency: divData.currency,
-              accountType,
-              isCanadianEligible: divData.currency === "CAD" && accountType === "NON_REG",
-            });
-          }
+      for (const monthKey of projectedMonthKeys) {
+        if (monthMap.has(monthKey)) {
+          monthMap.get(monthKey)!.items.push({
+            ticker,
+            amount: grossAmount,
+            net: netAmount,
+            currency: divData.currency,
+            accountType,
+            isCanadianEligible: divData.currency === "CAD" && accountType === "NON_REG",
+          });
         }
       }
     }

@@ -5,13 +5,8 @@ export const revalidate = 300;
 
 const yahooFinance = new YahooFinance();
 
-function getNdxTier(drawdownPct: number): number {
-  if (drawdownPct <= -30) return 3;
-  if (drawdownPct <= -20) return 2;
-  if (drawdownPct <= -10) return 1;
-  return 0;
-}
-
+// RULEBOOK v4.1.8: NDX-based tier triggers are forbidden. Endpoint still returns NDX price/drawdown
+// for read-only display purposes, but `tier` is hard-coded to 0 so no caller can branch on it.
 export async function GET() {
   try {
     const quote = await yahooFinance.quote("^NDX");
@@ -26,13 +21,12 @@ export async function GET() {
     }
 
     const drawdownPct = ((price - high52w) / high52w) * 100;
-    const tier = getNdxTier(drawdownPct);
 
     return NextResponse.json({
       price,
       high52w,
       drawdownPct,
-      tier,
+      tier: 0,
     });
   } catch {
     return NextResponse.json(

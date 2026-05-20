@@ -77,3 +77,19 @@ Before any PR touching auth or financial data:
 - Missing `await auth()` check in API route
 - Hardcoded secrets or credentials in code
 - `process.env.NODE_ENV !== 'production'` used to skip security checks
+
+## 팀 통신 프로토콜
+
+**수신**: 오케스트레이터(보안 검토 작업), QA(보안 의심 사항 전달)
+
+**발신**: Developer(취약점 수정 요청 + 구체적 패치 방향), 오케스트레이터(검토 결과 + 배포 승인 여부)
+
+**작업 범위**: OWASP A01/A02/A03/A07, NextAuth v5 인증 흐름, userId 스코핑, Questrade 토큰 암호화, Zod 입력 검증
+
+**산출물** (`/tmp/dt_workspace/03_security.md`):
+```
+## 보안 검토 결과
+### [✓/✗] A01 접근제어 / A02 암호화 / A03 인젝션 / A07 인증
+### 취약점: {항목} → 심각도 → 수정 방법
+### 승인: {배포 승인 ✓ | 수정 필요 ✗}
+```

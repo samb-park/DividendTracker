@@ -1,18 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  type TooltipProps,
-} from "recharts";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import ReactECharts from "echarts-for-react";
 import { fmt } from "@/lib/utils";
-import { RETRO_TOOLTIP_STYLE } from "@/lib/chart-tokens";
+import { useThemeTokens } from "@/lib/use-theme-tokens";
 
 interface HoldingData {
   ticker: string;
@@ -39,9 +30,8 @@ interface HoldingWithTxn {
   currency: "USD" | "CAD";
   quantity: string | null;
   avgCost: string | null;
-  transactions: Transaction[];
+  transactions?: Transaction[];
 }
-
 
 const RANGES = ["1M", "3M", "6M", "1Y", "ALL"] as const;
 
@@ -51,27 +41,10 @@ interface EquityPoint {
   cost: number;
 }
 
-interface CustomTooltipProps extends TooltipProps<number, string> {
-  currencySymbol?: string;
-}
-
-function CustomTooltip({ active, payload, label, currencySymbol }: CustomTooltipProps) {
-  if (!active || !payload || payload.length === 0) return null;
-  const value = payload.find((p) => p.dataKey === "value")?.value ?? 0;
-  const cost = payload.find((p) => p.dataKey === "cost")?.value ?? 0;
-  const sym = currencySymbol ?? "$";
-  const pnl = value - cost;
-  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  return (
-    <div style={RETRO_TOOLTIP_STYLE} className="p-2">
-      <div style={{ color: "hsl(var(--muted-foreground))", marginBottom: 4 }}>{label}</div>
-      <div>Value: <span style={{ color: "hsl(var(--positive))" }}>{sym}{fmt(value)}</span></div>
-      <div>Cost: <span style={{ color: "hsl(var(--muted-foreground))" }}>{sym}{fmt(cost)}</span></div>
-      <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 4, paddingTop: 4, color: pnl >= 0 ? "hsl(var(--positive))" : "hsl(var(--negative))" }}>
-        P&L: {pnl >= 0 ? "+" : ""}{sym}{fmt(Math.abs(pnl))} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
-      </div>
-    </div>
-  );
+interface EChartTooltipParam {
+  axisValue?: string | number;
+  seriesName?: string;
+  value?: number | string;
 }
 
 function useChartHeight(mobile: number, desktop: number) {
@@ -117,6 +90,7 @@ export function PortfolioCharts({
   const [equityError, setEquityError] = useState(false);
   const lineChartHeight = useChartHeight(160, 220);
   const currencySymbol = displayCurrency === "CAD" ? "C$" : "$";
+  const tokens = useThemeTokens();
 
   const fetchEquityData = useCallback(async () => {
     if (!holdingsWithTransactions || holdingsWithTransactions.length === 0) return;
@@ -129,7 +103,7 @@ export function PortfolioCharts({
     let queryParam: string;
     if (range === "ALL") {
       const earliest = holdingsWithTransactions
-        .flatMap(h => h.transactions.filter(t => t.action === "BUY"))
+        .flatMap(h => (h.transactions ?? []).filter(t => t.action === "BUY"))
         .map(t => t.date?.slice(0, 10) ?? "")
         .filter(Boolean)
         .sort()[0];
@@ -192,7 +166,7 @@ export function PortfolioCharts({
         const currencyMult = h.currency === "USD" ? fx : 1;
         const currentQty = h.quantity != null ? parseFloat(h.quantity) : 0;
         const avgCost = h.avgCost != null ? parseFloat(h.avgCost) : 0;
-        const txns = h.transactions;
+        const txns = h.transactions ?? [];
 
         let sharesAtDate = currentQty;
         if (txns && txns.length > 0) {
@@ -247,11 +221,92 @@ export function PortfolioCharts({
     }
     setEquityData(result);
     setLoadingPnl(false);
-  }, [holdingsWithTransactions, fxRate, range]);
+  }, [holdingsWithTransactions, fxRate, range, totalCashCAD]);
 
   useEffect(() => {
     fetchEquityData();
   }, [fetchEquityData]);
+
+  const option = useMemo(() => {
+    if (equityData.length === 0) return {};
+    return {
+      backgroundColor: "transparent",
+      animation: false,
+      grid: { left: 0, right: 4, top: 4, bottom: 4, containLabel: false },
+      tooltip: {
+        trigger: "axis" as const,
+        confine: true,
+        axisPointer: { type: "line" as const, lineStyle: { color: tokens.mutedForeground, width: 0.5, type: [2, 2] as [number, number] } },
+        backgroundColor: tokens.card,
+        borderColor: tokens.border,
+        borderWidth: 1,
+        textStyle: {
+          color: tokens.foreground,
+          fontFamily: "IBM Plex Mono, monospace",
+          fontSize: 11,
+        },
+        extraCssText: "border-radius:0",
+        formatter: (params: EChartTooltipParam | EChartTooltipParam[]) => {
+          const items = Array.isArray(params) ? params : [params];
+          const label = items[0]?.axisValue ?? "";
+          let value = 0;
+          let cost = 0;
+          for (const p of items) {
+            if (p.seriesName === "Total Value") value = Number(p.value ?? 0);
+            if (p.seriesName === "Cost Basis") cost = Number(p.value ?? 0);
+          }
+          const sym = currencySymbol ?? "$";
+          const pnl = value - cost;
+          const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+          const pnlColor = pnl >= 0 ? tokens.positive : tokens.negative;
+          return `
+            <div style="color:${tokens.mutedForeground};margin-bottom:4px">${label}</div>
+            <div>Value: <span style="color:${tokens.positive}">${sym}${fmt(value)}</span></div>
+            <div>Cost: <span style="color:${tokens.mutedForeground}">${sym}${fmt(cost)}</span></div>
+            <div style="border-top:1px solid ${tokens.border};margin-top:4px;padding-top:4px;color:${pnlColor}">
+              P&L: ${pnl >= 0 ? "+" : ""}${sym}${fmt(Math.abs(pnl))} (${pnl >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)
+            </div>
+          `;
+        },
+      },
+      xAxis: {
+        type: "category" as const,
+        data: equityData.map((d) => d.date),
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        splitLine: { show: false },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: "value" as const,
+        scale: true,
+        axisLabel: { show: false },
+        splitLine: { lineStyle: { color: tokens.border, type: [2, 2] as [number, number] } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: "line",
+          name: "Cost Basis",
+          data: equityData.map((d) => d.cost),
+          color: tokens.mutedForeground,
+          lineStyle: { width: 1, type: [4, 3] as [number, number] },
+          symbol: "none",
+          emphasis: { disabled: true },
+        },
+        {
+          type: "line",
+          name: "Total Value",
+          data: equityData.map((d) => d.value),
+          color: "hsl(142, 69%, 58%)",
+          lineStyle: { width: 1.5 },
+          symbol: "none",
+          emphasis: { disabled: true },
+        },
+      ],
+    };
+  }, [equityData, currencySymbol, tokens]);
 
   if (holdings.length === 0) return null;
 
@@ -295,31 +350,7 @@ export function PortfolioCharts({
           ) : equityData.length > 0 ? (
             <>
             <div className="chart-touch-zone">
-              <ResponsiveContainer width="100%" height={lineChartHeight}>
-                <LineChart data={equityData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
-                  <Line
-                    type="monotone"
-                    dataKey="cost"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeDasharray="4 3"
-                    strokeWidth={1}
-                    dot={false}
-                    activeDot={{ r: 2, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="hsl(142, 69%, 58%)"
-                    strokeWidth={1.5}
-                    dot={false}
-                    activeDot={{ r: 3, fill: "hsl(142, 69%, 58%)" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <ReactECharts option={option} style={{ height: lineChartHeight, width: "100%" }} />
             </div>
             <div className="flex gap-4 mt-2 ml-1">
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">

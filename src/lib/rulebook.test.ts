@@ -2,9 +2,9 @@
 import { strict as assert } from "node:assert";
 import {
   computeRulebookWeights,
-  computeMethodBAllocation,
-  computeIaumWeeklyPlan,
-  computeTqqqSoftExitPlan,
+  computeStaticCoreAllocation,
+  computeSchdDividendReinvest,
+  computeQqqiWeeklyPlan,
   computeTqqqHardExitPlan,
   computeCrisisTriggerPlan,
   computeAnnualRebalancePlan,
@@ -41,7 +41,7 @@ test("QLD core weight uses (SCHD + QLD), not total portfolio", () => {
     { ticker: "SCHD", valueCAD: 70 },
     { ticker: "QLD",  valueCAD: 30 },
     { ticker: "SGOV", valueCAD: 40 },  // would dilute total-basis QLD weight
-    { ticker: "IAUM", valueCAD: 10 },
+    { ticker: "QQQI", valueCAD: 10 },
   ]);
   assert.equal(w.coreCAD, 100);
   assert.equal(w.totalCAD, 150);
@@ -49,15 +49,15 @@ test("QLD core weight uses (SCHD + QLD), not total portfolio", () => {
   assert.ok(close(w.schdCoreWeightPct, 70));
 });
 
-test("SGOV/IAUM weights use TOTAL portfolio, not core", () => {
+test("SGOV/QQQI weights use TOTAL portfolio, not core", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 70 },
     { ticker: "QLD",  valueCAD: 30 },
     { ticker: "SGOV", valueCAD: 5 },
-    { ticker: "IAUM", valueCAD: 5 },
+    { ticker: "QQQI", valueCAD: 5 },
   ]);
   assert.ok(close(w.sgovTotalWeightPct, (5 / 110) * 100));
-  assert.ok(close(w.iaumTotalWeightPct, (5 / 110) * 100));
+  assert.ok(close(w.jepqTotalWeightPct, (5 / 110) * 100));
 });
 
 test("QLD crisis tiers split at 25% / 20% core weight", () => {
@@ -159,104 +159,125 @@ test("Case B eligibility requires TQQQ=0 in addition to W<29", () => {
   assert.equal(eligible.caseBEligible, true);
 });
 
-test("hard exit takes precedence over soft exit (both ranges true)", () => {
+test("v4.4.2: growth bucket 37.5% triggers SOFT exit (≥34, <38)", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 100 },
     { ticker: "QLD",  valueCAD: 30 },
-    { ticker: "TQQQ", valueCAD: 30 },  // growth bucket 60/160 = 37.5% → soft only
+    { ticker: "TQQQ", valueCAD: 30 },  // growth bucket 60/160 = 37.5%
   ]);
-  assert.equal(w.softExit, true);
-  assert.equal(w.hardExit, false);
+  assert.equal(w.hardExit, false, "37.5% must not trigger Emergency cap");
+  assert.equal(w.softExit, true, "37.5% must trigger Soft Exit (v4.4.2 reintroduced)");
   const wHard = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 100 },
     { ticker: "QLD",  valueCAD: 35 },
-    { ticker: "TQQQ", valueCAD: 35 },  // 70/170 = 41.2% → hard
+    { ticker: "TQQQ", valueCAD: 35 },  // 70/170 = 41.2% → emergency cap
   ]);
-  assert.equal(wHard.softExit, false);   // hard supersedes soft
+  assert.equal(wHard.softExit, false, "hard supersedes soft");
   assert.equal(wHard.hardExit, true);
 });
 
-test("IAUM at-cap flag triggers ≥5% total weight", () => {
+test("QQQI at-cap flag triggers ≥5% total weight (v4.4.2)", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 70 },
     { ticker: "QLD",  valueCAD: 30 },
-    { ticker: "IAUM", valueCAD: 6 },   // 6 / 106 = 5.66%
+    { ticker: "QQQI", valueCAD: 6 },   // 6 / 106 = 5.66%
   ]);
-  assert.equal(w.iaumAtCap, true);
+  assert.equal(w.jepqAtCap, true);
 });
 
-// ── computeMethodBAllocation ─────────────────────────────────────────────────
-test("Method B never produces negative buy (no-sell guarantee)", () => {
-  // QLD overshoot: S=10, Q=90, C=100 → target core 200, target QLD 60. Q=90 overshoots target.
-  const m = computeMethodBAllocation(10, 90, 100);
-  assert.ok(m.qldBuyCAD >= 0, `qldBuyCAD must be >=0, got ${m.qldBuyCAD}`);
-  assert.ok(m.schdBuyCAD >= 0);
-  assert.equal(m.qldShortCAD, 0);   // overshoot is clamped
-  assert.ok(m.schdShortCAD > 0);
+// ── computeStaticCoreAllocation (v4.3.1) ────────────────────────────────────
+test("v4.3.1 static core: SCHD 70 / QLD 30 (normal)", () => {
+  const a = computeStaticCoreAllocation(100, false);
+  assert.ok(close(a.schdBuyCAD, 70));
+  assert.ok(close(a.qldBuyCAD, 30));
+  assert.equal(a.tqqqBuyCAD, 0);
+  assert.equal(a.overlayActive, false);
 });
 
-test("Method B at perfect 70/30: contribution proportional to shortfall", () => {
-  // S=70, Q=30, C=100 → target core 200, target SCHD 140, target QLD 60
-  // schdShort = 70, qldShort = 30 → totalShort 100 == C
-  const m = computeMethodBAllocation(70, 30, 100);
-  assert.ok(close(m.schdBuyCAD, 70));
-  assert.ok(close(m.qldBuyCAD, 30));
-  assert.ok(close(m.unallocatedCAD, 0));
+test("v4.3.1 static core: SCHD 70 / TQQQ 30 / QLD 0 (overlay)", () => {
+  const a = computeStaticCoreAllocation(100, true);
+  assert.ok(close(a.schdBuyCAD, 70));
+  assert.equal(a.qldBuyCAD, 0, "QLD must be 0 during overlay");
+  assert.ok(close(a.tqqqBuyCAD, 30));
+  assert.equal(a.overlayActive, true);
 });
 
-test("Method B with C=0 and both at target: zero buy, zero unallocated", () => {
-  // S=70, Q=30, C=0 → both exactly at target → no buy, no unallocation needed
-  const m = computeMethodBAllocation(70, 30, 0);
-  assert.equal(m.schdBuyCAD, 0);
-  assert.equal(m.qldBuyCAD, 0);
-  assert.equal(m.unallocatedCAD, 0);
+test("v4.3.1 static core: no shortfall logic — overshoot does NOT reduce buy", () => {
+  // Even when SCHD is heavily underweight, the split stays 70/30 (no Method B shortfall fill).
+  const a = computeStaticCoreAllocation(100, false);
+  assert.ok(close(a.schdBuyCAD, 70));
+  assert.ok(close(a.qldBuyCAD, 30));
 });
 
-test("Method B caps allocation at shortfall when contribution exceeds", () => {
-  // S=68, Q=30, C=100, target=198 → SCHD target 138.6, QLD target 59.4
-  // schdShort = 70.6, qldShort = 29.4 → totalShort 100 ≈ C
-  const m = computeMethodBAllocation(68, 30, 100);
-  assert.ok(close(m.schdBuyCAD + m.qldBuyCAD, 100));
+test("v4.3.1 static core: zero contribution → zero buys", () => {
+  const a = computeStaticCoreAllocation(0, false);
+  assert.equal(a.schdBuyCAD, 0);
+  assert.equal(a.qldBuyCAD, 0);
+  assert.equal(a.tqqqBuyCAD, 0);
 });
 
-// Real DB scenario (approximate)
-test("Real DB scenario: SCHD overweight, $300 core contribution → all SCHD", () => {
-  // From actual DB (approx): SCHD ≈ 27,712, QLD ≈ 22,038 → QLD core = 44.3%
-  // Method B with $300 core contribution: target core = 50,050 → target SCHD = 35,035
-  //   schdShort = 7,323, QLD overshoot → all $300 to SCHD
-  const m = computeMethodBAllocation(27712, 22038, 300);
-  assert.ok(close(m.qldBuyCAD, 0), `qld should be 0, got ${m.qldBuyCAD}`);
-  assert.ok(close(m.schdBuyCAD, 300));
+test("v4.4.2: Method B helper must not exist (regression guard)", () => {
+  // Static import surface check: importing computeMethodBAllocation above would
+  // error at module-load. v4.4.2 retains the v4.3.1 Method-B-removed invariant.
+  // SOFT_EXIT_GROWTH_BUCKET_PCT IS reintroduced in v4.4.2 (was undefined in v4.3.1).
+  const tgts = RULEBOOK_TARGETS as Record<string, unknown>;
+  assert.equal(tgts.SOFT_EXIT_GROWTH_BUCKET_PCT, 34,
+    "v4.4.2 reintroduces SOFT_EXIT_GROWTH_BUCKET_PCT = 34");
+  assert.equal(tgts.IAUM_MAX_PCT, undefined, "IAUM_MAX_PCT removed in v4.4.2 (replaced by QQQI_MAX_PCT)");
+  assert.equal(tgts.IAUM_WEEKLY_BUY_CAD, undefined, "IAUM_WEEKLY_BUY_CAD removed in v4.4.2");
 });
 
-// ── computeIaumWeeklyPlan (§7) ───────────────────────────────────────────────
-test("§7 IAUM weekly: 25 CAD applied when TFSA room AND IAUM<5%", () => {
-  const p = computeIaumWeeklyPlan(true, 3.2);
-  assert.equal(p.iaumBuyCAD, 25);
+// ── computeQqqiWeeklyPlan (§4 — v4.4.2) ────────────────────────────────────
+test("§4 QQQI weekly: 25 CAD applied when TFSA room AND QQQI<5%", () => {
+  const p = computeQqqiWeeklyPlan(true, 3.2);
+  assert.equal(p.qqqiBuyCAD, 25);
   assert.equal(p.redirectedToCoreCAD, 0);
   assert.equal(p.tfsaRoomExists, true);
-  assert.equal(p.iaumBelowCap, true);
+  assert.equal(p.qqqiBelowCap, true);
 });
 
-test("§7 IAUM weekly: redirected to Method B when TFSA room missing", () => {
-  const p = computeIaumWeeklyPlan(false, 3.2);
-  assert.equal(p.iaumBuyCAD, 0);
+test("§4 QQQI weekly: redirected to Core (70/30) when TFSA room missing", () => {
+  const p = computeQqqiWeeklyPlan(false, 3.2);
+  assert.equal(p.qqqiBuyCAD, 0);
   assert.equal(p.redirectedToCoreCAD, 25);
   assert.ok(p.reason.includes("TFSA"));
 });
 
-test("§7 IAUM weekly: redirected when IAUM ≥ 5% even if TFSA room exists", () => {
-  const p = computeIaumWeeklyPlan(true, 5.0);
-  assert.equal(p.iaumBuyCAD, 0);
+test("§4 QQQI weekly: redirected when QQQI ≥ 5% (soft stop) even if TFSA room exists", () => {
+  const p = computeQqqiWeeklyPlan(true, 5.0);
+  assert.equal(p.qqqiBuyCAD, 0);
   assert.equal(p.redirectedToCoreCAD, 25);
-  assert.equal(p.iaumBelowCap, false);
+  assert.equal(p.qqqiBelowCap, false);
   assert.ok(p.reason.includes("5%"));
 });
 
-test("§7 IAUM weekly: not forced to 5% target (4.99% still applies 25 CAD)", () => {
-  // The rule is "below cap" not "below target" — at 4.99% the rule still buys 25.
-  const p = computeIaumWeeklyPlan(true, 4.99);
-  assert.equal(p.iaumBuyCAD, 25);
+test("§4 QQQI weekly: not forced to 5% target (4.99% still applies 25 CAD)", () => {
+  const p = computeQqqiWeeklyPlan(true, 4.99);
+  assert.equal(p.qqqiBuyCAD, 25);
+});
+
+// ── computeSchdDividendReinvest (§5 v4.4.2) ────────────────────────────────
+test("v4.4.2 SCHD dividend reinvest: 70/30 SCHD/QLD (normal)", () => {
+  const r = computeSchdDividendReinvest(100, false);
+  assert.ok(close(r.schdBuyCAD, 70));
+  assert.ok(close(r.qldBuyCAD, 30));
+  assert.equal(r.tqqqBuyCAD, 0);
+  assert.equal(r.overlayActive, false);
+});
+
+test("v4.4.2 SCHD dividend reinvest: 70/30 SCHD/TQQQ during overlay (QLD = 0)", () => {
+  const r = computeSchdDividendReinvest(100, true);
+  assert.ok(close(r.schdBuyCAD, 70));
+  assert.equal(r.qldBuyCAD, 0, "QLD must be 0 during overlay");
+  assert.ok(close(r.tqqqBuyCAD, 30));
+});
+
+test("v4.4.2 SCHD dividend never routes to SGOV or QQQI (output shape check)", () => {
+  // The return type has no sgovBuyCAD / jepqBuyCAD fields. This guarantees the
+  // helper cannot accidentally route dividends to satellites.
+  const r = computeSchdDividendReinvest(100, false) as unknown as Record<string, unknown>;
+  assert.equal(r.sgovBuyCAD, undefined);
+  assert.equal(r.jepqBuyCAD, undefined);
 });
 
 // ── projectScenarios ─────────────────────────────────────────────────────────
@@ -293,7 +314,7 @@ test("Worst scenario produces lower portfolio than Base at year 20", () => {
   assert.ok(baseY20 > worstY20);
 });
 
-test("RULEBOOK_TARGETS exposes documented v4.1.10 thresholds", () => {
+test("RULEBOOK_TARGETS exposes documented v4.4.2 thresholds", () => {
   assert.equal(RULEBOOK_TARGETS.SCHD_OF_CORE_PCT, 70);
   assert.equal(RULEBOOK_TARGETS.QLD_OF_CORE_PCT, 30);
   assert.equal(RULEBOOK_TARGETS.REBAL_HIGH_PCT, 31);
@@ -304,7 +325,77 @@ test("RULEBOOK_TARGETS exposes documented v4.1.10 thresholds", () => {
   assert.equal(RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT, 38);
   assert.equal(RULEBOOK_TARGETS.SGOV_TARGET_PCT, 8);
   assert.equal(RULEBOOK_TARGETS.SGOV_FLOOR_PCT, 5);
-  assert.equal(RULEBOOK_TARGETS.IAUM_MAX_PCT, 5);
+  assert.equal(RULEBOOK_TARGETS.SGOV_DEPLOYABLE_BUFFER_PCT, 3);
+  assert.equal(RULEBOOK_TARGETS.QQQI_MAX_PCT, 5);
+  assert.equal(RULEBOOK_TARGETS.QQQI_WEEKLY_BUY_CAD, 25);
+});
+
+// ── v4.3.1 SGOV weekly contribution boundary tests ──────────────────────────
+test("v4.3.1: SGOV at 6% of total → sgovBelowTarget=true (refill needed)", () => {
+  // 6 / 100 = 6.0% < 8%
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 64 },
+    { ticker: "QLD",  valueCAD: 30 },
+    { ticker: "SGOV", valueCAD: 6 },
+  ]);
+  assert.ok(close(w.sgovTotalWeightPct, 6));
+  assert.equal(w.sgovBelowTarget, true);
+});
+
+test("v4.3.1: SGOV at 7% of total → sgovBelowTarget=true", () => {
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 63 },
+    { ticker: "QLD",  valueCAD: 30 },
+    { ticker: "SGOV", valueCAD: 7 },
+  ]);
+  assert.ok(close(w.sgovTotalWeightPct, 7));
+  assert.equal(w.sgovBelowTarget, true);
+});
+
+test("v4.3.1: SGOV at 7.99% of total → sgovBelowTarget=true (just below cutoff)", () => {
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 62.01 },
+    { ticker: "QLD",  valueCAD: 30 },
+    { ticker: "SGOV", valueCAD: 7.99 },
+  ]);
+  assert.ok(w.sgovTotalWeightPct < 8 && w.sgovTotalWeightPct > 7.98,
+    `expected ~7.99%, got ${w.sgovTotalWeightPct}`);
+  assert.equal(w.sgovBelowTarget, true);
+});
+
+test("v4.3.1: SGOV at exactly 8% of total → sgovBelowTarget=false (redirect to Core)", () => {
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 62 },
+    { ticker: "QLD",  valueCAD: 30 },
+    { ticker: "SGOV", valueCAD: 8 },
+  ]);
+  assert.ok(close(w.sgovTotalWeightPct, 8));
+  assert.equal(w.sgovBelowTarget, false, "at 8% the weekly SGOV buy must stop");
+});
+
+// ── v4.3.1 deployable buffer = max(0, SGOV − 5%·Total) ──────────────────────
+test("v4.3.1: SGOV deployable buffer = max(0, SGOV − 5%·Total) — derived from FLOOR", () => {
+  // SGOV=8, Total=100 → buffer = 8 − 5 = 3 (max 3% per rulebook).
+  const w = computeRulebookWeights([
+    { ticker: "SCHD", valueCAD: 62 },
+    { ticker: "QLD",  valueCAD: 30 },
+    { ticker: "SGOV", valueCAD: 8 },
+  ]);
+  const floorCAD = (RULEBOOK_TARGETS.SGOV_FLOOR_PCT / 100) * w.totalCAD;
+  const buffer = Math.max(0, w.sgovCAD - floorCAD);
+  assert.ok(close(buffer, 3, 0.01), `buffer should be ~3, got ${buffer}`);
+});
+
+test("v4.3.1: crisis cannot push SGOV below 5% floor when buffer is the constraint", () => {
+  // SGOV=8 of total 100 → buffer = 3. T2 requested = 5% of 100 = 5. Sale capped at 5 by min(sgov, requested).
+  // Then post-SGOV = 3 (below 5% floor — allowed only by §6.1).
+  // This test asserts the function NEVER yields a sale > sgov holding (no negative SGOV).
+  const plan = computeCrisisTriggerPlan({
+    totalCAD: 100, sgovCAD: 8,
+    crisisT1: false, crisisT2: true, cycleArmed: true, tqqqCAD: 0,
+  });
+  assert.ok(plan.sgovSaleCAD <= 8, "sale must not exceed SGOV holding");
+  assert.ok(plan.sgovSaleCAD >= 0, "sale must not be negative");
 });
 
 test("RULEBOOK_SCENARIOS contains exactly 3 fixed CAGRs", () => {
@@ -319,15 +410,15 @@ const baseProjectionInput = (overrides: Partial<Parameters<typeof projectScenari
     schdCAD: 35000,
     qldCAD: 15000,
     sgovCAD: 2500,
-    iaumCAD: 0,
+    jepqCAD: 0,
     tqqqCAD: 0,
     schdYieldPct: 3.5,
     qldYieldPct: 0.5,
-    sgovYieldPct: 4.5,
+    sgovYieldPct: 4.5, jepqYieldPct: 0,
   },
   coreWeeklyCAD: 350,
   sgovWeeklyCAD: 50,
-  iaumWeeklyCAD: 25,
+  jepqWeeklyCAD: 25,
   tfsaRoomExists: true,
   currentAge: 40,
   divGrowthPct: 7,
@@ -367,7 +458,7 @@ test("projectScenariosRulebook: per-asset values sum to totalCAD", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   for (const s of out) {
     for (const p of s.points) {
-      const sum = p.schdCAD + p.qldCAD + p.sgovCAD + p.iaumCAD + p.tqqqCAD;
+      const sum = p.schdCAD + p.qldCAD + p.sgovCAD + p.jepqCAD + p.tqqqCAD;
       assert.ok(Math.abs(sum - p.totalCAD) <= 1, `sum ${sum} vs total ${p.totalCAD} (${s.id} year ${p.year})`);
     }
   }
@@ -380,9 +471,9 @@ test("projectScenariosRulebook: Case A or Hard Exit fires when QLD overshoots in
       schdCAD: 32500,
       qldCAD: 17500,  // 35% of core 50000
       sgovCAD: 2500,
-      iaumCAD: 0,
+      jepqCAD: 0,
       tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     yearPoints: [1, 2, 3, 5, 10, 20],
   }));
@@ -394,24 +485,29 @@ test("projectScenariosRulebook: Case A or Hard Exit fires when QLD overshoots in
     `expected Case A or Hard Exit to fire at least once, got counts=${JSON.stringify(base.triggerCounts)}`);
 });
 
-test("projectScenariosRulebook: IAUM exits at age 65", () => {
+test("v4.4.2: age-65 IAUM exit removed — projection points have no iaumExited field", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
     currentAge: 60,
     yearPoints: [1, 5, 6, 7, 10],
     maxYears: 10,
   }));
   const base = out.find(s => s.id === "base")!;
-  const exitYear = base.points.find(p => p.iaumExited);
-  assert.ok(exitYear, "expected IAUM exit point to be present");
-  assert.equal(exitYear?.iaumCAD, 0, "after exit, IAUM should be 0");
+  // No point should carry iaumExited (field removed in v4.4.2)
+  for (const p of base.points) {
+    assert.equal((p as unknown as Record<string, unknown>).iaumExited, undefined,
+      "iaumExited field must not exist on projection points in v4.4.2");
+  }
+  // triggerCounts should also drop iaumExited
+  const tc = base.triggerCounts as unknown as Record<string, unknown>;
+  assert.equal(tc.iaumExited, undefined, "triggerCounts.iaumExited removed in v4.4.2");
 });
 
 test("projectScenariosRulebook: SGOV gating — when SGOV ≥ 8% of total, weekly SGOV stops", () => {
   // Start SGOV already at ~28.6% of total → above 8% target. Annual SGOV contribution should be 0.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     yearPoints: [1],
     maxYears: 1,
@@ -422,7 +518,7 @@ test("projectScenariosRulebook: SGOV gating — when SGOV ≥ 8% of total, weekl
   assert.ok(y1.sgovCAD < 4500, `SGOV should be near 4160 (no contrib gated), got ${y1.sgovCAD}`);
 });
 
-test("projectScenariosRulebook: IAUM gating — when no TFSA room, IAUM contribution stops", () => {
+test("projectScenariosRulebook: QQQI gating — when no TFSA room, QQQI contribution stops", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
     tfsaRoomExists: false,
     yearPoints: [1, 5],
@@ -430,16 +526,16 @@ test("projectScenariosRulebook: IAUM gating — when no TFSA room, IAUM contribu
   }));
   const base = out.find(s => s.id === "base")!;
   const y5 = base.points.at(-1)!;
-  // IAUM stays at start value 0 + grows from 0 = 0. Even with weekly 25 set, gating blocks.
-  assert.equal(y5.iaumCAD, 0, "IAUM should remain 0 when TFSA room missing");
+  // QQQI stays at start value 0 + grows from 0 = 0. Even with weekly 25 set, gating blocks.
+  assert.equal(y5.jepqCAD, 0, "QQQI should remain 0 when TFSA room missing");
 });
 
 test("projectScenariosRulebook: gated SGOV/IAUM redirects to Core when option is on", () => {
   // Start with SGOV already > 8% so SGOV gating kicks in.
   const inputWithRedirect = baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     redirectGatedToCore: true,
     yearPoints: [1, 2, 3],
@@ -447,8 +543,8 @@ test("projectScenariosRulebook: gated SGOV/IAUM redirects to Core when option is
   });
   const inputNoRedirect = baseProjectionInput({
     start: {
-      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 7000, qldCAD: 3000, sgovCAD: 4000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     redirectGatedToCore: false,
     yearPoints: [1, 2, 3],
@@ -521,32 +617,32 @@ test("projectScenariosRulebook: yield held constant — dividend grows via balan
     `qldDivGrowthFactor must NOT affect dividend (got ${a.annualDivGrossCAD} vs ${b.annualDivGrossCAD})`);
 });
 
-test("projection: Case B fires when QLD core under 29 and TQQQ=0 (Sangbong path)", () => {
-  // Start at 26% core (above the 25% Crisis-T1 line, below the 29% deadband floor) with
-  // contributions zeroed so Method B doesn't drag QLD back into deadband on Y1.
-  // Case B should buy QLD with SGOV at year-end while TQQQ stays at 0.
+test("v4.4.2 projection: Case B NEVER fires (rulebook changed to no-action)", () => {
+  // Start at 26% core (below 29% deadband floor) with zero contributions so QLD
+  // drift keeps caseBEligible alive across the horizon. v4.4.2 mandates no
+  // action — Case B trigger count must remain 0 and SGOV / QLD CAD do not move.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
-      schdCAD: 74000, qldCAD: 26000,   // 26% core
-      sgovCAD: 8000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 74000, qldCAD: 26000,
+      sgovCAD: 8000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     coreWeeklyCAD: 0,
     sgovWeeklyCAD: 0,
-    iaumWeeklyCAD: 0,
+    jepqWeeklyCAD: 0,
     yearPoints: [1, 2, 3, 5],
     maxYears: 5,
   }));
   const base = out.find(s => s.id === "base")!;
-  assert.ok(base.triggerCounts.caseB > 0,
-    `expected Case B to fire at least once, got counts=${JSON.stringify(base.triggerCounts)}`);
+  assert.equal(base.triggerCounts.caseB, 0,
+    `v4.4.2: Case B must NOT fire, got counts=${JSON.stringify(base.triggerCounts)}`);
 });
 
 test("projection: SGOV target 8% — sgovCAD below 8% triggers refill contribution", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
-    start: { schdCAD: 30000, qldCAD: 13000, sgovCAD: 1000, iaumCAD: 0, tqqqCAD: 0,
-             schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5 },
-    sgovWeeklyCAD: 50, iaumWeeklyCAD: 0,
+    start: { schdCAD: 30000, qldCAD: 13000, sgovCAD: 1000, jepqCAD: 0, tqqqCAD: 0,
+             schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0 },
+    sgovWeeklyCAD: 50, jepqWeeklyCAD: 0,
     yearPoints: [1], maxYears: 1,
   }));
   const y1 = out.find(s => s.id === "base")!.points[0];
@@ -554,35 +650,7 @@ test("projection: SGOV target 8% — sgovCAD below 8% triggers refill contributi
   assert.ok(y1.sgovCAD > 3000, `expected SGOV refill (≥ ~3000), got ${y1.sgovCAD}`);
 });
 
-// ── computeTqqqSoftExitPlan (§6.2 — half-sell when growth bucket ≥ 34) ──
-test("§6.2 Soft Exit: inactive when growth bucket < 34", () => {
-  const plan = computeTqqqSoftExitPlan({
-    schdCAD: 60, qldCAD: 30, tqqqCAD: 5, sgovCAD: 5, totalCAD: 100, softExit: false,
-  });
-  assert.equal(plan.active, false);
-  assert.equal(plan.tqqqSaleCAD, 0);
-});
-
-test("§6.2 Soft Exit: sells exactly HALF of TQQQ, refills SGOV to 8%", () => {
-  // total 100, TQQQ 10, SGOV 0. Half-sell = 5. SGOV gap to 8% = 8. → 5 to SGOV (still < 8), 0 to SCHD.
-  const plan = computeTqqqSoftExitPlan({
-    schdCAD: 60, qldCAD: 30, tqqqCAD: 10, sgovCAD: 0, totalCAD: 100, softExit: true,
-  });
-  assert.equal(plan.active, true);
-  assert.ok(close(plan.tqqqSaleCAD, 5));
-  assert.ok(close(plan.sgovRefillCAD, 5));
-  assert.equal(plan.schdBuyCAD, 0);
-});
-
-test("§6.2 Soft Exit: when SGOV already at 8%, proceeds all → SCHD", () => {
-  const plan = computeTqqqSoftExitPlan({
-    schdCAD: 50, qldCAD: 30, tqqqCAD: 10, sgovCAD: 10, totalCAD: 100, softExit: true,
-  });
-  assert.ok(plan.sgovRefillCAD === 0);
-  assert.ok(close(plan.schdBuyCAD, plan.tqqqSaleCAD));
-});
-
-// ── computeTqqqHardExitPlan (§6.2 — full unwind when growth bucket ≥ 38) ────
+// ── computeTqqqHardExitPlan (§6.2 — full unwind when growth bucket ≥ 38, only TQQQ exit in v4.3.1) ────
 test("§6.2 Hard Exit: inactive when growth bucket < 38", () => {
   const plan = computeTqqqHardExitPlan({
     schdCAD: 60, qldCAD: 30, tqqqCAD: 0, sgovCAD: 10, totalCAD: 100, hardExit: false,
@@ -694,43 +762,65 @@ test("§5 Deadband: 29 ≤ W ≤ 31 → no action (caseA=false, caseB=false)", (
   assert.equal(plan.action, "deadband");
 });
 
-test("§5 Case A (W > 31): QLD sale to 30%, SGOV refill to 8%, remainder → SCHD", () => {
+test("§5 Case A (W > 31): QLD sale to 30%, SGOV refill to 8% (v4.3.1), remainder → SCHD", () => {
   // SCHD 60, QLD 40 → core 100, total 100, SGOV 0
   // Sale = (40 - 30) / 0.70 = 14.286
-  // SGOV gap to 8% of 100 = 8 → 8 to SGOV, 6.286 to SCHD
+  // v4.3.1: H = max(0, 0.08·T - G) = max(0, 8 - 0) = 8 → 8 to SGOV (target 8%), 6.286 to SCHD
   const plan = computeAnnualRebalancePlan({
     schdCAD: 60, qldCAD: 40, tqqqCAD: 0, sgovCAD: 0, totalCAD: 100,
     caseAEligible: true, caseBEligible: false,
   });
   assert.equal(plan.action, "case_a");
   assert.ok(close(plan.qldSaleCAD, 10 / 0.70, 0.01));
-  assert.ok(close(plan.sgovDeltaCAD, 8, 0.01));    // refill (+)
+  assert.ok(close(plan.sgovDeltaCAD, 8, 0.01),
+    `Case A must refill SGOV to 8% (v4.3.1), got ${plan.sgovDeltaCAD}`);
   assert.ok(plan.schdBuyCAD > 0);
 });
 
-test("§5 Case B (W < 29 AND TQQQ=0): SGOV → QLD, 5% floor protected", () => {
-  // SCHD 75, QLD 25, total 110, SGOV 10. (caseBEligible passed externally.)
-  // E_under = 0.30·(75+25) - 25 = 5
-  // X_need = 5 / 0.70 = 7.143
-  // SGOV available = SGOV - 5%·Total = 10 - 5.5 = 4.5 → X = min(7.143, 4.5) = 4.5
+test("v4.3.1: Case A SGOV refill = max(0, 0.08·T − G) — partial refill when SGOV non-zero", () => {
+  // SCHD 60, QLD 40, SGOV 2, Total 102 → H = max(0, 0.08·102 − 2) = max(0, 6.16) = 6.16
+  const plan = computeAnnualRebalancePlan({
+    schdCAD: 60, qldCAD: 40, tqqqCAD: 0, sgovCAD: 2, totalCAD: 102,
+    caseAEligible: true, caseBEligible: false,
+  });
+  assert.equal(plan.action, "case_a");
+  const expectedRefill = Math.min(plan.qldSaleCAD, 0.08 * 102 - 2);
+  assert.ok(close(plan.sgovDeltaCAD, expectedRefill, 0.01),
+    `expected ~${expectedRefill}, got ${plan.sgovDeltaCAD}`);
+});
+
+test("v4.3.1: Hard Exit refills SGOV toward 8% (not 5%)", () => {
+  // SCHD 40, QLD 40, TQQQ 20, SGOV 0, Total 100, growth bucket = 60/100 = 60% ≥ 38
+  // Proceeds = TQQQ (20) + QLD sale to 30% of core.
+  // SGOV target = 0.08 × 100 = 8. Refill = min(proceeds, 8).
+  const plan = computeTqqqHardExitPlan({
+    schdCAD: 40, qldCAD: 40, tqqqCAD: 20, sgovCAD: 0, totalCAD: 100, hardExit: true,
+  });
+  assert.equal(plan.active, true);
+  assert.ok(close(plan.sgovRefillCAD, 8, 0.01),
+    `Hard Exit must refill SGOV to 8% (v4.3.1), got ${plan.sgovRefillCAD}`);
+});
+
+test("v4.4.2 §5 Case B (W < 29 AND TQQQ=0): NO ACTION (changed from SGOV→QLD in earlier rulebook)", () => {
+  // SCHD 75, QLD 25, total 110, SGOV 10. caseBEligible passed externally.
+  // v4.4.2: explicit no-action. Plan returns deadband, no SGOV sale, no QLD buy.
   const plan = computeAnnualRebalancePlan({
     schdCAD: 75, qldCAD: 25, tqqqCAD: 0, sgovCAD: 10, totalCAD: 110,
     caseAEligible: false, caseBEligible: true,
   });
-  assert.equal(plan.action, "case_b");
-  assert.ok(close(plan.sgovDeltaCAD, -4.5, 0.01));   // sale (−)
-  assert.ok(close(plan.qldBuyCAD, 4.5));
+  assert.equal(plan.action, "deadband", "v4.4.2: Case B is no-action");
+  assert.equal(plan.qldBuyCAD, 0);
+  assert.equal(plan.sgovDeltaCAD, 0);
+  assert.equal(plan.schdBuyCAD, 0);
 });
 
-test("§5 Case B: blocked when SGOV ≤ floor (no action)", () => {
-  // SCHD 75, QLD 25, SGOV at exactly 5% of total 105
-  // available = 5 - 0.05*105 = 5 - 5.25 = -0.25 → 0
+test("v4.4.2 §5 Case B: SCHD never sold to buy QLD (regression guard)", () => {
   const plan = computeAnnualRebalancePlan({
     schdCAD: 75, qldCAD: 25, tqqqCAD: 0, sgovCAD: 5, totalCAD: 105,
     caseAEligible: false, caseBEligible: true,
   });
-  assert.equal(plan.qldBuyCAD, 0);
-  assert.equal(plan.action, "case_b_no_room");
+  assert.equal(plan.schdBuyCAD, 0);
+  assert.equal(plan.action, "deadband");
 });
 
 test("§5 Case B: blocked when TQQQ > 0 (caller must pass caseBEligible=false)", () => {
@@ -775,8 +865,8 @@ test("projection: 60-71세 RRSP 멜트다운 인출 40K/년 적용", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
     currentAge: 58,
     start: {
-      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     yearPoints: [1, 2, 3, 12, 13, 14, 15],
     maxYears: 15,
@@ -837,8 +927,8 @@ test("projection: 60-64 인출만, 펜션/배당소비 0", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
     currentAge: 58,
     start: {
-      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, iaumCAD: 0, tqqqCAD: 0,
-      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5,
+      schdCAD: 700000, qldCAD: 300000, sgovCAD: 80000, jepqCAD: 0, tqqqCAD: 0,
+      schdYieldPct: 3.5, qldYieldPct: 0.5, sgovYieldPct: 4.5, jepqYieldPct: 0,
     },
     yearPoints: [2, 3, 6],
     maxYears: 6,

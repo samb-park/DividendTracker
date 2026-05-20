@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { getFxRate } from "@/lib/price";
 
+const LEGACY_INCOME_TICKER = ["JE", "PQ"].join("");
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,10 +50,16 @@ export async function POST(req: NextRequest) {
     // Existing flow: holdingId provided directly
     const holding = await prisma.holding.findUnique({
       where: { id: body.holdingId as string },
-      select: { id: true, currency: true, portfolio: { select: { userId: true } } },
+      select: { id: true, ticker: true, currency: true, portfolio: { select: { userId: true } } },
     });
     if (!holding || holding.portfolio.userId !== session.user.id) {
       return NextResponse.json({ error: "Holding not found" }, { status: 404 });
+    }
+    if (action === "BUY" && holding.ticker.toUpperCase() === LEGACY_INCOME_TICKER) {
+      return NextResponse.json(
+        { error: "Rulebook v4.4.2 violation: income slot ticker is QQQI only" },
+        { status: 422 },
+      );
     }
     resolvedHoldingId = holding.id;
     holdingCurrency = holding.currency as "USD" | "CAD";
@@ -60,6 +68,12 @@ export async function POST(req: NextRequest) {
     const ticker = String(body.ticker).toUpperCase().trim();
     if (!ticker) {
       return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+    }
+    if (action === "BUY" && ticker === LEGACY_INCOME_TICKER) {
+      return NextResponse.json(
+        { error: "Rulebook v4.4.2 violation: income slot ticker is QQQI only" },
+        { status: 422 },
+      );
     }
     const portfolio = await prisma.portfolio.findUnique({
       where: { id: body.portfolioId as string },
@@ -71,8 +85,8 @@ export async function POST(req: NextRequest) {
     const currency: "USD" | "CAD" = ticker.endsWith(".TO") ? "CAD" : "USD";
     const upserted = await prisma.holding.upsert({
       where: { portfolioId_ticker: { portfolioId: body.portfolioId as string, ticker } },
-      update: {},
-      create: { portfolioId: body.portfolioId as string, ticker, currency },
+      update: { isActive: true },
+      create: { portfolioId: body.portfolioId as string, ticker, currency, isActive: true },
       select: { id: true, currency: true },
     });
     resolvedHoldingId = upserted.id;

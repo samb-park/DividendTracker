@@ -3,7 +3,7 @@
 // AI PROJECTION card — slim. Renders ONLY the future-looking content:
 // scenario selector + per-year projection table + AI narrative.
 // Current portfolio snapshot (Top Summary 4-stat), trigger status (RulebookStatus),
-// and Method B execution plan (ThisWeekActionPlan) are owned by other components.
+// and static 70/30 execution plan (ThisWeekActionPlan) are owned by other components.
 import { useState, useEffect } from "react";
 import { sanitizeAiOutput } from "@/lib/ai-output-rules";
 import type { ProjectionApiResponse as ProjectionData } from "@/lib/types/ai-projection";
@@ -45,7 +45,7 @@ export function ProjectionCard() {
     const handler = () => load({ force: true });
     window.addEventListener(AI_REFRESH_EVENT, handler);
     return () => window.removeEventListener(AI_REFRESH_EVENT, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const a = data?.assumptions;
@@ -60,7 +60,7 @@ export function ProjectionCard() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2">
         <div className="text-accent text-xs tracking-wide truncate">
-          &#9654; PROJECTION (장기 시나리오 · 미래 전용)
+          &#9654; PROJECTION
         </div>
         {data?.cached && (
           <span className="text-[10px] text-muted-foreground border border-border px-1.5 py-0.5 shrink-0">CACHED</span>
@@ -118,7 +118,7 @@ export function ProjectionCard() {
                         <th className="text-right py-1.5 px-2 font-normal">SCHD</th>
                         <th className="text-right py-1.5 px-2 font-normal">QLD</th>
                         <th className="text-right py-1.5 px-2 font-normal">SGOV</th>
-                        <th className="text-right py-1.5 px-2 font-normal">IAUM</th>
+                        <th className="text-right py-1.5 px-2 font-normal">QQQI</th>
                         <th className="text-right py-1.5 px-2 font-normal">연배당</th>
                         <th className="text-right py-1.5 px-2 font-normal">월배당</th>
                         <th className="text-right py-1.5 px-2 font-normal">인출</th>
@@ -129,15 +129,14 @@ export function ProjectionCard() {
                     <tbody>
                       {activeRows.map((p) => {
                         const isRetirement = a?.retirementYear === p.year;
-                        // v4.1.10 event labels: §6.2 Hard/Soft Exit, §6.1 Crisis T1/T2, §5 Case A/B, age-65 IAUM exit.
+                        // Event labels shown in the projection table per simulated year.
                         const events: string[] = [];
-                        if (p.hardExitApplied) events.push("§6.2 Hard");
-                        if (p.softExitApplied) events.push("§6.2 Soft");
-                        if (p.crisisT2Applied) events.push("§6.1 T2");
-                        else if (p.crisisT1Applied) events.push("§6.1 T1");
+                        if (p.hardExitApplied) events.push("Emergency cap");
+                        if (p.softExitApplied) events.push("Soft Exit");
+                        if (p.crisisT2Applied) events.push("Crisis T2");
+                        else if (p.crisisT1Applied) events.push("Crisis T1");
                         if (p.caseAApplied) events.push("Case A");
                         if (p.caseBApplied) events.push("Case B");
-                        if (p.iaumExited) events.push("IAUM 65세 매도");
                         return (
                           <tr key={p.year} className={`border-b border-border/50 ${isRetirement ? "text-primary" : ""}`}>
                             <td className="text-left  py-1.5 px-2">
@@ -150,7 +149,7 @@ export function ProjectionCard() {
                             <td className="text-right py-1.5 px-2">{fmtCAD(p.schdCAD)}</td>
                             <td className="text-right py-1.5 px-2">{fmtCAD(p.qldCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.sgovCAD)}</td>
-                            <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.iaumCAD)}</td>
+                            <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.jepqCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive">{fmtCAD(p.annualDivCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive/80">{fmtCAD(p.monthlyDivCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-amber-500">
@@ -171,15 +170,14 @@ export function ProjectionCard() {
                 <ul className="md:hidden grid grid-cols-2 gap-px bg-border border border-border">
                   {activeRows.map((p) => {
                     const isRetirement = a?.retirementYear === p.year;
-                    // v4.1.10 event labels (short form for mobile).
+                    // v4.4.2 event labels (short form for mobile).
                     const events: string[] = [];
-                    if (p.hardExitApplied) events.push("Hard");
+                    if (p.hardExitApplied) events.push("Emerg");
                     if (p.softExitApplied) events.push("Soft");
                     if (p.crisisT2Applied) events.push("T2");
                     else if (p.crisisT1Applied) events.push("T1");
                     if (p.caseAApplied) events.push("Case A");
                     if (p.caseBApplied) events.push("Case B");
-                    if (p.iaumExited) events.push("IAUM exit");
                     return (
                       <li key={p.year} className={`bg-card px-3 py-2 ${isRetirement ? "text-primary" : ""}`}>
                         <div className="flex items-baseline justify-between gap-1">

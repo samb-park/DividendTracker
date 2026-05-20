@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { deleteUserAiCache } from "@/lib/ai-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -106,5 +107,6 @@ export async function POST(req: NextRequest) {
       notes: notes ? String(notes).slice(0, 500) : null,
     },
   });
+  await deleteUserAiCache(session.user.id).catch(() => { /* non-fatal */ });
   return NextResponse.json(tx);
 }

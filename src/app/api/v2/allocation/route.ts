@@ -27,7 +27,7 @@ export async function GET() {
 
   // 1. holdings + portfolios (for cash)
   const holdings = await prisma.holding.findMany({
-    where: { quantity: { gt: 0 }, portfolio: { userId: uid } },
+    where: { isActive: true, quantity: { gt: 0 }, portfolio: { userId: uid } },
     select: {
       ticker: true,
       currency: true,

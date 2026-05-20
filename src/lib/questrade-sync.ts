@@ -60,6 +60,10 @@ function mapCashAction(action: string, type: string, netAmount: number): "DEPOSI
   return null;
 }
 
+function makeExternalId(accountNumber: string, act: QtActivity): string {
+  return `qt:${accountNumber}:${act.tradeDate}:${act.symbol}:${act.action}:${act.type}:${act.netAmount}`;
+}
+
 /** Core Questrade sync logic — callable from both the UI route and the cron job */
 export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
   const tokenKey = userId ? `${userId}:qt_refresh_token` : "qt_refresh_token";
@@ -94,7 +98,24 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     errors: [],
   };
 
-  const tokenData = await exchangeRefreshToken(rawToken);
+  // Distributed lock to prevent concurrent sync (refresh_token is single-use)
+  const lockKey = userId ? `${userId}:qt_sync_lock` : "qt_sync_lock";
+  const nowMs = Date.now();
+  const lockSetting = await prisma.setting.findUnique({ where: { key: lockKey } });
+  if (lockSetting?.value) {
+    const lockedAt = parseInt(lockSetting.value, 10);
+    if (!isNaN(lockedAt) && nowMs - lockedAt < 5 * 60 * 1000) {
+      throw new Error("Sync already in progress (locked). Try again in a few minutes.");
+    }
+  }
+  await prisma.setting.upsert({
+    where: { key: lockKey },
+    update: { value: String(nowMs) },
+    create: { key: lockKey, value: String(nowMs) },
+  });
+
+  try {
+    const tokenData = await exchangeRefreshToken(rawToken);
   const { access_token, refresh_token, api_server } = tokenData;
 
   // Validate api_server domain to prevent SSRF
@@ -169,7 +190,7 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
         const currency = pos.symbol.endsWith(".TO") ? "CAD" : "USD";
         await prisma.holding.upsert({
           where: { portfolioId_ticker: { portfolioId: portfolio.id, ticker: pos.symbol } },
-          update: { name: pos.symbol, quantity: pos.openQuantity, avgCost: pos.averageEntryPrice },
+          update: { name: pos.symbol, quantity: pos.openQuantity, avgCost: pos.averageEntryPrice, isActive: true },
           create: {
             portfolioId: portfolio.id,
             ticker: pos.symbol,
@@ -177,6 +198,7 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
             currency,
             quantity: pos.openQuantity,
             avgCost: pos.averageEntryPrice,
+            isActive: true,
           },
         });
         result.holdingsSynced++;
@@ -204,7 +226,20 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
         chunkStart = chunkEnd;
       }
 
+      // Fetch existing Questrade transactions for this portfolio to avoid duplicates
+      const existingTxs = await prisma.transaction.findMany({
+        where: {
+          source: "questrade",
+          holding: { portfolioId: portfolio.id },
+        },
+        select: { externalId: true },
+      });
+      const existingIds = new Set(existingTxs.map(t => t.externalId).filter(Boolean));
+
       for (const act of activities) {
+        const externalId = makeExternalId(account.number, act);
+        if (existingIds.has(externalId)) continue;
+
         // --- Stock transactions (BUY / SELL / DIVIDEND) ---
         const action = mapAction(act.action, act.type);
         if (action && act.symbol) {
@@ -213,13 +248,14 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
 
           const holding = await prisma.holding.upsert({
             where: { portfolioId_ticker: { portfolioId: portfolio.id, ticker: act.symbol } },
-            update: { source: "questrade" },
+            update: { source: "questrade", isActive: true },
             create: {
               portfolioId: portfolio.id,
               ticker: act.symbol,
               name: act.symbol,
               currency: act.currency === "CAD" ? "CAD" : "USD",
               source: "questrade",
+              isActive: true,
             },
           });
 
@@ -238,8 +274,8 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
               commission: isDividend ? 0 : Math.abs(act.commission ?? 0),
               source: "questrade",
               notes: act.description || null,
+              externalId,
             }],
-            skipDuplicates: true,
           });
           result.transactionsAdded += txResult.count;
           continue;
@@ -272,12 +308,15 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     }
   }
 
-  const now = new Date().toISOString();
-  await prisma.setting.upsert({
-    where: { key: lastSyncKey },
-    update: { value: now },
-    create: { key: lastSyncKey, value: now },
-  });
+    const now = new Date().toISOString();
+    await prisma.setting.upsert({
+      where: { key: lastSyncKey },
+      update: { value: now },
+      create: { key: lastSyncKey, value: now },
+    });
 
-  return result;
+    return result;
+  } finally {
+    await prisma.setting.deleteMany({ where: { key: lockKey } });
+  }
 }

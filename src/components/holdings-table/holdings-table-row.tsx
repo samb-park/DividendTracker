@@ -88,9 +88,6 @@ export function HoldingsTableRow({
   const priceUnavailable = !row.price;
   const priceReason = priceReasons[row.holding.ticker];
   const todayChange = row.price ? row.price.change * row.shares : null;
-  const annualDivRate = row.price?.trailingAnnualDividendRate ?? row.price?.dividendRate ?? 0;
-  const divYield = row.price?.trailingAnnualDividendYield ?? row.price?.dividendYield ?? null;
-  const annualDivIncome = annualDivRate > 0 ? annualDivRate * row.shares : null;
   const sharesStr = Number.isInteger(row.shares)
     ? fmt(row.shares, 0)
     : fmt(row.shares, row.shares < 10 ? 4 : 2);

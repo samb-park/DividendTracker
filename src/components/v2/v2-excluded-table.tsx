@@ -8,7 +8,7 @@ export function V2ExcludedTable({ rows }: { rows: V2ExcludedRow[] }) {
     return (
       <div className="v2-card-soft px-6 py-8 text-center">
         <p className="v2-caption">
-          No reserve / excluded tickers. Toggle &ldquo;excluded&rdquo; in Settings → Targets.
+          No Non-Core tickers. Toggle &ldquo;excluded&rdquo; in Settings → Core to move a ticker to Non-Core.
         </p>
       </div>
     );

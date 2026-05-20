@@ -1,4 +1,4 @@
-const CACHE = 'dividend-tracker-v2-20260520';
+const CACHE = 'dividend-tracker-v1';
 
 const PRECACHE = [
   '/',

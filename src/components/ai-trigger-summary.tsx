@@ -5,7 +5,7 @@ import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
 
 // Compact rebalancing/trigger snapshot. Renders ONLY a 4-stat dashboard so the
 // AI page header gives an at-a-glance status read. All detailed numbers
-// (Method B table, Non-Core CAD, TQQQ exit plan, full trigger list, AI
+// (static-70/30 table, Non-Core CAD, TQQQ exit plan, full trigger list, AI
 // narrative) live in ProjectionCard below — this component intentionally
 // avoids duplicating them.
 interface CurrentState {
@@ -14,17 +14,18 @@ interface CurrentState {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  iaumCAD: number;
+  jepqCAD: number;
   qldCoreWeightPct: number;
   schdCoreWeightPct: number;
   sgovTotalWeightPct: number;
-  iaumTotalWeightPct: number;
+  jepqTotalWeightPct: number;
   flags: {
     hardExit: boolean;
+    softExit: boolean;
     crisisT1: boolean;
     crisisT2: boolean;
     sgovBelowTarget: boolean;
-    iaumAtCap: boolean;
+    jepqAtCap: boolean;
   };
 }
 
@@ -64,7 +65,7 @@ export function AiTriggerSummary() {
     const handler = () => load({ force: true });
     window.addEventListener(AI_REFRESH_EVENT, handler);
     return () => window.removeEventListener(AI_REFRESH_EVENT, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   if (loading) {
@@ -94,17 +95,19 @@ export function AiTriggerSummary() {
   // page header captures the most critical action without duplicating the full
   // trigger list (which lives in ProjectionCard below).
   const qldSub = cs.flags.hardExit
-    ? "TQQQ Hard Exit (성장 버킷 ≥ 38%, §6.2) — 아래 실행안 참고"
-    : cs.flags.crisisT2
-      ? "위기 트리거 T2 (≤20% core, §6.1)"
-      : cs.flags.crisisT1
-        ? "위기 트리거 T1 (≤25% core, §6.1, SGOV → TQQQ)"
-        : "목표 30% (core)";
+    ? "Emergency cap — 아래 실행안 참고"
+    : cs.flags.softExit
+      ? "Soft Exit — 아래 실행안 참고"
+      : cs.flags.crisisT2
+        ? "위기 트리거 T2"
+        : cs.flags.crisisT1
+          ? "위기 트리거 T1"
+          : "목표 30% (core)";
 
   return (
     <div className="border border-border bg-card">
       <div className="px-4 py-2 border-b border-border text-accent text-xs tracking-wide truncate">
-        ▶ REBALANCING / TRIGGER STATUS (RULEBOOK v4.1.10)
+        ▶ REBALANCING / TRIGGER STATUS
       </div>
       <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
         <Stat label="총 평가금액"   value={fmtDollar(cs.portfolioValueCAD)} />
@@ -112,14 +115,14 @@ export function AiTriggerSummary() {
         <Stat
           label="QLD 코어 비중"
           value={fmtPct(cs.qldCoreWeightPct)}
-          tone={cs.flags.hardExit ? "negative" : cs.flags.crisisT1 || cs.flags.crisisT2 ? "negative" : "default"}
+          tone={cs.flags.hardExit || cs.flags.softExit ? "negative" : cs.flags.crisisT1 || cs.flags.crisisT2 ? "negative" : "default"}
           sub={qldSub}
         />
         <Stat
           label="SGOV 전체 비중"
           value={fmtPct(cs.sgovTotalWeightPct)}
           tone={cs.flags.sgovBelowTarget ? "amber" : "default"}
-          sub={cs.flags.sgovBelowTarget ? "보충 필요 (<8% target)" : "목표 8% total"}
+          sub={cs.flags.sgovBelowTarget ? "보충 필요 (<8% target)" : "목표 8% / 바닥 5%"}
         />
       </div>
       <div className="px-4 pb-3 text-[10px] text-muted-foreground">

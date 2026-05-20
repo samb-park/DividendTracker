@@ -2,14 +2,11 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { CashFlow } from "@/components/cash-flow";
-import { DividendGrowthChart } from "@/components/dividend-growth-chart";
-import { ErrorBoundary } from "@/components/error-boundary";
 
 const TABS = [
   { key: "cashflow", label: "CASH FLOW" },
   { key: "transactions", label: "TRANSACTIONS" },
   { key: "dividends", label: "DIV HISTORY" },
-  { key: "divgrowth", label: "DIV GROWTH" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -144,7 +141,7 @@ export function MoreClient({ initialTxns, initialFxRate }: { initialTxns: Txn[];
       <div
         role="tablist"
         aria-label="History view"
-        className="grid grid-cols-4 border border-border mb-6"
+        className="grid grid-cols-3 border border-border mb-6"
       >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -167,12 +164,6 @@ export function MoreClient({ initialTxns, initialFxRate }: { initialTxns: Txn[];
       </div>
 
       {activeTab === "cashflow" && <CashFlow fxRate={fxRate} />}
-
-      {activeTab === "divgrowth" && (
-        <ErrorBoundary label="DIV GROWTH">
-          <DividendGrowthChart />
-        </ErrorBoundary>
-      )}
 
       {(activeTab === "transactions" || activeTab === "dividends") && (
         <>

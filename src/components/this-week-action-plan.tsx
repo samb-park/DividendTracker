@@ -1,13 +1,13 @@
 "use client";
 
 // SOLE authoritative renderer for "이번 주 실행안" action plan.
-// Method B (Core SCHD/QLD) + Non-Core stream (SGOV/IAUM Settings CAD) + grand total.
+// v4.4.2: Static 70/30 Core (SCHD/QLD or overlay SCHD/TQQQ) + Satellite stream (SGOV/QQQI Settings CAD) + grand total.
 // No other component on the AI page should display per-asset weekly buy CAD amounts.
 import { useEffect, useState } from "react";
 import type {
-  MethodBPlan,
+  CoreAllocationPlan,
   ProjectionApiResponse,
-  IaumWeeklyPlan,
+  JepqWeeklyPlan,
 } from "@/lib/types/ai-projection";
 import { nonCoreSourceLabel } from "@/lib/types/ai-projection";
 import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
@@ -41,13 +41,13 @@ export function ThisWeekActionPlan() {
     const handler = () => load({ force: true });
     window.addEventListener(AI_REFRESH_EVENT, handler);
     return () => window.removeEventListener(AI_REFRESH_EVENT, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (
     <div className="border border-border bg-card">
       <div className="px-4 py-2 border-b border-border text-accent text-xs tracking-wide truncate">
-        ▶ THIS WEEK ACTION PLAN (실행안 — sole authority)
+        ▶ THIS WEEK ACTION PLAN
       </div>
 
       <div className="p-4">
@@ -58,10 +58,10 @@ export function ThisWeekActionPlan() {
             <div className="text-[10px]">사유: {error}</div>
           </div>
         )}
-        {!loading && !error && data?.methodBPlan && (
-          <ActionPlanBody mb={data.methodBPlan} iaumPlan={data.iaumWeeklyPlan} />
+        {!loading && !error && data?.coreAllocationPlan && (
+          <ActionPlanBody plan={data.coreAllocationPlan} jepqPlan={data.jepqWeeklyPlan} />
         )}
-        {!loading && !error && !data?.methodBPlan && (
+        {!loading && !error && !data?.coreAllocationPlan && (
           <div className="text-xs text-muted-foreground">실행안 데이터가 없습니다.</div>
         )}
       </div>
@@ -69,9 +69,13 @@ export function ThisWeekActionPlan() {
   );
 }
 
-function ActionPlanBody({ mb, iaumPlan }: { mb: MethodBPlan; iaumPlan?: IaumWeeklyPlan }) {
-  const nonCoreSum = mb.sgovReserveCAD + mb.iaumBuyCAD;
-  const totalOut = mb.totalWeeklyOutCAD ?? mb.weeklyContribCAD + nonCoreSum;
+function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan?: JepqWeeklyPlan }) {
+  const nonCoreSum = plan.sgovReserveCAD + plan.jepqBuyCAD;
+  const totalOut = plan.totalWeeklyOutCAD ?? plan.weeklyContribCAD + nonCoreSum;
+  const overlay = plan.overlayActive;
+  const coreTitle = overlay ? "Core (정적 70/30 · 오버레이)" : "Core (정적 70/30)";
+  const growthLabel = overlay ? "TQQQ" : "QLD";
+  const growthBuyCAD = overlay ? plan.tqqqBuyCAD : plan.qldBuyCAD;
 
   return (
     <>
@@ -87,45 +91,44 @@ function ActionPlanBody({ mb, iaumPlan }: { mb: MethodBPlan; iaumPlan?: IaumWeek
           </thead>
           <tbody>
             <tr className="border-b border-border/50">
-              <td className="text-left py-1.5 px-2 text-muted-foreground" rowSpan={3}>Core (Method B)</td>
-              <td className="text-left py-1.5 px-2">SCHD</td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(mb.schdBuyCAD)}</td>
+              <td className="text-left py-1.5 px-2 text-muted-foreground" rowSpan={2}>{coreTitle}</td>
+              <td className="text-left py-1.5 px-2">SCHD (70%)</td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(plan.schdBuyCAD)}</td>
             </tr>
             <tr className="border-b border-border/50">
-              <td className="text-left py-1.5 px-2">QLD</td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(mb.qldBuyCAD)}</td>
-            </tr>
-            <tr className="border-b border-border/50">
-              <td className="text-left py-1.5 px-2 text-muted-foreground">미할당</td>
-              <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtDollar(mb.unallocatedCAD)}</td>
+              <td className="text-left py-1.5 px-2">
+                {growthLabel} (30%)
+                {overlay && <span className="ml-1 text-[9px] text-amber-500">(overlay)</span>}
+              </td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(growthBuyCAD)}</td>
             </tr>
             <tr className="border-b border-border/50 bg-muted/10">
               <td className="text-left py-1.5 px-2 text-muted-foreground" rowSpan={2}>Non-Core (별도 스트림)</td>
               <td className="text-left py-1.5 px-2">
                 SGOV
-                {mb.sgovSource && (
-                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(mb.sgovSource)})</span>
+                {plan.sgovSource && (
+                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(plan.sgovSource)})</span>
                 )}
               </td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(mb.sgovReserveCAD)}</td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(plan.sgovReserveCAD)}</td>
             </tr>
             <tr className="border-b border-border/50 bg-muted/10">
               <td className="text-left py-1.5 px-2">
-                IAUM
-                {mb.iaumSource && (
-                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(mb.iaumSource)})</span>
+                QQQI
+                {plan.jepqSource && (
+                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(plan.jepqSource)})</span>
                 )}
               </td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(mb.iaumBuyCAD)}</td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(plan.jepqBuyCAD)}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr className="border-t border-border bg-muted/20">
               <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>주간 납입금 (Core)</td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(mb.weeklyContribCAD)}</td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(plan.weeklyContribCAD)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/20">
-              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Non-Core 추가 (SGOV+IAUM)</td>
+              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Satellite 추가 (SGOV+QQQI)</td>
               <td className="text-right py-1.5 px-2">{fmtDollar(nonCoreSum)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/30">
@@ -139,23 +142,26 @@ function ActionPlanBody({ mb, iaumPlan }: { mb: MethodBPlan; iaumPlan?: IaumWeek
       {/* Mobile compact list */}
       <div className="md:hidden border border-border divide-y divide-border">
         <div className="bg-muted/30 px-3 py-1.5 text-[10px] tracking-wide text-muted-foreground">
-          Core (Method B)
+          {coreTitle}
         </div>
         <ul className="divide-y divide-border">
-          <MobileRow label="SCHD" value={fmtDollar(mb.schdBuyCAD)} />
-          <MobileRow label="QLD" value={fmtDollar(mb.qldBuyCAD)} />
-          <MobileRow label="미할당" value={fmtDollar(mb.unallocatedCAD)} muted />
+          <MobileRow label="SCHD (70%)" value={fmtDollar(plan.schdBuyCAD)} />
+          <MobileRow
+            label={`${growthLabel} (30%)`}
+            value={fmtDollar(growthBuyCAD)}
+            hint={overlay ? "overlay" : undefined}
+          />
         </ul>
         <div className="bg-muted/10 px-3 py-1.5 text-[10px] tracking-wide text-muted-foreground">
           Non-Core (별도 스트림)
         </div>
         <ul className="divide-y divide-border">
-          <MobileRow label="SGOV" value={fmtDollar(mb.sgovReserveCAD)} hint={mb.sgovSource ? nonCoreSourceLabel(mb.sgovSource) : undefined} />
-          <MobileRow label="IAUM" value={fmtDollar(mb.iaumBuyCAD)} hint={mb.iaumSource ? nonCoreSourceLabel(mb.iaumSource) : undefined} />
+          <MobileRow label="SGOV" value={fmtDollar(plan.sgovReserveCAD)} hint={plan.sgovSource ? nonCoreSourceLabel(plan.sgovSource) : undefined} />
+          <MobileRow label="QQQI" value={fmtDollar(plan.jepqBuyCAD)} hint={plan.jepqSource ? nonCoreSourceLabel(plan.jepqSource) : undefined} />
         </ul>
         <div className="bg-muted/20">
           <ul className="divide-y divide-border">
-            <MobileRow label="주간 납입금 (Core)" value={fmtDollar(mb.weeklyContribCAD)} muted />
+            <MobileRow label="주간 납입금 (Core)" value={fmtDollar(plan.weeklyContribCAD)} muted />
             <MobileRow label="Non-Core 추가" value={fmtDollar(nonCoreSum)} muted />
           </ul>
         </div>
@@ -167,8 +173,8 @@ function ActionPlanBody({ mb, iaumPlan }: { mb: MethodBPlan; iaumPlan?: IaumWeek
       </div>
 
       <div className="text-[10px] text-muted-foreground mt-2">
-        Method B 비율(SCHD 70 / QLD 30)은 SCHD+QLD만 사용. SGOV/IAUM은 Settings 별도 CAD 스트림이며 Core Method B에 합산되지 않음. TQQQ 매수는 §6.1 위기 트리거 발동 시에만 SGOV→TQQQ 경로로 별도 실행 (Method B 무관).
-        {iaumPlan?.reason && <> · IAUM: {iaumPlan.reason}</>}
+        v4.4.2 정적 분배: 정상은 SCHD 70 / QLD 30. TQQQ 오버레이 활성(TQQQ &gt; 0) 시 SCHD 70 / TQQQ 30 / QLD 0. SCHD 배당 재투자도 동일 70/30 분배. SGOV·QQQI는 Settings 별도 CAD 스트림. QQQI는 Sangbong TFSA only, hard cap 5%, crisis/rebalance 자금원 사용 금지. 위기 트리거(§6.1, MONTH-END)는 SGOV → TQQQ.
+        {jepqPlan?.reason && <> · QQQI: {jepqPlan.reason}</>}
       </div>
     </>
   );

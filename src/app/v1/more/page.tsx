@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getFxRate } from "@/lib/price";
@@ -10,7 +9,6 @@ export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin");
   const userId = session.user.id;
 
   const [txnsRaw, fx] = await Promise.all([

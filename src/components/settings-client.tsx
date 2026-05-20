@@ -61,7 +61,7 @@ const GOAL_OPTIONS = [
   { value: "wealth_building", label: "WEALTH BUILDING" },
 ] as const;
 
-export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false }: { portfolios: PortfolioItem[]; isAdmin?: boolean }) {
+export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: PortfolioItem[] }) {
   const router = useRouter();
   const [portfolios, setPortfolios] = useState(initialPortfolios);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
@@ -84,7 +84,8 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   const [contribAmount, setContribAmount] = useState("");
   const [contribCurrency, setContribCurrency] = useState<"USD" | "CAD">("CAD");
   const [cashAvailable, setCashAvailable] = useState("");
-  const [targets, setTargets] = useState<Record<string, { pct: string; excluded?: boolean }>>({});
+  type V1NonCorePlan = { frequency: "weekly" | "biweekly" | "monthly"; cad: string };
+  const [targets, setTargets] = useState<Record<string, { pct: string; excluded?: boolean; nonCorePlan?: V1NonCorePlan }>>({});
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTargets, setSavingTargets] = useState(false);
   const [goalAmount, setGoalAmount] = useState("");
@@ -117,13 +118,29 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
 
   // Advanced strategy
   const [accountMapping, setAccountMapping] = useState<Record<string, string>>({});
-  const [upperTriggerPct, setUpperTriggerPct] = useState("33");
   const [glidepathAuto, setGlidepathAuto] = useState(true);
+
+  // Projection assumptions (user override)
+  // Empty string means "auto-derive from history"; otherwise overrides the AI projection's dg input.
+  const [projDivGrowthOverride, setProjDivGrowthOverride] = useState<string>("");
+  const [projTaxWithholdPct, setProjTaxWithholdPct] = useState<string>("");
+  const [savingProj, setSavingProj] = useState(false);
+  const [savedProj, setSavedProj] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [savedStrategy, setSavedStrategy] = useState(false);
 
+  // Sum is over Core tickers only (Satellite SGOV/QQQI + legacy IAUM use CAD, not %).
+  const isNonCoreSym = (t: string) => {
+    const u = t.toUpperCase();
+    return u === "SGOV" || u === "QQQI" || u === "IAUM";  // v4.4.2: QQQI; IAUM legacy.
+  };
   const targetTotal = useMemo(
-    () => tickers.reduce((s, t) => targets[t]?.excluded ? s : s + (parseFloat(targets[t]?.pct || "0") || 0), 0),
+    () =>
+      tickers.reduce((s, t) => {
+        if (isNonCoreSym(t)) return s;
+        if (targets[t]?.excluded) return s;
+        return s + (parseFloat(targets[t]?.pct || "0") || 0);
+      }, 0),
     [tickers, targets]
   );
 
@@ -177,7 +194,12 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         setGoalCurrency(data.incomeGoal.currency);
       }
       if (data.contribRoom) {
-        setContribRoom(data.contribRoom);
+        // ContribRoom state is strings (input values); API returns numbers.
+        setContribRoom({
+          tfsaCarryover: String(data.contribRoom.tfsaCarryover ?? ""),
+          rrspLimit:     String(data.contribRoom.rrspLimit     ?? ""),
+          fhsaCarryover: String(data.contribRoom.fhsaCarryover ?? ""),
+        });
       }
       if (data.investorProfile) {
         setProfileAge(String(data.investorProfile.birthYear ?? ""));
@@ -186,13 +208,29 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         setProfileGoals(data.investorProfile.goals ?? []);
       }
       if (data.accountMapping) setAccountMapping(data.accountMapping);
+      if (data.projectionAssumptions) {
+        const pa = data.projectionAssumptions as { divGrowthPct?: number; taxWithholdPct?: number };
+        if (typeof pa.divGrowthPct === "number") setProjDivGrowthOverride(String(pa.divGrowthPct));
+        if (typeof pa.taxWithholdPct === "number") setProjTaxWithholdPct(String(pa.taxWithholdPct));
+      }
       if (data.triggerParams) {
-        setUpperTriggerPct(String(data.triggerParams.upperTriggerPct));
         setGlidepathAuto(data.triggerParams.glidepathAuto ?? true);
       }
-      const t: Record<string, { pct: string; excluded?: boolean }> = {};
+      const t: Record<string, { pct: string; excluded?: boolean; nonCorePlan?: V1NonCorePlan }> = {};
       for (const [tk, v] of Object.entries(data.targets ?? {})) {
-        t[tk] = { pct: String((v as any).pct), excluded: (v as any).excluded ?? false };
+        const raw = v as { pct?: number | string; excluded?: boolean; nonCorePlan?: { frequency?: string; cad?: number } };
+        const ncp = raw.nonCorePlan;
+        const planFreq: V1NonCorePlan["frequency"] | null =
+          ncp?.frequency === "weekly" || ncp?.frequency === "biweekly" || ncp?.frequency === "monthly"
+            ? ncp.frequency
+            : null;
+        t[tk] = {
+          pct: String(raw.pct ?? ""),
+          excluded: raw.excluded ?? false,
+          ...(planFreq && typeof ncp?.cad === "number"
+            ? { nonCorePlan: { frequency: planFreq, cad: String(ncp.cad) } }
+            : {}),
+        };
       }
       setTargets(t);
     });
@@ -215,7 +253,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         setContribDeposits({ tfsa, rrsp, fhsa });
       })
       .catch(() => {});
-  }, [CURRENT_YEAR]);
+  }, [CURRENT_YEAR, fxRate]);
 
   const handleSave = async () => {
     if (!tokenInput.trim()) return;
@@ -275,7 +313,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
   const refreshPortfolios = async () => {
     const res = await fetch("/api/portfolios");
     const data = await res.json();
-    setPortfolios(data.map((p: any) => ({
+    setPortfolios(data.map((p: PortfolioItem) => ({
       id: p.id,
       name: p.name,
       accountType: p.accountType ?? "NON_REG",
@@ -357,7 +395,7 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         <div className="border border-border bg-card p-4 text-xs text-muted-foreground space-y-1">
           <div className="text-foreground mb-2 tracking-wide">HOW TO GET A TOKEN:</div>
           <div>1. Login → My Account → App Hub</div>
-          <div>2. Generate a new token under "Personal API Access"</div>
+          <div>2. Generate a new token under &quot;Personal API Access&quot;</div>
           <div>3. Paste it below — tokens expire after 30 days without use</div>
         </div>
 
@@ -632,23 +670,6 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
                 )}
               </div>
 
-              {/* Upper Trigger */}
-              <div className="space-y-2">
-                <div className="text-[10px] tracking-wide text-muted-foreground">QLD 상단 트리거 (%)</div>
-                <input
-                  type="number"
-                  min={30}
-                  max={50}
-                  step="any"
-                  value={upperTriggerPct}
-                  onChange={e => setUpperTriggerPct(e.target.value)}
-                  className="w-32 !py-1 text-xs"
-                />
-                <div className="text-[10px] text-muted-foreground">
-                  QLD 비중이 이 임계값을 넘으면 리밸런스 신호 (30–50%).
-                </div>
-              </div>
-
               {/* Account Mapping */}
               {tickers.length > 0 && (
                 <div className="space-y-2">
@@ -694,7 +715,6 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         type: "trigger_params",
-                        upperTriggerPct: Number(upperTriggerPct),
                         glidepathAuto,
                       }),
                     });
@@ -772,6 +792,73 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
       </Section>
 
       {/* Income Goal */}
+      <Section title="PROJECTION ASSUMPTIONS" defaultOpen={false}>
+        <div className="space-y-4">
+          <div className="text-[10px] text-muted-foreground">
+            장기 Projection 계산 시 사용할 가정. 빈 값이면 자동 derive (dg는 트랜잭션 기록 기반, tax는 0%).
+          </div>
+
+          {/* Dividend growth override */}
+          <div className="space-y-1">
+            <div className="text-[10px] tracking-wide text-muted-foreground">배당 성장률 가정 (%)</div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min="0" max="20" step="any"
+                placeholder="자동"
+                value={projDivGrowthOverride}
+                onChange={e => setProjDivGrowthOverride(e.target.value)}
+                className="w-32 !py-1 text-xs" />
+              <span className="text-[10px] text-muted-foreground">% (0~20)</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              비워두면 최근 12개월/24개월 dividend 비율로 자동 계산. 명시 입력 시 그 값을 사용 (룰북 cap 20%).
+            </div>
+          </div>
+
+          {/* Tax withholding */}
+          <div className="space-y-1">
+            <div className="text-[10px] tracking-wide text-muted-foreground">배당 원천징수 차감 (%)</div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min="0" max="50" step="any"
+                placeholder="0"
+                value={projTaxWithholdPct}
+                onChange={e => setProjTaxWithholdPct(e.target.value)}
+                className="w-32 !py-1 text-xs" />
+              <span className="text-[10px] text-muted-foreground">% (0~50)</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              미국 ETF in TFSA = 15. RRSP는 면제(0). NON_REG는 별도 추가과세. 빈 값이면 0% (gross).
+            </div>
+          </div>
+
+          <button
+            disabled={savingProj}
+            className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40"
+            onClick={async () => {
+              setSavingProj(true);
+              try {
+                const body: Record<string, unknown> = { type: "projection_assumptions" };
+                const dg = parseFloat(projDivGrowthOverride);
+                const tax = parseFloat(projTaxWithholdPct);
+                if (isFinite(dg) && projDivGrowthOverride.trim() !== "") body.divGrowthPct = Math.max(0, Math.min(20, dg));
+                if (isFinite(tax) && projTaxWithholdPct.trim() !== "") body.taxWithholdPct = Math.max(0, Math.min(50, tax));
+                await fetch("/api/settings/investment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                setSavedProj(true);
+                setTimeout(() => setSavedProj(false), 2000);
+              } finally {
+                setSavingProj(false);
+              }
+            }}>
+            {savingProj ? "SAVING..." : savedProj ? "SAVED ✓" : "[ SAVE ASSUMPTIONS ]"}
+          </button>
+        </div>
+      </Section>
+
       <Section title="INCOME GOAL" defaultOpen={true}>
         <div className="space-y-4">
           <div className="text-[10px] text-muted-foreground">Annual dividend income target</div>
@@ -809,11 +896,15 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
         <Section title="TICKER TARGETS" defaultOpen={true}>
           <div className="space-y-3">
             {(() => {
-              const total = tickers.reduce((s, t) => targets[t]?.excluded ? s : s + (parseFloat(targets[t]?.pct || "0") || 0), 0);
+              const total = tickers.reduce((s, t) => {
+                if (isNonCoreSym(t)) return s;
+                if (targets[t]?.excluded) return s;
+                return s + (parseFloat(targets[t]?.pct || "0") || 0);
+              }, 0);
               const ok = Math.abs(total - 100) < 0.01;
               return (
                 <div className={`flex items-center justify-between text-[10px] mb-2 ${ok ? "text-positive" : total > 100 ? "text-negative" : "text-muted-foreground"}`}>
-                  <span>ALLOCATION TARGET (%) — MUST SUM TO 100</span>
+                  <span>CORE ALLOCATION (%) — MUST SUM TO 100 (Non-Core uses CAD)</span>
                   <span className="tabular-nums font-medium">{total.toFixed(1)}%</span>
                 </div>
               );
@@ -821,17 +912,46 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
             {tickers.map(ticker => {
               const t = targets[ticker] ?? { pct: "" };
               const isExcluded = t.excluded ?? false;
+              // Core/Non-Core is determined by ticker symbol (rulebook reserve list).
+              const tickerUpper = ticker.toUpperCase();
+              const isNonCore = tickerUpper === "SGOV" || tickerUpper === "QQQI" || tickerUpper === "IAUM";  // v4.4.2: QQQI; IAUM legacy.
+              const plan = t.nonCorePlan ?? { frequency: contribFreq, cad: "" };
+              const periodLabel = contribFreq === "weekly" ? "주간" : contribFreq === "biweekly" ? "격주" : "월간";
               return (
-                <div key={ticker} className={`flex items-center gap-2 ${isExcluded ? "opacity-40" : ""}`}>
-                  <span className="text-xs font-medium w-16 shrink-0">{ticker}</span>
-                  <input type="number" min="0" max="100" step="any" placeholder="0"
-                    value={t.pct}
-                    disabled={isExcluded}
-                    onChange={e => setTargets(prev => ({ ...prev, [ticker]: { ...prev[ticker], pct: e.target.value } }))}
-                    className="flex-1 !py-1 disabled:cursor-not-allowed" />
-                  <span className="text-xs text-muted-foreground">%</span>
+                <div key={ticker} className={`flex items-center gap-2 ${isExcluded ? "opacity-50" : ""}`}>
+                  <span className="text-xs font-medium w-16 shrink-0">
+                    {ticker}
+                    <span className="ml-1 text-[9px] text-muted-foreground">{isNonCore ? "Non-Core" : "Core"}</span>
+                  </span>
+                  {isNonCore ? (
+                    <>
+                      <input
+                        type="number" min="0" step="1" placeholder="0"
+                        value={plan.cad}
+                        disabled={isExcluded}
+                        onChange={e => setTargets(prev => ({
+                          ...prev,
+                          [ticker]: {
+                            ...prev[ticker],
+                            nonCorePlan: { frequency: contribFreq, cad: e.target.value },
+                          },
+                        }))}
+                        className="flex-1 !py-1 disabled:cursor-not-allowed"
+                      />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">CAD/{periodLabel}</span>
+                    </>
+                  ) : (
+                    <>
+                      <input type="number" min="0" max="100" step="any" placeholder="0"
+                        value={t.pct}
+                        disabled={isExcluded}
+                        onChange={e => setTargets(prev => ({ ...prev, [ticker]: { ...prev[ticker], pct: e.target.value } }))}
+                        className="flex-1 !py-1 disabled:cursor-not-allowed" />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </>
+                  )}
                   <button
-                    title={isExcluded ? "타겟에서 제외됨 (클릭하여 복원)" : "타겟에서 제외"}
+                    title={isExcluded ? "Contribution Plan에서 제외됨 (클릭하여 포함)" : "Contribution Plan에 포함 (클릭하여 제외)"}
                     onClick={() => setTargets(prev => ({ ...prev, [ticker]: { ...prev[ticker], excluded: !isExcluded } }))}
                     className={`btn-retro text-[10px] px-1.5 py-0.5 shrink-0 ${isExcluded ? "btn-retro-primary" : ""}`}
                   >EXCL</button>
@@ -851,14 +971,32 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
                 setSavingTargets(true);
                 await Promise.all(
                   tickers
-                    .filter(ticker => targets[ticker]?.pct || targets[ticker]?.excluded)
-                    .map(ticker =>
-                      fetch("/api/settings/investment", {
+                    .filter(ticker => targets[ticker]?.pct || targets[ticker]?.excluded || targets[ticker]?.nonCorePlan)
+                    .map(ticker => {
+                      const t = targets[ticker];
+                      const isExcluded = !!t.excluded;
+                      const isNonCore = isNonCoreSym(ticker);
+                      const planCadNum = t.nonCorePlan ? parseFloat(t.nonCorePlan.cad) : NaN;
+                      const body: Record<string, unknown> = {
+                        type: "target",
+                        ticker,
+                        // Core uses %; Non-Core's pct is forced to 0 (it does not participate in % sum).
+                        pct: isNonCore ? 0 : (parseFloat(t.pct) || 0),
+                        excluded: isExcluded,
+                      };
+                      // Non-Core CAD: persist {frequency: current Contribution Plan freq, cad: number}.
+                      // Core tickers never carry nonCorePlan.
+                      if (isNonCore && t.nonCorePlan && isFinite(planCadNum) && planCadNum > 0) {
+                        body.nonCorePlan = { frequency: contribFreq, cad: planCadNum };
+                      } else {
+                        body.nonCorePlan = null;
+                      }
+                      return fetch("/api/settings/investment", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "target", ticker, pct: parseFloat(targets[ticker].pct) || 0, excluded: targets[ticker].excluded ?? false }),
-                      })
-                    )
+                        body: JSON.stringify(body),
+                      });
+                    })
                 );
                 setSavingTargets(false);
                 setSavedTargets(true);
@@ -985,14 +1123,39 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
             disabled={savingRoom}
             onClick={async () => {
               setSavingRoom(true);
-              await fetch("/api/settings/investment", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ type: "contrib_room", ...contribRoom }),
-              });
-              setSavingRoom(false);
-              setSavedRoom(true);
-              setTimeout(() => setSavedRoom(false), 2000);
+              try {
+                // Schema requires numbers; form state holds strings — coerce here.
+                const payload = {
+                  type: "contrib_room" as const,
+                  tfsaCarryover: parseFloat(contribRoom.tfsaCarryover) || 0,
+                  rrspLimit:     parseFloat(contribRoom.rrspLimit)     || 0,
+                  fhsaCarryover: parseFloat(contribRoom.fhsaCarryover) || 0,
+                };
+                const res = await fetch("/api/settings/investment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  console.error("contrib_room save failed:", res.status, err);
+                  alert(`저장 실패 (HTTP ${res.status}). 입력값을 확인해주세요.`);
+                } else {
+                  // Refresh from server so reload shows persisted values.
+                  const fresh = await fetch("/api/settings/investment").then(r => r.json()).catch(() => null);
+                  if (fresh?.contribRoom) {
+                    setContribRoom({
+                      tfsaCarryover: String(fresh.contribRoom.tfsaCarryover ?? ""),
+                      rrspLimit:     String(fresh.contribRoom.rrspLimit ?? ""),
+                      fhsaCarryover: String(fresh.contribRoom.fhsaCarryover ?? ""),
+                    });
+                  }
+                  setSavedRoom(true);
+                  setTimeout(() => setSavedRoom(false), 2000);
+                }
+              } finally {
+                setSavingRoom(false);
+              }
             }}
             className="btn-retro btn-retro-primary w-full py-2 text-xs disabled:opacity-40"
           >
@@ -1062,21 +1225,6 @@ export function SettingsClient({ portfolios: initialPortfolios, isAdmin = false 
           )}
         </div>
       </Section>
-
-      {/* Admin */}
-      {isAdmin && (
-        <Section title="ADMIN" defaultOpen={true} badge="ADMIN">
-          <div className="space-y-3">
-            <div className="text-[10px] text-muted-foreground">Admin-only tools. Not visible to regular users.</div>
-            <a
-              href="/admin"
-              className="btn-retro btn-retro-primary w-full py-2 text-xs text-center block"
-            >
-              [ USER MANAGEMENT ]
-            </a>
-          </div>
-        </Section>
-      )}
 
       {/* Appearance */}
       <Section title="APPEARANCE" defaultOpen={true}>
