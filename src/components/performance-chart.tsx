@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ComposedChart,
-  Area,
   Line,
   XAxis,
   YAxis,
@@ -13,342 +12,254 @@ import {
   ReferenceLine,
 } from "recharts";
 
-interface Snapshot {
+interface SeriesPoint {
   date: string;
-  totalCAD: number;
-  costBasisCAD: number;
-  cashCAD: number;
-  cumulativeDividendCAD?: number;
+  valueCAD: number;
+}
+
+interface PerformanceResponse {
+  portfolio: SeriesPoint[];
+  spy: SeriesPoint[];
+  baseR: SeriesPoint[];
+  v0: number;
+  t0: string | null;
+  t1: string | null;
+  totalContribInWindow: number;
+  valueChangePct: number | null;
+  xirrPct: number | null;
+  maxDrawdownPct: number | null;
+  ticker: string;
+  ratePercent: BaseRate;
 }
 
 const RANGES = ["3m", "6m", "1y", "all"] as const;
 type Range = (typeof RANGES)[number];
 
-interface BenchmarkPoint {
-  date: string;
-  value: number;
+const BENCHMARK_TICKERS = ["SPY", "QQQ", "VOO"] as const;
+type BenchmarkTicker = (typeof BENCHMARK_TICKERS)[number];
+
+const BASE_RATES = [2, 4, 6] as const;
+type BaseRate = (typeof BASE_RATES)[number];
+
+function formatCurrency(value: number): string {
+  return `C$${value.toLocaleString("en-CA", { maximumFractionDigits: 0 })}`;
 }
 
-function computeMDD(values: number[]): number {
-  let peak = -Infinity;
-  let mdd = 0;
-  for (const v of values) {
-    if (v > peak) peak = v;
-    const dd = peak > 0 ? (v - peak) / peak : 0;
-    if (dd < mdd) mdd = dd;
-  }
-  return mdd * 100; // as percentage
+function formatCompactCAD(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `C$${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `C$${(value / 1_000).toFixed(0)}K`;
+  return `C$${value.toFixed(0)}`;
 }
 
-function computeCAGR(start: number, end: number, days: number): number | null {
-  if (start <= 0 || days < 30) return null;
-  const years = days / 365.25;
-  return (Math.pow(end / start, 1 / years) - 1) * 100;
+function formatPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "-";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
 export function PerformanceChart() {
   const [range, setRange] = useState<Range>("1y");
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [benchmark, setBenchmark] = useState<BenchmarkPoint[]>([]);
-  const [showBenchmark, setShowBenchmark] = useState(false);
-  const [benchmarkError, setBenchmarkError] = useState(false);
+  const [ticker, setTicker] = useState<BenchmarkTicker>("SPY");
+  const [baseRate, setBaseRate] = useState<BaseRate>(6);
+  const [data, setData] = useState<PerformanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [allLoaded, setAllLoaded] = useState(false);
-  const [rangeDropOpen, setRangeDropOpen] = useState(false);
-  const rangeDropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (rangeDropRef.current && !rangeDropRef.current.contains(e.target as Node)) setRangeDropOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
+    const controller = new AbortController();
+    const params = new URLSearchParams({ range, ticker, rate: String(baseRate) });
 
-  useEffect(() => {
-    if (range === "all" && allLoaded) return;
     setLoading(true);
     setFetchError(false);
-    fetch(`/api/snapshots?range=${range}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setSnapshots(d.snapshots ?? []);
-        if (range === "all") setAllLoaded(true);
+    fetch(`/api/benchmarks?${params.toString()}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`benchmark request failed: ${r.status}`);
+        return r.json();
+      })
+      .then((payload) => {
+        setData(payload);
         setLoading(false);
       })
-      .catch(() => { setFetchError(true); setLoading(false); });
-  }, [range, allLoaded]);
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setFetchError(true);
+        setData(null);
+        setLoading(false);
+      });
 
-  useEffect(() => {
-    if (!showBenchmark) return;
-    setBenchmarkError(false);
-    fetch(`/api/benchmarks?range=${range}`)
-      .then((r) => r.json())
-      .then((d) => setBenchmark(d.prices ?? []))
-      .catch(() => { setBenchmark([]); setBenchmarkError(true); });
-  }, [range, showBenchmark]);
+    return () => controller.abort();
+  }, [range, ticker, baseRate]);
 
-  const { cagr, mdd, totalReturn, chartData, hasTotalReturn } = useMemo(() => {
-    if (snapshots.length < 2) return { cagr: null, mdd: null, totalReturn: null, chartData: [], hasTotalReturn: false };
+  const chartData = useMemo(() => {
+    if (!data) return [];
 
-    const first = snapshots[0];
-    const last = snapshots[snapshots.length - 1];
-    const days =
-      (new Date(last.date).getTime() - new Date(first.date).getTime()) /
-      (1000 * 60 * 60 * 24);
+    const spyByDate = new Map(data.spy.map((point) => [point.date, point.valueCAD]));
+    const baseByDate = new Map(data.baseR.map((point) => [point.date, point.valueCAD]));
+    const firstDate = data.portfolio[0]?.date;
+    const lastDate = data.portfolio.at(-1)?.date;
+    const spanYears = firstDate && lastDate
+      ? (new Date(`${lastDate}T00:00:00.000Z`).getTime() - new Date(`${firstDate}T00:00:00.000Z`).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+      : 0;
 
-    const cagr = computeCAGR(first.totalCAD, last.totalCAD, days);
-    const mdd = computeMDD(snapshots.map((s) => s.totalCAD));
-    const totalReturn = first.totalCAD > 0
-      ? ((last.totalCAD - first.totalCAD) / first.totalCAD) * 100
-      : null;
+    return data.portfolio.map((point) => ({
+      date: (range === "all" || spanYears >= 1) ? point.date.slice(0, 7) : point.date.slice(5),
+      fullDate: point.date,
+      portfolio: point.valueCAD,
+      benchmark: spyByDate.get(point.date) ?? null,
+      baseR: baseByDate.get(point.date) ?? null,
+    }));
+  }, [data, range]);
 
-    // Build benchmark lookup by date
-    const benchMap = new Map(benchmark.map((b) => [b.date, b.value]));
-
-    // Normalize portfolio to 100 for benchmark overlay
-    const portfolioBase = first.totalCAD;
-
-    const spanYears = days / 365;
-    const firstCumDiv = first.cumulativeDividendCAD ?? 0;
-    const hasTotalReturn = snapshots.some((s) => (s.cumulativeDividendCAD ?? 0) > 0);
-    const chartData = snapshots.map((s) => {
-      const normalizedPortfolio = portfolioBase > 0 ? (s.totalCAD / portfolioBase) * 100 : null;
-      const spyValue = benchMap.get(s.date) ?? null;
-      const cumDiv = s.cumulativeDividendCAD ?? 0;
-      const totalReturnCAD = s.totalCAD + (cumDiv - firstCumDiv);
-      const normalizedTotalReturn = portfolioBase > 0 ? (totalReturnCAD / portfolioBase) * 100 : null;
-      return {
-        date: (range === "all" || spanYears >= 1) ? s.date.slice(0, 7) : s.date.slice(5),
-        fullDate: s.date,
-        total: Math.round(s.totalCAD),
-        cost: Math.round(s.costBasisCAD),
-        gain: Math.round(s.totalCAD - s.costBasisCAD),
-        portfolioNorm: normalizedPortfolio,
-        spyNorm: spyValue,
-        totalReturn: Math.round(totalReturnCAD),
-        totalReturnNorm: normalizedTotalReturn,
-      };
-    });
-
-    return { cagr, mdd, totalReturn, chartData, hasTotalReturn };
-
-  }, [snapshots, benchmark, range]);
-
-  const hasSufficientData = snapshots.length >= 2;
-  const lastSnapshot = snapshots[snapshots.length - 1];
+  const hasSufficientData = chartData.length >= 2;
+  const valueChangeClass = data?.valueChangePct != null && data.valueChangePct >= 0 ? "text-positive" : "text-negative";
+  const xirrClass = data?.xirrPct != null && data.xirrPct >= 0 ? "text-positive" : "text-negative";
 
   return (
     <div className="border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="text-accent text-xs tracking-wide">&#9654; PERFORMANCE</div>
-          <button
-            onClick={() => setShowBenchmark((v) => !v)}
-            className={`btn-retro text-[10px] px-2 py-0.5 ${showBenchmark ? "btn-retro-primary" : ""}`}
-            title="Toggle SPY benchmark overlay"
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="text-accent text-xs tracking-wide">&#9654; PERFORMANCE</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={range}
+            onChange={(event) => setRange(event.target.value as Range)}
+            className="btn-retro btn-retro-primary text-[10px] h-7 px-2 bg-card"
+            aria-label="Performance range"
           >
-            SPY
-          </button>
-        </div>
-        <div className="relative" ref={rangeDropRef}>
-          <button
-            className="btn-retro btn-retro-primary text-[10px] flex items-center gap-1.5 min-w-[4rem]"
-            onClick={() => setRangeDropOpen(v => !v)}
+            {RANGES.map((r) => (
+              <option key={r} value={r}>{r.toUpperCase()}</option>
+            ))}
+          </select>
+          <select
+            value={ticker}
+            onChange={(event) => setTicker(event.target.value as BenchmarkTicker)}
+            className="btn-retro text-[10px] h-7 px-2 bg-card"
+            aria-label="Benchmark ticker"
           >
-            <span className="flex-1 text-left">{range.toUpperCase()}</span>
-            <span className="text-muted-foreground">▾</span>
-          </button>
-          {rangeDropOpen && (
-            <div className="absolute top-full right-0 mt-0.5 z-50 bg-card border border-border min-w-full">
-              {RANGES.map((r) => (
-                <button
-                  key={r}
-                  className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-border/30 ${range === r ? "text-accent" : ""}`}
-                  onClick={() => { setRange(r); setRangeDropOpen(false); }}
-                >
-                  {r.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          )}
+            {BENCHMARK_TICKERS.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <select
+            value={baseRate}
+            onChange={(event) => setBaseRate(Number(event.target.value) as BaseRate)}
+            className="btn-retro text-[10px] h-7 px-2 bg-card"
+            aria-label="Base rate"
+          >
+            {BASE_RATES.map((rate) => (
+              <option key={rate} value={rate}>BASE {rate}%</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Metrics row */}
-      {hasSufficientData && (
+      {data && hasSufficientData && (
         <div className="grid grid-cols-3 gap-px bg-border border border-border mb-4">
-          <div className="bg-card p-2" title="Compound Annual Growth Rate — annualized return of your portfolio over the selected period">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">CAGR <span className="opacity-50">?</span></div>
-            <div className={`text-sm font-medium tabular-nums ${cagr !== null && cagr >= 0 ? "text-positive" : "text-negative"}`}>
-              {cagr !== null ? `${cagr >= 0 ? "+" : ""}${cagr.toFixed(2)}%` : "—"}
+          <div className="bg-card p-2" title="Window value change net of deposits and withdrawals inside the selected range">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">VALUE CHANGE</div>
+            <div className={`text-sm font-medium tabular-nums ${valueChangeClass}`}>
+              {formatPct(data.valueChangePct)}
             </div>
           </div>
-          <div className="bg-card p-2" title="Price Return — overall gain or loss from start to end of the selected period, excluding dividends">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">PRICE RETURN</div>
-            <div className={`text-sm font-medium tabular-nums ${totalReturn !== null && totalReturn >= 0 ? "text-positive" : "text-negative"}`}>
-              {totalReturn !== null ? `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%` : "—"}
+          <div className="bg-card p-2" title="Lifetime money-weighted return; not recalculated by range">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">XIRR</div>
+            <div className={`text-sm font-medium tabular-nums ${xirrClass}`}>
+              {formatPct(data.xirrPct)}
             </div>
           </div>
-          <div className="bg-card p-2" title="Maximum Drawdown — largest peak-to-trough decline over the selected period. Values below −5% are highlighted.">
-            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MAX DD <span className="opacity-50">?</span></div>
-            <div className={`text-sm font-medium tabular-nums ${mdd !== null && mdd < -5 ? "text-negative" : "text-muted-foreground"}`}>
-              {mdd !== null ? `${mdd.toFixed(2)}%` : "—"}
+          <div className="bg-card p-2" title="Maximum peak-to-trough decline over the selected range">
+            <div className="text-[10px] text-muted-foreground tracking-wide mb-1">MAX DD</div>
+            <div className={`text-sm font-medium tabular-nums ${data.maxDrawdownPct !== null && data.maxDrawdownPct < -5 ? "text-negative" : "text-muted-foreground"}`}>
+              {formatPct(data.maxDrawdownPct)}
             </div>
           </div>
         </div>
       )}
 
-      {/* Chart */}
       {loading ? (
         <div className="h-36 flex items-center justify-center text-muted-foreground text-xs">LOADING...</div>
       ) : fetchError ? (
         <div className="h-36 flex flex-col items-center justify-center text-xs space-y-2 border border-dashed border-border">
           <span className="text-negative">FAILED TO LOAD PERFORMANCE DATA</span>
-          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); setAllLoaded(false); }}>RETRY</button>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); setData(null); }}>RETRY</button>
         </div>
       ) : !hasSufficientData ? (
         <div className="h-36 flex flex-col items-center justify-center text-muted-foreground text-xs space-y-1 border border-dashed border-border">
           <span>NOT ENOUGH DATA YET</span>
-          <span className="text-[10px]">Daily snapshots will accumulate over time</span>
-          {lastSnapshot && (
-            <span className="text-[10px] text-primary">1 snapshot: {lastSnapshot.date} — C${lastSnapshot.totalCAD.toLocaleString("en-CA", { maximumFractionDigits: 0 })}</span>
+          {data?.t0 && (
+            <span className="text-[10px] text-primary">ANCHOR {data.t0} / {formatCurrency(data.v0)}</span>
           )}
         </div>
       ) : (
         <div>
-          <div className="flex items-center gap-4 mb-2 text-[10px] text-muted-foreground">
-            {showBenchmark ? (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
-                  PORTFOLIO
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 border-t border-dashed border-accent" />
-                  SPY
-                </span>
-                {benchmarkError ? (
-                  <span className="ml-auto text-[9px] text-negative">SPY DATA UNAVAILABLE</span>
-                ) : (
-                  <span className="ml-auto text-[9px] opacity-60">NORMALIZED TO 100</span>
-                )}
-              </>
-            ) : hasTotalReturn ? (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
-                  PRICE
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-px" style={{ height: 2, backgroundColor: "hsl(196,80%,60%)" }} />
-                  TOTAL RETURN
-                </span>
-              </>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-4 mb-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-px bg-primary" style={{ height: 2 }} />
+              PORTFOLIO
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 border-t border-dashed border-accent" />
+              {ticker}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-px" style={{ height: 2, backgroundColor: "hsl(196,80%,60%)" }} />
+              BASE {baseRate}%
+            </span>
           </div>
           <div className="h-48 lg:h-72 chart-touch-zone">
             <ResponsiveContainer width="100%" height="100%">
-              {showBenchmark ? (
-                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <Tooltip
-                    cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      fontSize: 11,
-                      fontFamily: "inherit",
-                    }}
-                    formatter={(value: number, name: string) => {
-                      if (name === "portfolioNorm") return [`${value.toFixed(1)}`, "Portfolio"];
-                      if (name === "spyNorm") return [`${value.toFixed(1)}`, "SPY"];
-                      return [value, name];
-                    }}
-                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="portfolioNorm"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={1.5}
-                    dot={false}
-                    connectNulls
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="spyNorm"
-                    stroke="hsl(var(--accent))"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeDasharray="4 2"
-                    connectNulls
-                  />
-                  <ReferenceLine y={100} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} strokeOpacity={0.4} />
-                </ComposedChart>
-              ) : (
-                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <Tooltip
-                    cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      fontSize: 11,
-                      fontFamily: "inherit",
-                    }}
-                    formatter={(value: number, name: string) => {
-                      if (name === "total") return [`C$${value.toLocaleString("en-CA")}`, "Price"];
-                      if (name === "cost") return [`C$${value.toLocaleString("en-CA")}`, "Cost Basis"];
-                      if (name === "totalReturn") return [`C$${value.toLocaleString("en-CA")}`, "Total Return"];
-                      return [value, name];
-                    }}
-                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="cost"
-                    stroke="hsl(var(--border))"
-                    strokeWidth={1}
-                    fill="transparent"
-                    dot={false}
-                    strokeDasharray="4 2"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="total"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={1.5}
-                    fill="url(#totalGrad)"
-                    dot={false}
-                  />
-                  {hasTotalReturn && (
-                    <Line
-                      type="monotone"
-                      dataKey="totalReturn"
-                      stroke="hsl(196,80%,60%)"
-                      strokeWidth={1}
-                      dot={false}
-                      strokeDasharray="3 2"
-                    />
-                  )}
-                  <ReferenceLine
-                    y={chartData[0]?.cost}
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth={0.5}
-                    strokeOpacity={0.4}
-                  />
-                </ComposedChart>
-              )}
+              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" hide />
+                <YAxis
+                  width={54}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={formatCompactCAD}
+                />
+                <Tooltip
+                  cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    fontSize: 11,
+                    fontFamily: "inherit",
+                  }}
+                  formatter={(value: number, name: string) => {
+                    if (name === "portfolio") return [formatCurrency(value), "Portfolio"];
+                    if (name === "benchmark") return [formatCurrency(value), ticker];
+                    if (name === "baseR") return [formatCurrency(value), `Base ${baseRate}%`];
+                    return [value, name];
+                  }}
+                  labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate ?? label}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="portfolio"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={1.8}
+                  dot={false}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="benchmark"
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={1.2}
+                  dot={false}
+                  strokeDasharray="4 2"
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="baseR"
+                  stroke="hsl(196,80%,60%)"
+                  strokeWidth={1.2}
+                  dot={false}
+                  connectNulls
+                />
+                <ReferenceLine y={data?.v0 ?? chartData[0]?.portfolio} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} strokeOpacity={0.4} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
