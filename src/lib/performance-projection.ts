@@ -211,6 +211,50 @@ export function buildBaselineReturnSeriesForRate(
   });
 }
 
+export function buildCashflowAdjustedBaselineReturnSeriesForRate(
+  snapshots: PerformanceProjectionSnapshot[],
+  baselinePortfolioValueCAD: number,
+  cashflows: PerformanceContributionEventCAD[],
+  cagrPct: number,
+): Array<number | null> {
+  if (snapshots.length === 0) return [];
+
+  const anchorDate = parseSnapshotDate(snapshots[0].date);
+  const baseline = Number(baselinePortfolioValueCAD);
+  const cagr = Number(cagrPct) / 100;
+  if (!anchorDate || !Number.isFinite(baseline) || baseline < 0 || !Number.isFinite(cagr)) {
+    return snapshots.map(() => null);
+  }
+
+  const anchorDateKey = snapshots[0].date.slice(0, 10);
+  const contributionEventsCAD = cashflows
+    .map((event) => ({
+      date: event.date,
+      amountCAD: Number(event.amountCAD),
+      parsedDate: parseSnapshotDate(event.date),
+    }))
+    .filter((event): event is PerformanceContributionEventCAD & { parsedDate: Date } => (
+      !!event.parsedDate
+      && event.date.slice(0, 10) > anchorDateKey
+      && Number.isFinite(event.amountCAD)
+      && event.amountCAD !== 0
+    ))
+    .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+
+  return snapshots.map((snapshot) => {
+    const snapshotDate = parseSnapshotDate(snapshot.date);
+    if (!snapshotDate) return null;
+
+    let value = baseline * Math.pow(1 + cagr, yearsBetween(anchorDate, snapshotDate));
+    for (const contribution of contributionEventsCAD) {
+      if (contribution.parsedDate > snapshotDate) break;
+      value += contribution.amountCAD * Math.pow(1 + cagr, yearsBetween(contribution.parsedDate, snapshotDate));
+    }
+
+    return Math.max(0, value);
+  });
+}
+
 export function buildProjectedPortfolioSeries(
   snapshots: PerformanceProjectionSnapshot[],
   assumptions: PerformanceProjectionAssumptions | null | undefined,

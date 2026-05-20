@@ -77,8 +77,8 @@ assert.match(
 );
 assert.match(
   chartSource,
-  /alignBenchmarkSeriesToPortfolioBaseline/,
-  "SPY/QLD overlays must be rebased to the first visible portfolio value for the selected range",
+  /buildCashflowAdjustedBenchmarkSeries/,
+  "SPY/QLD/QQQ overlays must use the first visible portfolio value plus selected-range cashflows",
 );
 assert.match(
   benchmarkRouteSource,
@@ -88,7 +88,7 @@ assert.match(
 assert.doesNotMatch(
   benchmarkRouteSource,
   /computeShadowPortfolio|shadow-dca/,
-  "Benchmark API must not feed the chart with shadow-DCA values when comparing selected-range ticker returns",
+  "Benchmark API must not feed the chart with precomputed shadow-DCA values; the chart computes cashflow adjustment from raw prices",
 );
 assert.match(
   benchmarkRouteSource,
@@ -102,8 +102,13 @@ assert.match(
 );
 assert.match(
   chartSource,
-  /buildBaselineReturnSeriesForRate/,
-  "BASE overlays must start from the first visible portfolio value for the selected range",
+  /buildCashflowAdjustedBaselineReturnSeriesForRate/,
+  "BASE overlays must start from the first visible portfolio value and compound selected-range cashflows",
+);
+assert.match(
+  chartSource,
+  /SAME CASHFLOW BASIS/,
+  "Legend must identify benchmark and BASE overlays as same-cashflow comparisons",
 );
 
 assert.doesNotMatch(chartSource, /endpointMarkPoint/, "Chart should not render right-side endpoint markPoint labels");
@@ -152,8 +157,8 @@ assert.match(
 
 assert.match(
   chartSource,
-  /buildBaselineReturnSeriesForRate\(snapshots, baselinePortfolioValueCAD, option\.cagrPct\)/,
-  "Performance chart BASE series must use selected-range portfolio baseline and fixed return rate",
+  /buildCashflowAdjustedBaselineReturnSeriesForRate\(\s*snapshots,\s*baselinePortfolioValueCAD,\s*contributionEventsCAD,\s*option\.cagrPct,\s*\)/,
+  "Performance chart BASE series must use selected-range portfolio baseline, cashflows, and fixed return rate",
 );
 
 assert.match(

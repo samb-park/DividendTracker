@@ -6,13 +6,12 @@ import { formatPerformanceAxisLabel } from "@/lib/performance-axis";
 import { computePerformanceMetrics, type PerformanceContributionEventCAD, type PerformanceMetricRange } from "@/lib/performance-metrics";
 import {
   SUPPORTED_BENCHMARKS,
-  alignBenchmarkSeriesToPortfolioBaseline,
-  normalizeBenchmarkSeries,
+  buildCashflowAdjustedBenchmarkSeries,
   type BenchmarkTicker,
 } from "@/lib/performance-benchmark";
 import {
   BASE_RATE_OPTIONS,
-  buildBaselineReturnSeriesForRate,
+  buildCashflowAdjustedBaselineReturnSeriesForRate,
   getActiveBaseRateOptions,
   getProjectionSelectionLabel,
   type BaseRateId,
@@ -127,19 +126,26 @@ export function PerformanceChart() {
 
     const { xirr, mdd, valueChange } = computePerformanceMetrics(snapshots, range, contributionEventsCAD);
     const baselinePortfolioValueCAD = snapshots[0].totalCAD;
-    const normalizedBenchmark = normalizeBenchmarkSeries(snapshots, benchmark);
-    const alignedBenchmarkCAD = alignBenchmarkSeriesToPortfolioBaseline(snapshots, benchmark, baselinePortfolioValueCAD);
+    const cashflowAdjustedBenchmarkCAD = buildCashflowAdjustedBenchmarkSeries(
+      snapshots,
+      benchmark,
+      baselinePortfolioValueCAD,
+      contributionEventsCAD,
+    );
     const projectedSeriesByRate = Object.fromEntries(
       BASE_RATE_OPTIONS.map((option) => [
         option.id,
-        buildBaselineReturnSeriesForRate(snapshots, baselinePortfolioValueCAD, option.cagrPct),
+        buildCashflowAdjustedBaselineReturnSeriesForRate(
+          snapshots,
+          baselinePortfolioValueCAD,
+          contributionEventsCAD,
+          option.cagrPct,
+        ),
       ]),
     ) as Record<BaseRateId, Array<number | null>>;
 
     const chartData = snapshots.map((s, index) => {
-      const normalizedPortfolio = baselinePortfolioValueCAD > 0 ? (s.totalCAD / baselinePortfolioValueCAD) * 100 : null;
-      const benchmarkNorm = normalizedBenchmark[index] ?? null;
-      const benchmarkValueCAD = alignedBenchmarkCAD[index] ?? null;
+      const benchmarkValueCAD = cashflowAdjustedBenchmarkCAD[index] ?? null;
       const baseRate2 = projectedSeriesByRate["2"][index];
       const baseRate4 = projectedSeriesByRate["4"][index];
       const baseRate6 = projectedSeriesByRate["6"][index];
@@ -153,8 +159,6 @@ export function PerformanceChart() {
         total: Math.round(convertAmount(s.totalCAD, "CAD")),
         cost: Math.round(convertAmount(s.costBasisCAD, "CAD")),
         gain: Math.round(convertAmount(s.totalCAD - s.costBasisCAD, "CAD")),
-        portfolioNorm: normalizedPortfolio,
-        benchmarkNorm,
         benchmarkCAD: benchmarkValueCAD != null ? Math.round(convertAmount(benchmarkValueCAD, "CAD")) : null,
         baseRate2: baseRate2 != null ? Math.round(convertAmount(baseRate2, "CAD")) : null,
         baseRate4: baseRate4 != null ? Math.round(convertAmount(baseRate4, "CAD")) : null,
@@ -206,6 +210,9 @@ export function PerformanceChart() {
         const firstPayload = items[0]?.payload ?? {};
         const label = firstPayload.fullDate ?? firstPayload.date ?? items[0]?.axisValue ?? items[0]?.name ?? "";
         let html = `<div style="color:${tokens.mutedForeground};margin-bottom:4px">${label}</div>`;
+        if (showBenchmark || showProjection) {
+          html += `<div style="color:${tokens.mutedForeground};margin-bottom:4px">same cashflow basis</div>`;
+        }
         for (const p of items) {
           const val = typeof p.value === "number" ? p.value : p.data;
           if (val == null) continue;
@@ -567,7 +574,7 @@ export function PerformanceChart() {
                 {benchmarkError ? (
                   <span className="ml-auto text-[9px] text-negative">DATA UNAVAILABLE</span>
                 ) : (
-                  <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
+                  <span className="ml-auto text-[9px] opacity-60">SAME CASHFLOW BASIS</span>
                 )}
               </>
             ) : showBenchmark ? (
@@ -583,7 +590,7 @@ export function PerformanceChart() {
                 {benchmarkError ? (
                   <span className="ml-auto text-[9px] text-negative">{activeBenchmarkLabel} DATA UNAVAILABLE</span>
                 ) : (
-                  <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
+                  <span className="ml-auto text-[9px] opacity-60">SAME CASHFLOW BASIS</span>
                 )}
               </>
             ) : showProjection ? (
@@ -598,7 +605,7 @@ export function PerformanceChart() {
                     {item.label}
                   </span>
                 ))}
-                <span className="ml-auto text-[9px] opacity-60">BASELINE-ALIGNED CAD</span>
+                <span className="ml-auto text-[9px] opacity-60">SAME CASHFLOW BASIS</span>
               </>
             ) : (
               <>

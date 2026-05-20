@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   SUPPORTED_BENCHMARKS,
   alignBenchmarkSeriesToPortfolioBaseline,
+  buildCashflowAdjustedBenchmarkSeries,
   normalizeBenchmarkSeries,
   type BenchmarkPoint,
   type SnapshotPoint,
@@ -37,6 +38,54 @@ const qldPrices: BenchmarkPoint[] = [
     aligned.map((value) => value == null ? null : Math.round(value)),
     [31_339, 39_174, 47_009],
     "benchmark chart values must apply selected-range benchmark return to the first visible portfolio value",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    qldPrices,
+    1_000,
+    [{ date: "2026-01-03", amountCAD: 500 }],
+  );
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    [1_000, 1_750, 2_100],
+    "benchmark cashflow comparison should buy additional shares on the cashflow date",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    qldPrices,
+    1_000,
+    [],
+  );
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    [1_000, 1_250, 1_500],
+    "benchmark cashflow comparison should match lump-sum baseline alignment when no cashflows occur",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    [
+      { date: "2026-01-02", value: 100 },
+      { date: "2026-01-04", value: 150 },
+    ],
+    1_000,
+    [{ date: "2026-01-03", amountCAD: 500 }],
+  );
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    [1_000, 1_500, 2_250],
+    "cashflows on non-market dates should use the latest benchmark price on or before the cashflow date",
   );
 }
 

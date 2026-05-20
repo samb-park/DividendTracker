@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   BASE_RATE_OPTIONS,
   buildBaselineReturnSeriesForRate,
+  buildCashflowAdjustedBaselineReturnSeriesForRate,
   buildProjectedPortfolioSeries,
   buildProjectedPortfolioSeriesForRate,
   getProjectionScenarioCagrPct,
@@ -92,6 +93,39 @@ function anchorPlusCashflowsExpected(
   assert.equal(series[0], 31_339);
   assert.ok(series[1] !== null && Math.abs(series[1] - expected1) < 0.01);
   assert.ok(series[2] !== null && Math.abs(series[2] - expected2) < 0.01);
+}
+
+{
+  const snapshots = [
+    { date: "2026-01-01", totalCAD: 1_000 },
+    { date: "2026-07-01", totalCAD: 1_600 },
+    { date: "2027-01-01", totalCAD: 1_800 },
+  ];
+  const cashflows = [{ date: "2026-07-01", amountCAD: 500 }];
+  const series = buildCashflowAdjustedBaselineReturnSeriesForRate(snapshots, 1_000, cashflows, 6);
+  const expected1 = 1_000 * Math.pow(1.06, yearsBetween("2026-01-01", "2026-07-01")) + 500;
+  const expected2 = 1_000 * Math.pow(1.06, yearsBetween("2026-01-01", "2027-01-01"))
+    + 500 * Math.pow(1.06, yearsBetween("2026-07-01", "2027-01-01"));
+
+  assert.equal(series.length, snapshots.length);
+  assert.equal(series[0], 1_000);
+  assert.ok(series[1] !== null && Math.abs(series[1] - expected1) < 0.01);
+  assert.ok(series[2] !== null && Math.abs(series[2] - expected2) < 0.01);
+}
+
+{
+  const snapshots = [
+    { date: "2026-01-01", totalCAD: 1_000 },
+    { date: "2027-01-01", totalCAD: 1_200 },
+  ];
+  const cashflowAdjusted = buildCashflowAdjustedBaselineReturnSeriesForRate(snapshots, 1_000, [], 6);
+  const lumpSum = buildBaselineReturnSeriesForRate(snapshots, 1_000, 6);
+
+  assert.deepEqual(
+    cashflowAdjusted.map((value) => value == null ? null : Number(value.toFixed(2))),
+    lumpSum.map((value) => value == null ? null : Number(value.toFixed(2))),
+    "BASE cashflow comparison should match lump-sum baseline when no cashflows occur",
+  );
 }
 
 {
