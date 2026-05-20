@@ -10,6 +10,7 @@ import {
 } from "@/lib/rulebook";
 
 const AI_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const AI_MAX_CALLS_PER_DAY = 100;
 const DEFAULT_FX_RATE = parseFloat(process.env.DEFAULT_FX_RATE ?? "1.35");
 
 // ── AI provider call ─────────────────────────────────────────────────────────
@@ -675,6 +676,22 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   };
 
   return JSON.stringify(context);
+}
+
+export async function getRemainingAiCalls(userId: string): Promise<number> {
+  const today = new Date().toISOString().split("T")[0];
+  const dateKey = `${userId}:ai_calls_date`;
+  const countKey = `${userId}:ai_calls_count`;
+
+  const [dateSetting, countSetting] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: dateKey } }),
+    prisma.setting.findUnique({ where: { key: countKey } }),
+  ]);
+
+  const storedDate = dateSetting?.value ?? "";
+  const storedCount = storedDate === today ? parseInt(countSetting?.value ?? "0", 10) : 0;
+
+  return Math.max(0, AI_MAX_CALLS_PER_DAY - storedCount);
 }
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
