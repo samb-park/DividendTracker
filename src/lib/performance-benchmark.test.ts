@@ -61,6 +61,52 @@ const qldPrices: BenchmarkPoint[] = [
     snapshots,
     qldPrices,
     1_000,
+    [{ date: "2026-01-03", amountCAD: -250 }],
+  );
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    [1_000, 1_000, 1_200],
+    "benchmark cashflow comparison should sell benchmark shares on an external withdrawal date",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    qldPrices,
+    1_000,
+    [{ date: "2026-01-02", amountCAD: 500 }],
+  );
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    [1_000, 1_250, 1_500],
+    "cashflow on the first visible snapshot date must not be added again on top of the portfolio baseline",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    qldPrices,
+    1_000,
+    [],
+  );
+  const lumpSum = alignBenchmarkSeriesToPortfolioBaseline(snapshots, qldPrices, 1_000);
+
+  assert.deepEqual(
+    adjusted.map((value) => value == null ? null : Math.round(value)),
+    lumpSum.map((value) => value == null ? null : Math.round(value)),
+    "internal BUY/SELL/DIVIDEND/DRIP/FX/rebalance activity must not affect benchmark shares when no external cashflow is provided",
+  );
+}
+
+{
+  const adjusted = buildCashflowAdjustedBenchmarkSeries(
+    snapshots,
+    qldPrices,
+    1_000,
     [],
   );
 

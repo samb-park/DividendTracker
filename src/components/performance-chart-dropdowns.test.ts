@@ -11,7 +11,12 @@ const chartSource = readFileSync(join(process.cwd(), "src/components/performance
 const dashboardSource = readFileSync(join(process.cwd(), "src/components/dashboard-client.tsx"), "utf8");
 const projectionSource = readFileSync(join(process.cwd(), "src/lib/performance-projection.ts"), "utf8");
 const benchmarkRouteSource = readFileSync(join(process.cwd(), "src/app/api/benchmarks/route.ts"), "utf8");
+const snapshotsRouteSource = readFileSync(join(process.cwd(), "src/app/api/snapshots/route.ts"), "utf8");
+const cashTransactionsRouteSource = readFileSync(join(process.cwd(), "src/app/api/cash-transactions/route.ts"), "utf8");
+const questradeSyncSource = readFileSync(join(process.cwd(), "src/lib/questrade-sync.ts"), "utf8");
+const schemaSource = readFileSync(join(process.cwd(), "prisma/schema.prisma"), "utf8");
 const source = `${chartSource}\n${projectionSource}`;
+const cashActionEnum = schemaSource.match(/enum CashAction\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 
 assert.match(
   source,
@@ -79,6 +84,46 @@ assert.match(
   chartSource,
   /buildCashflowAdjustedBenchmarkSeries/,
   "SPY/QLD/QQQ overlays must use the first visible portfolio value plus selected-range cashflows",
+);
+assert.match(
+  snapshotsRouteSource,
+  /contributionEventsFromCashTxns\(cashTxns\)/,
+  "Performance cashflow overlays must be sourced from CashTransaction records only",
+);
+assert.doesNotMatch(
+  snapshotsRouteSource,
+  /contributionEventsFromCashTxns\(transactions|contributionEventsFromCashTxns\(engineLedgerRows|contributionEventsFromCashTxns\(ledgerRows/,
+  "Performance cashflow overlays must not source BUY/SELL/DIVIDEND/DRIP/FX ledger or transaction rows",
+);
+assert.match(
+  cashActionEnum,
+  /\bDEPOSIT\b/,
+  "CashTransaction action enum must include external deposits",
+);
+assert.match(
+  cashActionEnum,
+  /\bWITHDRAWAL\b/,
+  "CashTransaction action enum must include external withdrawals",
+);
+assert.doesNotMatch(
+  cashActionEnum,
+  /\b(BUY|SELL|DIVIDEND|DRIP|FX_CONVERT|FEE|ADJUSTMENT)\b/,
+  "CashTransaction action enum must not include internal trade, dividend, FX, fee, or adjustment events",
+);
+assert.match(
+  cashTransactionsRouteSource,
+  /\["DEPOSIT",\s*"WITHDRAWAL"\]\.includes\(action as string\)/,
+  "Manual cashflow API must reject actions other than external DEPOSIT/WITHDRAWAL",
+);
+assert.match(
+  questradeSyncSource,
+  /function mapCashAction[\s\S]*type === "Deposits"[\s\S]*type === "Withdrawals"[\s\S]*return null;/,
+  "Questrade sync must map only broker deposits/withdrawals into CashTransaction records",
+);
+assert.match(
+  questradeSyncSource,
+  /function mapAction[\s\S]*action === "Buy"[\s\S]*action === "Sell"[\s\S]*DIVIDEND/,
+  "Questrade BUY/SELL/DIVIDEND activity must stay in Transaction records, not CashTransaction records",
 );
 assert.match(
   benchmarkRouteSource,

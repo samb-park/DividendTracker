@@ -116,6 +116,42 @@ function anchorPlusCashflowsExpected(
 {
   const snapshots = [
     { date: "2026-01-01", totalCAD: 1_000 },
+    { date: "2026-07-01", totalCAD: 900 },
+    { date: "2027-01-01", totalCAD: 1_100 },
+  ];
+  const cashflows = [{ date: "2026-07-01", amountCAD: -250 }];
+  const series = buildCashflowAdjustedBaselineReturnSeriesForRate(snapshots, 1_000, cashflows, 6);
+  const expected1 = 1_000 * Math.pow(1.06, yearsBetween("2026-01-01", "2026-07-01")) - 250;
+  const expected2 = 1_000 * Math.pow(1.06, yearsBetween("2026-01-01", "2027-01-01"))
+    - 250 * Math.pow(1.06, yearsBetween("2026-07-01", "2027-01-01"));
+
+  assert.ok(series[1] !== null && Math.abs(series[1] - expected1) < 0.01);
+  assert.ok(series[2] !== null && Math.abs(series[2] - expected2) < 0.01);
+}
+
+{
+  const snapshots = [
+    { date: "2026-01-01", totalCAD: 1_000 },
+    { date: "2027-01-01", totalCAD: 1_200 },
+  ];
+  const cashflowAdjusted = buildCashflowAdjustedBaselineReturnSeriesForRate(
+    snapshots,
+    1_000,
+    [{ date: "2026-01-01", amountCAD: 500 }],
+    6,
+  );
+  const lumpSum = buildBaselineReturnSeriesForRate(snapshots, 1_000, 6);
+
+  assert.deepEqual(
+    cashflowAdjusted.map((value) => value == null ? null : Number(value.toFixed(2))),
+    lumpSum.map((value) => value == null ? null : Number(value.toFixed(2))),
+    "BASE cashflow on the first visible snapshot date must not be added again on top of the portfolio baseline",
+  );
+}
+
+{
+  const snapshots = [
+    { date: "2026-01-01", totalCAD: 1_000 },
     { date: "2027-01-01", totalCAD: 1_200 },
   ];
   const cashflowAdjusted = buildCashflowAdjustedBaselineReturnSeriesForRate(snapshots, 1_000, [], 6);
