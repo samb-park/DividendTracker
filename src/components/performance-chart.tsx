@@ -349,7 +349,8 @@ export function PerformanceChart() {
 
   const option = useMemo(() => {
     if (chartData.length === 0) return {};
-    const grid = { left: 4, right: 8, top: 4, bottom: 24, containLabel: false };
+    // left padding (28px) reserves room for the y-axis % labels ("0%" .. "300%").
+    const grid = { left: 30, right: 8, top: 4, bottom: 24, containLabel: false };
     const xAxisDates = chartData.map((d) => d.fullDate);
     const tooltip = {
       trigger: "axis" as const,
@@ -416,41 +417,47 @@ export function PerformanceChart() {
       axisTick: { show: false },
     };
 
-    // Y-axis: CAD DELTA from each series' baseline. All lines start at 0 on
-    // the leftmost x (totalDelta=0, benchmarkDelta=0, baseRate*Delta=0) and
-    // rise/fall from there. yAxisMin clamps to 0 unless any series drops below
-    // baseline (negative delta), in which case it expands downward so the
-    // negative portion stays visible.
-    const baseRateDeltaKeys: Array<keyof (typeof chartData)[number]> = activeProjectionOptions
-      .map((opt) => (`${opt.dataKey}Delta`) as keyof (typeof chartData)[number]);
-    const visibleDeltaValues: number[] = [];
+    // Y-axis: % RETURN from each series' baseline. All lines start at 0% on
+    // the leftmost x (totalPct=0, benchmarkPct=0, baseRate*Pct=0) and rise/fall
+    // from there. Pct normalizes by baseline so cross-range comparisons stay
+    // honest (a 10% gain looks the same regardless of dollar baseline).
+    const baseRatePctKeys: Array<keyof (typeof chartData)[number]> = activeProjectionOptions
+      .map((opt) => (`${opt.dataKey}Pct`) as keyof (typeof chartData)[number]);
+    const visiblePctValues: number[] = [];
     for (const d of chartData) {
-      if (typeof d.totalDelta === "number" && Number.isFinite(d.totalDelta)) visibleDeltaValues.push(d.totalDelta);
-      if (showBenchmark && typeof d.benchmarkDelta === "number" && Number.isFinite(d.benchmarkDelta)) {
-        visibleDeltaValues.push(d.benchmarkDelta);
+      if (typeof d.totalPct === "number" && Number.isFinite(d.totalPct)) visiblePctValues.push(d.totalPct);
+      if (showBenchmark && typeof d.benchmarkPct === "number" && Number.isFinite(d.benchmarkPct)) {
+        visiblePctValues.push(d.benchmarkPct);
       }
       if (showProjection) {
-        for (const key of baseRateDeltaKeys) {
+        for (const key of baseRatePctKeys) {
           const v = d[key];
-          if (typeof v === "number" && Number.isFinite(v)) visibleDeltaValues.push(v);
+          if (typeof v === "number" && Number.isFinite(v)) visiblePctValues.push(v);
         }
       }
     }
-    // Y-axis bottom is locked to 0 for every range (3m/6m/1y/3y/5y/all) so the
-    // chart visually anchors the baseline at the bottom in all views. Series
-    // values below 0 (drawdown vs. baseline) will be clipped off the bottom —
-    // ECharts won't render the portion under the axis. This trades drawdown
-    // visibility for cross-range visual consistency.
+    // Y-axis bottom is locked to 0% for every range so the chart visually
+    // anchors the baseline at the bottom in all views. Series values below 0%
+    // (drawdown vs. baseline) will be clipped off the bottom — ECharts won't
+    // render the portion under the axis. This trades drawdown visibility for
+    // cross-range visual consistency.
     const yAxisMin = 0;
-    const maxDelta = visibleDeltaValues.length > 0 ? Math.max(...visibleDeltaValues) : 0;
-    const yAxisMax = maxDelta > 0 ? Math.ceil(maxDelta * 1.05) : 1;
+    const maxPct = visiblePctValues.length > 0 ? Math.max(...visiblePctValues) : 0;
+    const yAxisMax = maxPct > 0 ? Math.ceil(maxPct * 1.05) : 1;
 
     const yAxis = {
       type: "value" as const,
       min: yAxisMin,
       max: yAxisMax,
       scale: false,
-      axisLabel: { show: false },
+      axisLabel: {
+        show: true,
+        formatter: (value: number) => `${Math.round(value)}%`,
+        color: tokens.mutedForeground,
+        fontFamily: "IBM Plex Mono, monospace",
+        fontSize: 9,
+        margin: 4,
+      },
       splitLine: { lineStyle: { color: tokens.border, type: [2, 4] as unknown as string } },
       axisLine: { show: false },
       axisTick: { show: false },
@@ -470,7 +477,7 @@ export function PerformanceChart() {
           {
             type: "line",
             name: "Portfolio Value",
-            data: chartData.map((d) => d.totalDelta),
+            data: chartData.map((d) => d.totalPct),
             color: PORTFOLIO_LINE_COLOR,
             lineStyle: { width: PORTFOLIO_LINE_WIDTH },
             symbol: "none",
@@ -486,7 +493,7 @@ export function PerformanceChart() {
           {
             type: "line",
             name: activeBenchmarkLabel ?? "Benchmark",
-            data: chartData.map((d) => d.benchmarkDelta),
+            data: chartData.map((d) => d.benchmarkPct),
             color: BENCHMARK_LINE_COLOR,
             lineStyle: { width: BENCHMARK_LINE_WIDTH, type: BENCHMARK_LINE_DASH as unknown as string },
             symbol: "none",
@@ -509,14 +516,13 @@ export function PerformanceChart() {
           {
             type: "line",
             name: "Portfolio Value",
-            data: chartData.map((d) => d.totalDelta),
+            data: chartData.map((d) => d.totalPct),
             color: PORTFOLIO_LINE_COLOR,
             lineStyle: { width: PORTFOLIO_LINE_WIDTH },
             symbol: "none",
             emphasis: { disabled: true },
-            // origin: 0 anchors the area fill base at the 0 (baseline) line so
-            // positive deltas (gain over baseline) fill upward and negative
-            // deltas (loss vs baseline) fill downward.
+            // origin: 0 anchors the area fill base at the 0% baseline so
+            // positive returns fill upward and negative returns fill downward.
             areaStyle: {
               origin: 0,
               color: tokens.primaryAlpha(0.18),
@@ -532,7 +538,7 @@ export function PerformanceChart() {
             {
               type: "line",
               name: "baseBandFloor",
-              data: chartData.map((d) => d.baseRate2Delta),
+              data: chartData.map((d) => d.baseRate2Pct),
               stack: "baseBand",
               lineStyle: { opacity: 0 },
               symbol: "none",
@@ -542,7 +548,7 @@ export function PerformanceChart() {
             {
               type: "line",
               name: "baseBand",
-              data: chartData.map((d) => d.baseBandDelta),
+              data: chartData.map((d) => d.baseBandPct),
               stack: "baseBand",
               lineStyle: { opacity: 0 },
               symbol: "none",
@@ -554,7 +560,7 @@ export function PerformanceChart() {
           ...(showBenchmark ? [{
             type: "line",
             name: activeBenchmarkLabel ?? "Benchmark",
-            data: chartData.map((d) => d.benchmarkDelta),
+            data: chartData.map((d) => d.benchmarkPct),
             color: BENCHMARK_LINE_COLOR,
             lineStyle: { width: BENCHMARK_LINE_WIDTH, type: BENCHMARK_LINE_DASH as unknown as string },
             symbol: "none",
@@ -564,7 +570,7 @@ export function PerformanceChart() {
           ...projectionLegendItems.map((item) => ({
             type: "line" as const,
             name: item.label,
-            data: chartData.map((d) => d[`${item.dataKey}Delta` as keyof typeof d]),
+            data: chartData.map((d) => d[`${item.dataKey}Pct` as keyof typeof d]),
             color: item.color,
             lineStyle: { width: item.width, type: item.dash as unknown as string },
             symbol: "none",
