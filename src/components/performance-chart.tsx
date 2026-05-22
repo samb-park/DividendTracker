@@ -370,33 +370,30 @@ export function PerformanceChart() {
         const dataIndex = (firstItem as unknown as { dataIndex?: number })?.dataIndex;
         const row = typeof dataIndex === "number" ? chartData[dataIndex] : undefined;
         const label = row?.fullDate ?? row?.date ?? firstItem?.axisValue ?? firstItem?.name ?? "";
-        // Compact mobile-friendly format: date header + one line per series.
-        // Each series line carries marker, short name, signed delta, and (when
-        // available) % return — no baseline→current secondary line, no subtitle.
+        // Tooltip shows ABSOLUTE asset value at the hovered date (not the
+        // delta/growth-rate the chart line geometry represents). Each row keeps
+        // the raw display-currency amounts (total, cost, benchmarkCAD,
+        // baseRate2..12) — we look them up by series name.
         let html = `<div style="color:${tokens.mutedForeground};margin-bottom:4px;font-size:9px">${label}</div>`;
         for (const p of items) {
-          const deltaVal = typeof p.value === "number" ? p.value : p.data;
-          if (deltaVal == null || typeof deltaVal !== "number") continue;
           const name = p.seriesName;
           if (name === "baseBandFloor" || name === "baseBand") continue;
-          let pctAux: number | null = null;
+          let assetValue: number | null = null;
           if (row) {
-            if (name === "Portfolio Value") pctAux = row.portfolioReturnPct ?? null;
-            else if (name === activeBenchmarkLabel) pctAux = row.benchmarkPct ?? null;
+            if (name === "Portfolio Value") assetValue = row.total;
+            else if (name === "Cost Basis") assetValue = row.cost;
+            else if (name === activeBenchmarkLabel) assetValue = row.benchmarkCAD ?? null;
             else if (name?.startsWith("BASE")) {
               const rate = name.replace("BASE ", "").replace("%", "");
-              const pv = row[`baseRate${rate}Pct` as keyof typeof row];
-              if (typeof pv === "number") pctAux = pv;
+              const v = row[`baseRate${rate}` as keyof typeof row];
+              if (typeof v === "number") assetValue = v;
             }
           }
+          if (assetValue == null || !Number.isFinite(assetValue)) continue;
           // Shorten "Portfolio Value" → "Portfolio" to save horizontal space.
           const shortName = name === "Portfolio Value" ? "Portfolio" : (name ?? "");
-          const sign = deltaVal >= 0 ? "+" : "−";
-          const deltaText = `${sign}${formatMoney(Math.abs(deltaVal), displayCurrency)}`;
-          const pctText = pctAux != null
-            ? ` ${pctAux >= 0 ? "+" : ""}${pctAux.toFixed(1)}%`
-            : "";
-          html += `<div style="margin-top:1px;line-height:1.3">${p.marker}${shortName} ${deltaText}${pctText}</div>`;
+          const valueText = formatMoney(assetValue, displayCurrency);
+          html += `<div style="margin-top:1px;line-height:1.3">${p.marker}${shortName} ${valueText}</div>`;
         }
         return html;
       },
