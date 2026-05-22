@@ -436,9 +436,13 @@ export function PerformanceChart() {
         }
       }
     }
+    // Y-axis bottom is locked to 0 for every range (3m/6m/1y/3y/5y/all) so the
+    // chart visually anchors the baseline at the bottom in all views. Series
+    // values below 0 (drawdown vs. baseline) will be clipped off the bottom —
+    // ECharts won't render the portion under the axis. This trades drawdown
+    // visibility for cross-range visual consistency.
+    const yAxisMin = 0;
     const maxDelta = visibleDeltaValues.length > 0 ? Math.max(...visibleDeltaValues) : 0;
-    const minDelta = visibleDeltaValues.length > 0 ? Math.min(...visibleDeltaValues) : 0;
-    const yAxisMin = minDelta < 0 ? Math.floor(minDelta * 1.05) : 0;
     const yAxisMax = maxDelta > 0 ? Math.ceil(maxDelta * 1.05) : 1;
 
     const yAxis = {
