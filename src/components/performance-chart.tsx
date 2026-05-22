@@ -64,7 +64,7 @@ interface TooltipParam {
 }
 
 export function PerformanceChart() {
-  const [range, setRange] = useState<Range>("1y");
+  const [range, setRange] = useState<Range>("all");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [contributionEventsCAD, setContributionEventsCAD] = useState<PerformanceContributionEventCAD[]>([]);
   const [benchmark, setBenchmark] = useState<BenchmarkPoint[]>([]);
@@ -124,10 +124,26 @@ export function PerformanceChart() {
   const { xirr, mdd, valueChange, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
-    const { xirr, mdd, valueChange } = computePerformanceMetrics(snapshots, range, contributionEventsCAD);
-    const baselinePortfolioValueCAD = snapshots[0].totalCAD;
+    // ALL range: clip to >= 2025-05-21 (frontend-only display cutoff).
+    // 다른 range (3m/6m/1y/3y/5y) 는 백엔드에서 이미 range filter 적용됨 → 그대로 사용.
+    const ALL_RANGE_START_DATE = "2025-05-21";
+    const effectiveSnapshots = range === "all"
+      ? snapshots.filter((s) => {
+          const raw = s.date as unknown;
+          const iso = raw instanceof Date
+            ? raw.toISOString().slice(0, 10)
+            : typeof raw === "string"
+              ? raw.slice(0, 10)
+              : "";
+          return iso >= ALL_RANGE_START_DATE;
+        })
+      : snapshots;
+    if (effectiveSnapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
+
+    const { xirr, mdd, valueChange } = computePerformanceMetrics(effectiveSnapshots, range, contributionEventsCAD);
+    const baselinePortfolioValueCAD = effectiveSnapshots[0].totalCAD;
     const cashflowAdjustedBenchmarkCAD = buildCashflowAdjustedBenchmarkSeries(
-      snapshots,
+      effectiveSnapshots,
       benchmark,
       baselinePortfolioValueCAD,
       contributionEventsCAD,
@@ -136,7 +152,7 @@ export function PerformanceChart() {
       BASE_RATE_OPTIONS.map((option) => [
         option.id,
         buildCashflowAdjustedBaselineReturnSeriesForRate(
-          snapshots,
+          effectiveSnapshots,
           baselinePortfolioValueCAD,
           contributionEventsCAD,
           option.cagrPct,
@@ -144,7 +160,7 @@ export function PerformanceChart() {
       ]),
     ) as Record<BaseRateId, Array<number | null>>;
 
-    const chartData = snapshots.map((s, index) => {
+    const rawChartData = effectiveSnapshots.map((s, index) => {
       const benchmarkValueCAD = cashflowAdjustedBenchmarkCAD[index] ?? null;
       const baseRate2 = projectedSeriesByRate["2"][index];
       const baseRate4 = projectedSeriesByRate["4"][index];
@@ -169,6 +185,147 @@ export function PerformanceChart() {
         baseBand: baseBand != null ? Math.round(convertAmount(baseBand, "CAD")) : null,
       };
     });
+
+    // ── Relative-return normalization (2026-05-21) ────────────────────────────
+    // Chart is rendered as percentage return from the period's first valid
+    // value. Each series normalizes against ITS OWN first valid value so all
+    // three (Portfolio / Benchmark / BASE) converge at 0% on the leftmost
+    // visible day. The raw CAD numbers are preserved on each chartData row
+    // for the tooltip and any callers that need them — only the *Pct fields
+    // are wired into ECharts series.data.
+    //   pct = ((current / firstValid) - 1) * 100
+    const pickFirstValid = (key: keyof typeof rawChartData[number]): number | null => {
+      for (const d of rawChartData) {
+        const v = d[key];
+        if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+      }
+      return null;
+    };
+    const firstTotal     = pickFirstValid("total");
+    const firstBenchmark = pickFirstValid("benchmarkCAD");
+    const firstBase2     = pickFirstValid("baseRate2");
+    const firstBase4     = pickFirstValid("baseRate4");
+    const firstBase6     = pickFirstValid("baseRate6");
+    const firstBase8     = pickFirstValid("baseRate8");
+    const firstBase10    = pickFirstValid("baseRate10");
+    const firstBase12    = pickFirstValid("baseRate12");
+    const toPct = (value: number | null, first: number | null): number | null => {
+      // value <= 0 is treated as missing (broken-anchor days at the start of a
+      // range have totalCAD = 0 and benchmarkCAD = 0; they would otherwise show
+      // as -100% and bury the chart in a negative spike before any real data).
+      if (first == null || first <= 0) return null;
+      if (value == null || !Number.isFinite(value) || value <= 0) return null;
+      return ((value / first) - 1) * 100;
+    };
+
+    // Portfolio cashflow-adjusted return (TWR — Time-Weighted Return).
+    // Raw totalCAD normalize 는 deposit/withdrawal 자체가 "수익률" 처럼 보이는
+    // jump 를 만듭니다 (예: $30k → $40k 인데 그 중 $8k 가 입금이면 raw +33%,
+    // 실제 투자 수익은 ~+6.67%). TWR 은 일별 수익률을 cashflow 제거 후 계산해서
+    // 누적 곱으로 표시하므로 입금/인출 효과를 분리합니다.
+    //   r_i  = (V_i - C_i) / V_{i-1} - 1            (C_i = day i 의 contribution CAD)
+    //   TWR  = ∏(1 + r_i) − 1
+    // 이 계산은 chart 표시용으로만 사용. XIRR / VALUE CHANGE / MAX DD 는 그대로.
+    const contribByDate = new Map<string, number>();
+    for (const e of contributionEventsCAD) {
+      const k = e.date.slice(0, 10);
+      contribByDate.set(k, (contribByDate.get(k) ?? 0) + e.amountCAD);
+    }
+    const portfolioTWRPct: Array<number | null> = [];
+    {
+      let prevValue: number | null = null;
+      let cumReturn = 1;
+      for (const s of effectiveSnapshots) {
+        const v = s.totalCAD;
+        if (v == null || !Number.isFinite(v) || v <= 0) {
+          portfolioTWRPct.push(null);
+          continue;
+        }
+        if (prevValue == null || prevValue <= 0) {
+          // 첫 funded day → TWR 의 anchor. 이후 일별 수익률 누적.
+          prevValue = v;
+          cumReturn = 1;
+          portfolioTWRPct.push(0);
+          continue;
+        }
+        const c = contribByDate.get(s.date.slice(0, 10)) ?? 0;
+        const dailyReturn = (v - c) / prevValue - 1;
+        cumReturn *= (1 + dailyReturn);
+        portfolioTWRPct.push((cumReturn - 1) * 100);
+        prevValue = v;
+      }
+    }
+
+    // Delta (=차감) helper — value - firstValid. Null/non-finite stays null,
+    // but unlike toPct we DO allow 0/negative deltas (portfolio can drop below
+    // its starting value). This is what powers the "lines start at 0" view.
+    const toDelta = (value: number | null, first: number | null): number | null => {
+      if (first == null) return null;
+      if (value == null || !Number.isFinite(value)) return null;
+      return value - first;
+    };
+
+    const normalized = rawChartData.map((d, idx) => {
+      const totalPct      = toPct(d.total, firstTotal);
+      const portfolioReturnPct = portfolioTWRPct[idx] ?? null;
+      const benchmarkPct  = toPct(d.benchmarkCAD, firstBenchmark);
+      const baseRate2Pct  = toPct(d.baseRate2, firstBase2);
+      const baseRate4Pct  = toPct(d.baseRate4, firstBase4);
+      const baseRate6Pct  = toPct(d.baseRate6, firstBase6);
+      const baseRate8Pct  = toPct(d.baseRate8, firstBase8);
+      const baseRate10Pct = toPct(d.baseRate10, firstBase10);
+      const baseRate12Pct = toPct(d.baseRate12, firstBase12);
+      const baseBandPct = baseRate2Pct != null && baseRate12Pct != null
+        ? baseRate12Pct - baseRate2Pct
+        : null;
+      // Delta fields (CAD - baseline CAD). Used by the chart so all 3 lines
+      // visually anchor at 0 on the leftmost x. Raw CAD is still kept on the
+      // row for tooltip display.
+      const totalDelta       = toDelta(d.total, firstTotal);
+      const benchmarkDelta   = toDelta(d.benchmarkCAD, firstBenchmark);
+      const baseRate2Delta   = toDelta(d.baseRate2, firstBase2);
+      const baseRate4Delta   = toDelta(d.baseRate4, firstBase4);
+      const baseRate6Delta   = toDelta(d.baseRate6, firstBase6);
+      const baseRate8Delta   = toDelta(d.baseRate8, firstBase8);
+      const baseRate10Delta  = toDelta(d.baseRate10, firstBase10);
+      const baseRate12Delta  = toDelta(d.baseRate12, firstBase12);
+      const baseBandDelta = baseRate2Delta != null && baseRate12Delta != null
+        ? baseRate12Delta - baseRate2Delta
+        : null;
+      return {
+        ...d,
+        totalPct,
+        portfolioReturnPct,
+        benchmarkPct,
+        baseRate2Pct,
+        baseRate4Pct,
+        baseRate6Pct,
+        baseRate8Pct,
+        baseRate10Pct,
+        baseRate12Pct,
+        baseBandPct,
+        totalDelta,
+        benchmarkDelta,
+        baseRate2Delta,
+        baseRate4Delta,
+        baseRate6Delta,
+        baseRate8Delta,
+        baseRate10Delta,
+        baseRate12Delta,
+        baseBandDelta,
+      };
+    });
+
+    // Trim leading rows where Portfolio is still in the broken-anchor null
+    // region. Once we slice from the first index whose totalPct is finite, the
+    // x-axis (chartData.map(d => d.fullDate)) AUTOMATICALLY starts at that
+    // date too — so the leftmost visible point on the chart is the first day
+    // Portfolio has a real value, and at that point totalPct = 0 by construction.
+    // benchmarkPct / baseRate*Pct are also 0 at that same index (they all
+    // anchor on their respective first-valid value, which for cashflow-adjusted
+    // series happens to align with the first funded portfolio day).
+    const firstValidPortfolioIdx = normalized.findIndex((d) => typeof d.portfolioReturnPct === "number" && Number.isFinite(d.portfolioReturnPct));
+    const chartData = firstValidPortfolioIdx > 0 ? normalized.slice(firstValidPortfolioIdx) : normalized;
 
     return { xirr, mdd, valueChange, chartData };
 
@@ -207,24 +364,59 @@ export function PerformanceChart() {
       extraCssText: "border-radius:0",
       formatter: (params: TooltipParam | TooltipParam[]) => {
         const items = Array.isArray(params) ? params : [params];
-        const firstPayload = items[0]?.payload ?? {};
-        const label = firstPayload.fullDate ?? firstPayload.date ?? items[0]?.axisValue ?? items[0]?.name ?? "";
-        let html = `<div style="color:${tokens.mutedForeground};margin-bottom:4px">${label}</div>`;
+        const firstItem = items[0];
+        const dataIndex = (firstItem as unknown as { dataIndex?: number })?.dataIndex;
+        const row = typeof dataIndex === "number" ? chartData[dataIndex] : undefined;
+        const baseline = chartData[0];
+        const label = row?.fullDate ?? row?.date ?? firstItem?.axisValue ?? firstItem?.name ?? "";
+        let html = `<div style="color:${tokens.mutedForeground};margin-bottom:6px">${label}</div>`;
         if (showBenchmark || showProjection) {
-          html += `<div style="color:${tokens.mutedForeground};margin-bottom:4px">same cashflow basis</div>`;
+          html += `<div style="color:${tokens.mutedForeground};margin-bottom:6px;font-size:10px">Δ from baseline · cashflow-adjusted CAD</div>`;
         }
         for (const p of items) {
-          const val = typeof p.value === "number" ? p.value : p.data;
-          if (val == null) continue;
+          // Chart series carry DELTA values (CAD − baseline CAD). The tooltip
+          // surfaces the delta as the primary number (with +/- sign) and the
+          // actual CAD pair (baseline → current) as a secondary line.
+          const deltaVal = typeof p.value === "number" ? p.value : p.data;
+          if (deltaVal == null || typeof deltaVal !== "number") continue;
           const name = p.seriesName;
-          let text = "";
-          if (name === "Portfolio") text = `${val.toFixed(1)}`;
-          else if (name === activeBenchmarkLabel) text = formatMoney(val, displayCurrency);
-          else if (name?.startsWith("BASE")) text = formatMoney(val, displayCurrency);
-          else if (name === "Portfolio Value") text = formatMoney(val, displayCurrency);
-          else if (name === "Cost Basis") text = formatMoney(val, displayCurrency);
-          else text = `${val}`;
-          html += `<div>${p.marker}${name}: ${text}</div>`;
+          if (name === "baseBandFloor" || name === "baseBand") continue;
+          let pctAux: number | null = null;
+          let baselineCAD: number | null = null;
+          let actualCAD: number | null = null;
+          if (row && baseline) {
+            if (name === "Portfolio Value") {
+              pctAux = row.portfolioReturnPct ?? null;
+              baselineCAD = baseline.total ?? null;
+              actualCAD = row.total ?? null;
+            } else if (name === "Cost Basis") {
+              baselineCAD = baseline.cost ?? null;
+              actualCAD = row.cost ?? null;
+            } else if (name === activeBenchmarkLabel) {
+              pctAux = row.benchmarkPct ?? null;
+              baselineCAD = baseline.benchmarkCAD ?? null;
+              actualCAD = row.benchmarkCAD ?? null;
+            } else if (name?.startsWith("BASE")) {
+              const rate = name.replace("BASE ", "").replace("%", "");
+              const pctKey = `baseRate${rate}Pct` as keyof typeof row;
+              const cadKey = `baseRate${rate}` as keyof typeof row;
+              const pv = row[pctKey];
+              const av = row[cadKey];
+              const bv = baseline[cadKey];
+              if (typeof pv === "number") pctAux = pv;
+              if (typeof av === "number") actualCAD = av;
+              if (typeof bv === "number") baselineCAD = bv;
+            }
+          }
+          const deltaSign = deltaVal >= 0 ? "+" : "−";
+          const deltaText = `${deltaSign}${formatMoney(Math.abs(deltaVal), displayCurrency)}`;
+          const pctText = pctAux != null
+            ? ` · ${pctAux >= 0 ? "+" : ""}${pctAux.toFixed(2)}%`
+            : "";
+          const actualLine = baselineCAD != null && actualCAD != null
+            ? `<div style="opacity:0.7;font-size:10px;margin:0 0 6px 14px">${formatMoney(baselineCAD, displayCurrency)} &rarr; ${formatMoney(actualCAD, displayCurrency)}</div>`
+            : "";
+          html += `<div style="margin-top:2px">${p.marker}${name}: ${deltaText}${pctText}</div>${actualLine}`;
         }
         return html;
       },
@@ -247,9 +439,36 @@ export function PerformanceChart() {
       axisTick: { show: false },
     };
 
+    // Y-axis: CAD DELTA from each series' baseline. All lines start at 0 on
+    // the leftmost x (totalDelta=0, benchmarkDelta=0, baseRate*Delta=0) and
+    // rise/fall from there. yAxisMin clamps to 0 unless any series drops below
+    // baseline (negative delta), in which case it expands downward so the
+    // negative portion stays visible.
+    const baseRateDeltaKeys: Array<keyof (typeof chartData)[number]> = activeProjectionOptions
+      .map((opt) => (`${opt.dataKey}Delta`) as keyof (typeof chartData)[number]);
+    const visibleDeltaValues: number[] = [];
+    for (const d of chartData) {
+      if (typeof d.totalDelta === "number" && Number.isFinite(d.totalDelta)) visibleDeltaValues.push(d.totalDelta);
+      if (showBenchmark && typeof d.benchmarkDelta === "number" && Number.isFinite(d.benchmarkDelta)) {
+        visibleDeltaValues.push(d.benchmarkDelta);
+      }
+      if (showProjection) {
+        for (const key of baseRateDeltaKeys) {
+          const v = d[key];
+          if (typeof v === "number" && Number.isFinite(v)) visibleDeltaValues.push(v);
+        }
+      }
+    }
+    const maxDelta = visibleDeltaValues.length > 0 ? Math.max(...visibleDeltaValues) : 0;
+    const minDelta = visibleDeltaValues.length > 0 ? Math.min(...visibleDeltaValues) : 0;
+    const yAxisMin = minDelta < 0 ? Math.floor(minDelta * 1.05) : 0;
+    const yAxisMax = maxDelta > 0 ? Math.ceil(maxDelta * 1.05) : 1;
+
     const yAxis = {
       type: "value" as const,
-      scale: true,
+      min: yAxisMin,
+      max: yAxisMax,
+      scale: false,
       axisLabel: { show: false },
       splitLine: { lineStyle: { color: tokens.border, type: [2, 4] as unknown as string } },
       axisLine: { show: false },
@@ -270,7 +489,7 @@ export function PerformanceChart() {
           {
             type: "line",
             name: "Portfolio Value",
-            data: chartData.map((d) => d.total),
+            data: chartData.map((d) => d.totalDelta),
             color: PORTFOLIO_LINE_COLOR,
             lineStyle: { width: PORTFOLIO_LINE_WIDTH },
             symbol: "none",
@@ -279,14 +498,14 @@ export function PerformanceChart() {
             markLine: {
               silent: true,
               symbol: "none",
-              data: [{ yAxis: chartData[0]?.total ?? 0, lineStyle: { color: tokens.mutedForeground, width: 0.5, opacity: 0.4 } }],
+              data: [{ yAxis: 0, lineStyle: { color: tokens.mutedForeground, width: 0.5, opacity: 0.4 } }],
               label: { show: false },
             },
           },
           {
             type: "line",
             name: activeBenchmarkLabel ?? "Benchmark",
-            data: chartData.map((d) => d.benchmarkCAD),
+            data: chartData.map((d) => d.benchmarkDelta),
             color: BENCHMARK_LINE_COLOR,
             lineStyle: { width: BENCHMARK_LINE_WIDTH, type: BENCHMARK_LINE_DASH as unknown as string },
             symbol: "none",
@@ -309,27 +528,30 @@ export function PerformanceChart() {
           {
             type: "line",
             name: "Portfolio Value",
-            data: chartData.map((d) => d.total),
+            data: chartData.map((d) => d.totalDelta),
             color: PORTFOLIO_LINE_COLOR,
             lineStyle: { width: PORTFOLIO_LINE_WIDTH },
             symbol: "none",
             emphasis: { disabled: true },
+            // origin: 0 anchors the area fill base at the 0 (baseline) line so
+            // positive deltas (gain over baseline) fill upward and negative
+            // deltas (loss vs baseline) fill downward.
             areaStyle: {
-              color: {
-                type: "linear" as const,
-                x: 0, y: 0, x2: 0, y2: 1,
-                colorStops: [
-                  { offset: 0.05, color: tokens.primaryAlpha(0.3) },
-                  { offset: 0.95, color: tokens.primaryAlpha(0) },
-                ],
-              },
+              origin: 0,
+              color: tokens.primaryAlpha(0.18),
+            },
+            markLine: {
+              silent: true,
+              symbol: "none",
+              data: [{ yAxis: 0, lineStyle: { color: tokens.mutedForeground, width: 0.5, opacity: 0.4 } }],
+              label: { show: false },
             },
           },
           ...(selectedProjection === "all" ? [
             {
               type: "line",
               name: "baseBandFloor",
-              data: chartData.map((d) => d.baseRate2),
+              data: chartData.map((d) => d.baseRate2Delta),
               stack: "baseBand",
               lineStyle: { opacity: 0 },
               symbol: "none",
@@ -339,7 +561,7 @@ export function PerformanceChart() {
             {
               type: "line",
               name: "baseBand",
-              data: chartData.map((d) => d.baseBand),
+              data: chartData.map((d) => d.baseBandDelta),
               stack: "baseBand",
               lineStyle: { opacity: 0 },
               symbol: "none",
@@ -351,7 +573,7 @@ export function PerformanceChart() {
           ...(showBenchmark ? [{
             type: "line",
             name: activeBenchmarkLabel ?? "Benchmark",
-            data: chartData.map((d) => d.benchmarkCAD),
+            data: chartData.map((d) => d.benchmarkDelta),
             color: BENCHMARK_LINE_COLOR,
             lineStyle: { width: BENCHMARK_LINE_WIDTH, type: BENCHMARK_LINE_DASH as unknown as string },
             symbol: "none",
@@ -361,7 +583,7 @@ export function PerformanceChart() {
           ...projectionLegendItems.map((item) => ({
             type: "line" as const,
             name: item.label,
-            data: chartData.map((d) => d[item.dataKey]),
+            data: chartData.map((d) => d[`${item.dataKey}Delta` as keyof typeof d]),
             color: item.color,
             lineStyle: { width: item.width, type: item.dash as unknown as string },
             symbol: "none",
@@ -398,15 +620,11 @@ export function PerformanceChart() {
           lineStyle: { width: PORTFOLIO_LINE_WIDTH },
           symbol: "none",
           emphasis: { disabled: true },
+          // Uniform translucent fill anchored at axis start (=yAxis.min=0)
+          // so the area visibly reaches the 0 baseline.
           areaStyle: {
-            color: {
-              type: "linear" as const,
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0.05, color: tokens.primaryAlpha(0.3) },
-                { offset: 0.95, color: tokens.primaryAlpha(0) },
-              ],
-            },
+            origin: "start" as const,
+            color: tokens.primaryAlpha(0.18),
           },
           markLine: {
             silent: true,
