@@ -359,64 +359,44 @@ export function PerformanceChart() {
       textStyle: {
         color: tokens.foreground,
         fontFamily: "IBM Plex Mono, monospace",
-        fontSize: 11,
+        fontSize: 10,
       },
-      extraCssText: "border-radius:0",
+      // padding/border-radius=0 keeps the touch popup tight so it doesn't
+      // dominate the small mobile chart height.
+      extraCssText: "border-radius:0;padding:6px 8px",
       formatter: (params: TooltipParam | TooltipParam[]) => {
         const items = Array.isArray(params) ? params : [params];
         const firstItem = items[0];
         const dataIndex = (firstItem as unknown as { dataIndex?: number })?.dataIndex;
         const row = typeof dataIndex === "number" ? chartData[dataIndex] : undefined;
-        const baseline = chartData[0];
         const label = row?.fullDate ?? row?.date ?? firstItem?.axisValue ?? firstItem?.name ?? "";
-        let html = `<div style="color:${tokens.mutedForeground};margin-bottom:6px">${label}</div>`;
-        if (showBenchmark || showProjection) {
-          html += `<div style="color:${tokens.mutedForeground};margin-bottom:6px;font-size:10px">Δ from baseline · cashflow-adjusted CAD</div>`;
-        }
+        // Compact mobile-friendly format: date header + one line per series.
+        // Each series line carries marker, short name, signed delta, and (when
+        // available) % return — no baseline→current secondary line, no subtitle.
+        let html = `<div style="color:${tokens.mutedForeground};margin-bottom:4px;font-size:9px">${label}</div>`;
         for (const p of items) {
-          // Chart series carry DELTA values (CAD − baseline CAD). The tooltip
-          // surfaces the delta as the primary number (with +/- sign) and the
-          // actual CAD pair (baseline → current) as a secondary line.
           const deltaVal = typeof p.value === "number" ? p.value : p.data;
           if (deltaVal == null || typeof deltaVal !== "number") continue;
           const name = p.seriesName;
           if (name === "baseBandFloor" || name === "baseBand") continue;
           let pctAux: number | null = null;
-          let baselineCAD: number | null = null;
-          let actualCAD: number | null = null;
-          if (row && baseline) {
-            if (name === "Portfolio Value") {
-              pctAux = row.portfolioReturnPct ?? null;
-              baselineCAD = baseline.total ?? null;
-              actualCAD = row.total ?? null;
-            } else if (name === "Cost Basis") {
-              baselineCAD = baseline.cost ?? null;
-              actualCAD = row.cost ?? null;
-            } else if (name === activeBenchmarkLabel) {
-              pctAux = row.benchmarkPct ?? null;
-              baselineCAD = baseline.benchmarkCAD ?? null;
-              actualCAD = row.benchmarkCAD ?? null;
-            } else if (name?.startsWith("BASE")) {
+          if (row) {
+            if (name === "Portfolio Value") pctAux = row.portfolioReturnPct ?? null;
+            else if (name === activeBenchmarkLabel) pctAux = row.benchmarkPct ?? null;
+            else if (name?.startsWith("BASE")) {
               const rate = name.replace("BASE ", "").replace("%", "");
-              const pctKey = `baseRate${rate}Pct` as keyof typeof row;
-              const cadKey = `baseRate${rate}` as keyof typeof row;
-              const pv = row[pctKey];
-              const av = row[cadKey];
-              const bv = baseline[cadKey];
+              const pv = row[`baseRate${rate}Pct` as keyof typeof row];
               if (typeof pv === "number") pctAux = pv;
-              if (typeof av === "number") actualCAD = av;
-              if (typeof bv === "number") baselineCAD = bv;
             }
           }
-          const deltaSign = deltaVal >= 0 ? "+" : "−";
-          const deltaText = `${deltaSign}${formatMoney(Math.abs(deltaVal), displayCurrency)}`;
+          // Shorten "Portfolio Value" → "Portfolio" to save horizontal space.
+          const shortName = name === "Portfolio Value" ? "Portfolio" : (name ?? "");
+          const sign = deltaVal >= 0 ? "+" : "−";
+          const deltaText = `${sign}${formatMoney(Math.abs(deltaVal), displayCurrency)}`;
           const pctText = pctAux != null
-            ? ` · ${pctAux >= 0 ? "+" : ""}${pctAux.toFixed(2)}%`
+            ? ` ${pctAux >= 0 ? "+" : ""}${pctAux.toFixed(1)}%`
             : "";
-          const actualLine = baselineCAD != null && actualCAD != null
-            ? `<div style="opacity:0.7;font-size:10px;margin:0 0 6px 14px">${formatMoney(baselineCAD, displayCurrency)} &rarr; ${formatMoney(actualCAD, displayCurrency)}</div>`
-            : "";
-          html += `<div style="margin-top:2px">${p.marker}${name}: ${deltaText}${pctText}</div>${actualLine}`;
+          html += `<div style="margin-top:1px;line-height:1.3">${p.marker}${shortName} ${deltaText}${pctText}</div>`;
         }
         return html;
       },
