@@ -118,7 +118,7 @@ export function ProjectionCard() {
                         <th className="text-right py-1.5 px-2 font-normal">SCHD</th>
                         <th className="text-right py-1.5 px-2 font-normal">QLD</th>
                         <th className="text-right py-1.5 px-2 font-normal">SGOV</th>
-                        <th className="text-right py-1.5 px-2 font-normal">QQQI</th>
+                        <th className="text-right py-1.5 px-2 font-normal">QQQM</th>
                         <th className="text-right py-1.5 px-2 font-normal">연배당</th>
                         <th className="text-right py-1.5 px-2 font-normal">월배당</th>
                         <th className="text-right py-1.5 px-2 font-normal">인출</th>
@@ -137,6 +137,7 @@ export function ProjectionCard() {
                         else if (p.crisisT1Applied) events.push("Crisis T1");
                         if (p.caseAApplied) events.push("Case A");
                         if (p.caseBApplied) events.push("Case B");
+                        if (p.qqqmSkimApplied) events.push("QQQM skim");
                         return (
                           <tr key={p.year} className={`border-b border-border/50 ${isRetirement ? "text-primary" : ""}`}>
                             <td className="text-left  py-1.5 px-2">
@@ -149,7 +150,7 @@ export function ProjectionCard() {
                             <td className="text-right py-1.5 px-2">{fmtCAD(p.schdCAD)}</td>
                             <td className="text-right py-1.5 px-2">{fmtCAD(p.qldCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.sgovCAD)}</td>
-                            <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.jepqCAD)}</td>
+                            <td className="text-right py-1.5 px-2 text-muted-foreground">{fmtCAD(p.qqqmCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive">{fmtCAD(p.annualDivCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-positive/80">{fmtCAD(p.monthlyDivCAD)}</td>
                             <td className="text-right py-1.5 px-2 text-amber-500">
@@ -178,6 +179,7 @@ export function ProjectionCard() {
                     else if (p.crisisT1Applied) events.push("T1");
                     if (p.caseAApplied) events.push("Case A");
                     if (p.caseBApplied) events.push("Case B");
+                    if (p.qqqmSkimApplied) events.push("Skim");
                     return (
                       <li key={p.year} className={`bg-card px-3 py-2 ${isRetirement ? "text-primary" : ""}`}>
                         <div className="flex items-baseline justify-between gap-1">

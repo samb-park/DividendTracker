@@ -22,8 +22,11 @@ export type TriggerKind =
   | "case_a"
   | "case_b"
   | "sgov_below_target"
-  | "sgov_below_floor"
-  | "iaum_at_cap"
+  | "sgov_below_floor"           // legacy v4.4.2 (no SGOV floor in v4.4.6.1)
+  | "sgov_above_max"             // v4.4.6.1 — SGOV > 8% (above ceiling)
+  | "iaum_at_cap"                // legacy v4.4.2
+  | "qqqm_annual_skim_eligible"  // v4.4.6.1 — 12/31 skim conditions met
+  | "qqqm_annual_skim_executed"  // v4.4.6.1 — skim recorded as transaction
   | "cycle_armable"
   | "meltdown_phase"
   | (string & {});

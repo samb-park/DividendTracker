@@ -128,7 +128,9 @@ export function HoldingsTable({
         const nonCore: Record<string, number> = {};
         const isNonCoreSym = (t: string) => {
           const u = t.toUpperCase();
-          return u === "SGOV" || u === "QQQI" || u === "IAUM";  // v4.4.2: QQQI is satellite; IAUM kept for legacy holdings.
+          // v4.4.6.1: QQQM is the active satellite. QQQI / IAUM are inert legacy
+          // (held positions remain visible, but isNonCore prevents Core %-target math).
+          return u === "SGOV" || u === "QQQM" || u === "QQQI" || u === "IAUM";
         };
         for (const [ticker, val] of Object.entries(d.targets ?? {})) {
           const v = val as { pct: number; excluded?: boolean; nonCorePlan?: { cad?: number } };

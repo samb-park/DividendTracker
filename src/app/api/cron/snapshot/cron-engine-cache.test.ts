@@ -82,4 +82,17 @@ assert.match(
   "cron snapshot must suppress drift alerts when CashLedger is empty and engine falls back to legacy values",
 );
 
+// v4.4.6.1: QQQM sibling of the JEPQ auto-buy invariant check.
+assert.match(
+  source,
+  /QQQM_AUTO_BUY_VIOLATION/,
+  "cron snapshot must emit QQQM_AUTO_BUY_VIOLATION sibling alerts (v4.4.6.1)",
+);
+
+assert.match(
+  source,
+  /QQQM[\s\S]{0,400}DIVIDEND|DIVIDEND[\s\S]{0,400}QQQM/,
+  "cron snapshot must inspect QQQM DIVIDEND → BUY pattern",
+);
+
 console.log("cron engine cache source tests passed");

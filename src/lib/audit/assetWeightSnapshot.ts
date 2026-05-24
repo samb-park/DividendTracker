@@ -35,6 +35,11 @@ export interface RecordWeightSnapshotInput {
   sgovTotalWeightPct: DecimalLike;
   iaumTotalWeightPct: DecimalLike;
   tqqqTotalWeightPct: DecimalLike;
+  // — v4.4.6.1 QQQM satellite observations (optional, additive)
+  qqqmCAD?: DecimalLike | null;
+  qqqmTotalWeightPct?: DecimalLike | null;
+  qqqmCumulativeCostUsd?: DecimalLike | null;
+  qqqmCumulativeShares?: DecimalLike | null;
   // — full trigger-flag map (JSONB)
   triggerFlags: Prisma.InputJsonValue;
   // — data provenance
@@ -122,6 +127,11 @@ export async function recordWeightSnapshot(
       sgovTotalWeightPct: input.sgovTotalWeightPct,
       iaumTotalWeightPct: input.iaumTotalWeightPct,
       tqqqTotalWeightPct: input.tqqqTotalWeightPct,
+      // v4.4.6.1 QQQM observations (nullable; absent on legacy callers)
+      qqqmCAD: input.qqqmCAD ?? null,
+      qqqmTotalWeightPct: input.qqqmTotalWeightPct ?? null,
+      qqqmCumulativeCostUsd: input.qqqmCumulativeCostUsd ?? null,
+      qqqmCumulativeShares: input.qqqmCumulativeShares ?? null,
       triggerFlags: input.triggerFlags,
       fxRateCAD: input.fxRateCAD,
       priceSource: input.priceSource,

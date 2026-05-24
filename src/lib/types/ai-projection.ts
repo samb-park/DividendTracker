@@ -14,22 +14,23 @@ export interface ProjectionYear {
   totalContribCAD: number;
 }
 
-// Rulebook-based projection point (v4.4.2). Per-asset CAD evolves year-by-year
-// through static 70/30 contribution / SGOV refill (8% target) / QQQI gating (TFSA+5%) /
-// Soft Exit (34%) / Emergency cap (38%) / Crisis (SGOV→TQQQ, month-end) / Case A/B annual rebal.
+// Rulebook-based projection point (v4.4.6.1). Per-asset CAD evolves year-by-year
+// through static 70/30 contribution / SGOV (base 5% / max 8% / no floor) / QQQM gating (TFSA only) /
+// Soft Exit (34%) / Emergency cap (38%) / Crisis (SGOV→TQQQ, month-end) / Case A/B annual rebal /
+// QQQM 12/31 annual skim (4% if USD-profitable).
 export interface ProjectionYearV2 {
   year: number;
   yearsFromNow: number;
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  jepqCAD: number;
+  qqqmCAD: number;
   tqqqCAD: number;
   totalCAD: number;
   qldCoreWeightPct: number;
   growthBucketPct: number;
   sgovTotalWeightPct: number;
-  jepqTotalWeightPct: number;
+  qqqmTotalWeightPct: number;
   annualDivCAD: number;
   monthlyDivCAD: number;
   totalContribCAD: number;
@@ -39,6 +40,7 @@ export interface ProjectionYearV2 {
   crisisT2Applied: boolean;
   caseAApplied: boolean;
   caseBApplied: boolean;
+  qqqmSkimApplied: boolean;
   // Retirement phase ([10] / [11] / [16])
   withdrawalCAD: number;
   dividendConsumedCAD: number;
@@ -58,6 +60,7 @@ export interface ProjectionScenario {
     crisisT2: number;
     caseA: number;
     caseB: number;
+    qqqmSkim: number;
   };
 }
 
@@ -81,13 +84,13 @@ export interface CurrentState {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  jepqCAD: number;
+  qqqmCAD: number;
   tqqqCAD: number;
   qldCoreWeightPct: number;
   schdCoreWeightPct: number;
   growthBucketPct: number;
   sgovTotalWeightPct: number;
-  jepqTotalWeightPct: number;
+  qqqmTotalWeightPct: number;
   tqqqTotalWeightPct: number;
   flags: {
     hardExit: boolean;
@@ -98,17 +101,16 @@ export interface CurrentState {
     caseBEligible: boolean;
     inDeadband: boolean;
     cycleArmable: boolean;
-    sgovBelowTarget: boolean;
-    sgovBelowFloor: boolean;
-    jepqAtCap: boolean;
+    sgovBelowTarget: boolean;     // SGOV total W < 5 (base target)
+    sgovAboveMax: boolean;        // SGOV total W > 8 (above ceiling)
     overlayActive: boolean;
   };
 }
 
 export type NonCoreSource = "user-settings" | "rulebook-default" | "rulebook-inactive";
 
-// v4.4.2 — Static 70/30 Core allocation. Overlay (TQQQ > 0) moves the 30% to TQQQ.
-// Satellite streams: SGOV (8% target) + QQQI (TFSA only, 5% cap).
+// v4.4.6.1 — Static 70/30 Core allocation. Overlay (TQQQ > 0) moves the 30% to TQQQ.
+// Satellite streams: SGOV (user-settings only) + QQQM (TFSA only, weekly 45 CAD CAD-accum, no cap).
 export interface CoreAllocationPlan {
   weeklyContribCAD: number;
   coreContribCAD: number;
@@ -117,21 +119,38 @@ export interface CoreAllocationPlan {
   tqqqBuyCAD: number;
   overlayActive: boolean;
   sgovReserveCAD: number;
-  jepqBuyCAD: number;
+  /** Weekly CAD accumulation toward quarterly NG batch (user handles externally). */
+  qqqmCashAccumCAD: number;
   sgovSource?: NonCoreSource;
-  jepqSource?: NonCoreSource;
+  qqqmSource?: NonCoreSource;
   totalWeeklyOutCAD?: number;
 }
 
-export interface JepqWeeklyPlan {
-  jepqRuleBuyCAD: number;
-  jepqActualBuyCAD: number;
+export interface QqqmWeeklyPlan {
+  qqqmRuleCashAccumCAD: number;
+  qqqmActualCashAccumCAD: number;
   redirectedToCoreCAD: number;
   reason: string;
   tfsaRoomExists: boolean;
-  jepqBelowCap: boolean;
   account: string;
-  capCAD: number;
+  weeklyDefaultCAD: number;
+}
+
+/**
+ * v4.4.6.1 §4 — QQQM annual skim eligibility report (12/31 only, USD-profitable check).
+ * Server-side computed once per AI call; UI renders eligibility + next-skim-date row.
+ */
+export interface QqqmAnnualSkimPlan {
+  nextSkimDateISO: string;
+  isPostponed: boolean;
+  postponeReason: "weekend-12-30" | "weekend-12-29" | null;
+  daysUntilSkim: number;
+  cumulativeCostUsd: number;
+  cumulativeShares: number;
+  estimatedSkimAmountUsd: number;
+  eligibilityHint: string;
+  pUsdAvg: number;
+  vUsd: number;
 }
 
 // v4.4.2 — three event-driven plans.
@@ -179,7 +198,8 @@ export interface ProjectionApiResponse {
   assumptions?: ProjectionAssumptions;
   currentState?: CurrentState;
   coreAllocationPlan?: CoreAllocationPlan;
-  jepqWeeklyPlan?: JepqWeeklyPlan;
+  qqqmWeeklyPlan?: QqqmWeeklyPlan;
+  qqqmAnnualSkimPlan?: QqqmAnnualSkimPlan;
   tqqqExitPlan?: TqqqExitPlanOut;
   crisisTriggerPlan?: CrisisTriggerPlanOut;
   annualRebalancePlan?: AnnualRebalancePlanOut;

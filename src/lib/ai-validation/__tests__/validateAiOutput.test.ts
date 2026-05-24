@@ -153,12 +153,44 @@ test("QLD_WRONG_BASIS detects total-basis sell decision", () => {
   );
 });
 
-// ── QQQI_FIXED_TARGET ────────────────────────────────────────────────────────
+// ── QQQI_FIXED_TARGET (legacy v4.4.2 framing) ────────────────────────────────
 test("QQQI_FIXED_TARGET detects 5% target language", () => {
   expectViolation(
     "QQQI 5% 목표를 항상 맞추도록 매수합니다.",
     "QQQI_FIXED_TARGET",
   );
+});
+
+// ── v4.4.6.1 QQQM detectors ────────────────────────────────────────────────
+test("QQQM_INCORRECT_FRAMING detects QQQM 5% cap framing", () => {
+  expectViolation("QQQM은 5% cap을 항상 유지하세요.", "QQQM_INCORRECT_FRAMING");
+});
+
+test("QQQM_INCORRECT_FRAMING detects hard cap N% language", () => {
+  expectViolation("QQQM hard cap 10%를 적용해야 합니다.", "QQQM_INCORRECT_FRAMING");
+});
+
+test("QQQM_QUARTERLY_PROFIT_TAKING detects 분기 매도 권유", () => {
+  expectViolation("QQQM 분기 매도로 차익실현을 권장합니다.", "QQQM_QUARTERLY_PROFIT_TAKING");
+});
+
+test("QQQM_QUARTERLY_PROFIT_TAKING detects quarterly profit taking (English)", () => {
+  expectViolation("Take profit on QQQM quarterly when the price is high.", "QQQM_QUARTERLY_PROFIT_TAKING");
+});
+
+test("QQQM_CRISIS_BUY detects crisis-driven QQQM source", () => {
+  expectViolation(
+    "위기 T1 트리거 발동 시 QQQM에서 자금을 빼서 TQQQ 매수.",
+    "QQQM_CRISIS_BUY",
+  );
+});
+
+test("QQQM_FUNDED_BY_CORE_SALE detects core/overlay sale to buy QQQM", () => {
+  expectViolation("QLD를 일부 매도하여 QQQM을 매수합니다.", "QQQM_FUNDED_BY_CORE_SALE");
+});
+
+test("QQQM_AUTO_ROUTING detects distribution auto routing", () => {
+  expectViolation("QQQM 분배금을 SCHD와 QLD로 자동 라우팅합니다.", "QQQM_AUTO_ROUTING");
 });
 
 // ── AUTO_TRADE_LANGUAGE ──────────────────────────────────────────────────────

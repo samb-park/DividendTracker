@@ -129,10 +129,11 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [savedStrategy, setSavedStrategy] = useState(false);
 
-  // Sum is over Core tickers only (Satellite SGOV/QQQI + legacy IAUM use CAD, not %).
+  // Sum is over Core tickers only (Satellite SGOV/QQQM + legacy QQQI/IAUM use CAD, not %).
   const isNonCoreSym = (t: string) => {
     const u = t.toUpperCase();
-    return u === "SGOV" || u === "QQQI" || u === "IAUM";  // v4.4.2: QQQI; IAUM legacy.
+    // v4.4.6.1: SGOV reserve + QQQM active satellite + QQQI/IAUM inert legacy.
+    return u === "SGOV" || u === "QQQM" || u === "QQQI" || u === "IAUM";
   };
   const targetTotal = useMemo(
     () =>
@@ -914,7 +915,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
               const isExcluded = t.excluded ?? false;
               // Core/Non-Core is determined by ticker symbol (rulebook reserve list).
               const tickerUpper = ticker.toUpperCase();
-              const isNonCore = tickerUpper === "SGOV" || tickerUpper === "QQQI" || tickerUpper === "IAUM";  // v4.4.2: QQQI; IAUM legacy.
+              const isNonCore = tickerUpper === "SGOV" || tickerUpper === "QQQM" || tickerUpper === "QQQI" || tickerUpper === "IAUM";  // v4.4.6.1: QQQM satellite; QQQI/IAUM legacy.
               const plan = t.nonCorePlan ?? { frequency: contribFreq, cad: "" };
               const periodLabel = contribFreq === "weekly" ? "주간" : contribFreq === "biweekly" ? "격주" : "월간";
               return (

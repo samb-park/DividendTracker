@@ -88,7 +88,8 @@ export function RulebookStatus() {
             tqqqExitActive={data.tqqqExitPlan?.active ? { variant: data.tqqqExitPlan.variant } : null}
             crisisTriggerActive={data.crisisTriggerPlan?.active ? { tier: data.crisisTriggerPlan.tier } : null}
             annualRebalanceAction={data.annualRebalancePlan?.action ?? null}
-            jepqReason={data.jepqWeeklyPlan?.reason}
+            qqqmReason={data.qqqmWeeklyPlan?.reason}
+            qqqmAnnualSkimPlan={data.qqqmAnnualSkimPlan ?? null}
             overlayActive={data.coreAllocationPlan?.overlayActive ?? false}
           />
         )}
@@ -102,14 +103,16 @@ function Body({
   tqqqExitActive,
   crisisTriggerActive,
   annualRebalanceAction,
-  jepqReason,
+  qqqmReason,
+  qqqmAnnualSkimPlan,
   overlayActive,
 }: {
   cs: CurrentState;
   tqqqExitActive: { variant?: "soft" | "hard" } | null;
   crisisTriggerActive: { tier?: "T1" | "T2" } | null;
   annualRebalanceAction: "deadband" | "case_a" | "case_b" | "case_b_no_room" | null;
-  jepqReason?: string;
+  qqqmReason?: string;
+  qqqmAnnualSkimPlan: NonNullable<ProjectionApiResponse["qqqmAnnualSkimPlan"]> | null;
   overlayActive: boolean;
 }) {
   const f = cs.flags;
@@ -119,10 +122,11 @@ function Body({
   const crisisStatus: Status = f.crisisT2 ? "applied" : f.crisisT1 ? "applied" : "inactive";
   const crisisHint = f.crisisT2 ? "T2 (≤20% core) — 누적 5%" : f.crisisT1 ? "T1 (≤25% core) — 2.5%" : "정상 범위";
 
-  const sgovTargetStatus: Status = f.sgovBelowTarget ? "pending" : "inactive";
-  const sgovTargetLabel  = f.sgovBelowTarget ? "필요 (<8% target)" : "불필요 (≥8%)";
-  const sgovFloorStatus: Status = f.sgovBelowFloor ? "applied" : "inactive";
-  const sgovFloorLabel   = f.sgovBelowFloor ? "위기 바닥 침범" : "안전";
+  // v4.4.6.1: SGOV base 5% / max 8% / min 0%. No hard floor. Above-max row replaces the old floor row.
+  const sgovBaseStatus: Status = f.sgovBelowTarget ? "pending" : "inactive";
+  const sgovBaseLabel  = f.sgovBelowTarget ? "베이스 미달 (<5%)" : "정상 (≥5%)";
+  const sgovAboveStatus: Status = f.sgovAboveMax ? "pending" : "inactive";
+  const sgovAboveLabel  = f.sgovAboveMax ? "상한 초과 (>8%)" : "상한 내 (≤8%)";
 
   const today = new Date();
   const isYearEnd = today.getMonth() === 11 && today.getDate() >= 25;
@@ -133,30 +137,47 @@ function Body({
   const annualLabel = annualRebalanceAction === "case_a"
     ? "Case A — QLD 매도 → SCHD"
     : annualRebalanceAction === "case_b"
-      ? "Case B — SGOV → QLD"
+      ? "Case B — 무행동 (v4.4.2+)"
       : annualRebalanceAction === "case_b_no_room"
         ? "Case B 차단 (SGOV 바닥)"
         : f.inDeadband
           ? "데드밴드 (29-31%, 무행동)"
           : isYearEnd ? "예정 (12/31)" : "해당 없음 (12/31 외)";
 
-  // QQQI (v4.4.2 — Sangbong TFSA only, hard cap 5%)
-  let jepqStatus: Status;
-  let jepqLabel: string;
-  if (jepqReason && jepqReason.startsWith("적용")) {
-    jepqStatus = "pending"; jepqLabel = "충족";
-  } else if (jepqReason && jepqReason.startsWith("사용자 Settings 별도")) {
-    jepqStatus = "pending"; jepqLabel = "충족 (사용자)";
-  } else if (jepqReason?.includes("TFSA 잔여한도 없음")) {
-    jepqStatus = "inactive"; jepqLabel = "미충족 (TFSA room 없음)";
-  } else if (jepqReason?.includes("QQQI 전체 비중")) {
-    jepqStatus = "inactive"; jepqLabel = "미충족 (QQQI ≥ 5%)";
-  } else if (f.jepqAtCap) {
-    jepqStatus = "inactive"; jepqLabel = "미충족 (hard cap 도달)";
-  } else if (!jepqReason) {
-    jepqStatus = "unverified"; jepqLabel = "확인 필요";
+  // QQQM (v4.4.6.1 — Sangbong TFSA only, no cap, weekly 45 CAD CAD-accum)
+  let qqqmStatus: Status;
+  let qqqmLabel: string;
+  if (qqqmReason && qqqmReason.startsWith("적용")) {
+    qqqmStatus = "pending"; qqqmLabel = "충족";
+  } else if (qqqmReason && qqqmReason.startsWith("사용자 Settings 별도")) {
+    qqqmStatus = "pending"; qqqmLabel = "충족 (사용자)";
+  } else if (qqqmReason?.includes("TFSA 잔여한도 없음")) {
+    qqqmStatus = "inactive"; qqqmLabel = "미충족 (TFSA room 없음)";
+  } else if (qqqmReason?.startsWith("룰북 default")) {
+    qqqmStatus = "pending"; qqqmLabel = "충족 (룰북)";
+  } else if (!qqqmReason) {
+    qqqmStatus = "unverified"; qqqmLabel = "확인 필요";
   } else {
-    jepqStatus = "inactive"; jepqLabel = "미충족";
+    qqqmStatus = "inactive"; qqqmLabel = "미충족";
+  }
+
+  // §4 QQQM 연 skim (12/31) row
+  let qqqmSkimStatus: Status = "unverified";
+  let qqqmSkimLabel = "확인 필요";
+  let qqqmSkimHint = "조건 = V_usd > cumulativeCostUsd AND V_usd > 0; 12/31 (또는 직전 거래일)";
+  if (qqqmAnnualSkimPlan) {
+    const daysUntil = qqqmAnnualSkimPlan.daysUntilSkim;
+    if (qqqmAnnualSkimPlan.eligibilityHint === "profitable") {
+      qqqmSkimStatus = "pending";
+      qqqmSkimLabel = `예정 (≈ $${qqqmAnnualSkimPlan.estimatedSkimAmountUsd.toLocaleString()} USD, D-${daysUntil})`;
+    } else if (qqqmAnnualSkimPlan.eligibilityHint === "no-position") {
+      qqqmSkimStatus = "inactive";
+      qqqmSkimLabel = `해당 없음 (QQQM 보유 0)`;
+    } else {
+      qqqmSkimStatus = "inactive";
+      qqqmSkimLabel = `미해당 (USD 손실, D-${daysUntil})`;
+    }
+    qqqmSkimHint = `다음 일자 ${qqqmAnnualSkimPlan.nextSkimDateISO}${qqqmAnnualSkimPlan.isPostponed ? " (주말 조정)" : ""} · cumulativeCostUsd 차감 금지`;
   }
 
   void tqqqExitActive;
@@ -168,31 +189,31 @@ function Body({
         title="§10 Emergency cap (성장 버킷 ≥ 38%, daily close)"
         status={hardExitStatus}
         statusLabel={hardExitStatus === "applied" ? "적용" : "미적용"}
-        hint="TQQQ 전량 + QLD 30% → SGOV 8% → SCHD"
+        hint="TQQQ 전량 + QLD 30% → SGOV 8% (max) → SCHD · QQQM 매도 금지"
       />
       <StatusRow
         title="§6.2 TQQQ Soft Exit (성장 버킷 ≥ 34%, daily close)"
         status={softExitStatus}
         statusLabel={softExitStatus === "applied" ? "적용" : "미적용"}
-        hint="TQQQ 절반 매도 → SGOV 8% → SCHD"
+        hint="TQQQ 절반 매도 → SGOV 8% (max) → SCHD"
       />
       <StatusRow
         title="§6.1 Crisis Trigger (MONTH-END close 만)"
         status={crisisStatus}
         statusLabel={crisisStatus === "applied" ? "적용" : "미적용"}
-        hint={`${crisisHint} · SGOV 5% 바닥 보호`}
+        hint={`${crisisHint} · SGOV 0%까지 소진 가능 (바닥 없음) · QQQM 매도 금지`}
       />
       <StatusRow
-        title="SGOV 보충 (target 8%)"
-        status={sgovTargetStatus}
-        statusLabel={sgovTargetLabel}
-        hint={`현재 ${cs.sgovTotalWeightPct}% · floor 5% · 가용 버퍼 3%`}
+        title="SGOV 베이스 (5%)"
+        status={sgovBaseStatus}
+        statusLabel={sgovBaseLabel}
+        hint={`현재 ${cs.sgovTotalWeightPct}% · base 5% / max 8% / min 0% (바닥 없음)`}
       />
       <StatusRow
-        title="SGOV 위기 바닥 (5%)"
-        status={sgovFloorStatus}
-        statusLabel={sgovFloorLabel}
-        hint="위기 트리거만 침범 허용 · 가용 버퍼 = max(0, SGOV − 5%·Total)"
+        title="SGOV 상한 (8%)"
+        status={sgovAboveStatus}
+        statusLabel={sgovAboveLabel}
+        hint="annual rebal / QQQM 12/31 skim refill은 상한에서 중단"
       />
       <StatusRow
         title="TQQQ 오버레이"
@@ -201,16 +222,22 @@ function Body({
         hint="TQQQ > 0 시 Core 분배가 오버레이로 전환 · SCHD 배당도 동일 분배"
       />
       <StatusRow
-        title="QQQI Buy Condition (Sangbong TFSA)"
-        status={jepqStatus}
-        statusLabel={jepqLabel}
-        hint="조건 = TFSA room AND QQQI < 5% (hard cap)"
+        title="QQQM 주간 CAD 누적 (Sangbong TFSA)"
+        status={qqqmStatus}
+        statusLabel={qqqmLabel}
+        hint="조건 = TFSA room · 주간 45 CAD CAD-accum · cap 없음 · 분기 NG batch 사용자 외부 처리"
+      />
+      <StatusRow
+        title="§4 QQQM 연 skim (12/31)"
+        status={qqqmSkimStatus}
+        statusLabel={qqqmSkimLabel}
+        hint={qqqmSkimHint}
       />
       <StatusRow
         title="연말 리밸런스"
         status={annualStatus}
         statusLabel={annualLabel}
-        hint="29 ≤ W ≤ 31% 무행동 / W > 31% Case A (refill SGOV→8%) / W < 29% 무행동 (SCHD 매도 금지)"
+        hint="29 ≤ W ≤ 31% 무행동 / W > 31% Case A (refill SGOV→8% max) / W < 29% 무행동 (SCHD 매도 금지)"
       />
     </ul>
   );

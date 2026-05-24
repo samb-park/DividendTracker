@@ -4,6 +4,25 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { buildGlidepathTargets } from "@/lib/glide-path";
 import { deleteUserAiCache } from "@/lib/ai-cache";
+import { RULEBOOK_TARGETS } from "@/lib/rulebook";
+
+// v4.4.6.1 rulebook defaults exposed to the Settings UI so it can pre-fill /
+// surface fallback values for satellite tickers when the user has no override.
+// SGOV reserve: no rulebook-default weekly contribution (refill comes from annual
+// rebal / QQQM 12/31 skim). QQQM satellite: 45 CAD/wk TFSA cash-accum.
+const RULEBOOK_NON_CORE_DEFAULTS = {
+  QQQM: {
+    frequency: "weekly" as const,
+    cad: RULEBOOK_TARGETS.QQQM_WEEKLY_BUY_CAD,
+    account: "TFSA" as const,
+    rulebookVersion: "v4.4.6.1",
+  },
+  SGOV: {
+    frequency: "weekly" as const,
+    cad: 0,                                  // v4.4.6.1: no rulebook-default refill
+    rulebookVersion: "v4.4.6.1",
+  },
+};
 
 const contributionSchema = z.object({
   type: z.literal("contribution"),
@@ -142,6 +161,9 @@ export async function GET() {
     accountMapping,
     triggerParams,
     projectionAssumptions,
+    // v4.4.6.1: rulebook-default non-core CAD streams. UI uses these as fallback
+    // pre-fill when the user has no per-ticker nonCorePlan override saved.
+    nonCoreDefaults: RULEBOOK_NON_CORE_DEFAULTS,
   });
 }
 

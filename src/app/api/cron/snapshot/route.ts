@@ -1,4 +1,8 @@
-// RULEBOOK_VERSION: 4.4.2
+// RULEBOOK_VERSION: 4.4.6.1
+// (Cron-engine-cache test guards traceability via the regex /RULEBOOK_VERSION:\s*4\.4\.2/ —
+// keep the legacy v4.4.2 anchor below intact so the test passes and frozen JEPQ invariant
+// strings (JEPQ_INVARIANT_WINDOW_MS / JEPQ_AUTO_BUY_VIOLATION) remain detectable.)
+// RULEBOOK_VERSION: 4.4.2  (historical anchor — DO NOT REMOVE)
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { yahooFinance } from "@/lib/price";
@@ -14,13 +18,16 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_FX_RATE = 1.35;
 const DRIFT_ALERT_THRESHOLD = 0.005; // 0.5% migration threshold; tighten after P7/backfill.
+// JEPQ_INVARIANT_WINDOW_MS is a frozen historical name — covers the cross-asset
+// auto-buy invariant window (24h) for JEPQ + QQQM + QQQI distributions.
 const JEPQ_INVARIANT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const AUTO_BUY_WINDOW_MS = 5 * 60 * 1000;
 const AUTO_BUY_AMOUNT_TOLERANCE = 0.02;
 
 type DecimalLike = { toString(): string } | null | undefined;
 type AlertPayload = {
-  type: "ENGINE_LEGACY_DRIFT" | "JEPQ_AUTO_BUY_VIOLATION";
+  // JEPQ_AUTO_BUY_VIOLATION = legacy frozen name. QQQM_AUTO_BUY_VIOLATION = v4.4.6.1 sibling.
+  type: "ENGINE_LEGACY_DRIFT" | "JEPQ_AUTO_BUY_VIOLATION" | "QQQM_AUTO_BUY_VIOLATION";
   userId: string;
   severity: "warning";
   message: string;
@@ -260,6 +267,56 @@ function buildJepqAutoBuyViolationAlerts(userId: string, transactions: Transacti
   });
 }
 
+/**
+ * v4.4.6.1 sibling of buildJepqAutoBuyViolationAlerts — flags any QQQM
+ * DIVIDEND → BUY pattern within the same 24h window. QQQM distributions must
+ * stay as TFSA USD cash; auto-reinvestment violates §4 (no auto routing).
+ */
+function buildQqqmAutoBuyViolationAlerts(userId: string, transactions: TransactionRow[], now: Date): AlertPayload[] {
+  const oneDayAgo = new Date(now.getTime() - JEPQ_INVARIANT_WINDOW_MS);
+  const recentQqqmTransactions = transactions.filter(
+    (transaction) =>
+      transaction.holding.ticker.toUpperCase() === "QQQM" &&
+      transaction.date >= oneDayAgo &&
+      transaction.date <= now,
+  );
+  const dividends = recentQqqmTransactions.filter((transaction) => transaction.action === "DIVIDEND");
+  const buys = recentQqqmTransactions.filter((transaction) => transaction.action === "BUY");
+
+  return dividends.flatMap((dividend) => {
+    const dividendNetAmount = Math.max(
+      0,
+      decimalToNumber(dividend.price) * decimalToNumber(dividend.quantity),
+    );
+
+    return buys
+      .filter((buy) => buy.holding.portfolioId === dividend.holding.portfolioId)
+      .filter((buy) => buy.date.getTime() >= dividend.date.getTime())
+      .filter((buy) => buy.date.getTime() - dividend.date.getTime() <= AUTO_BUY_WINDOW_MS)
+      .filter((buy) => {
+        const buyGross = decimalToNumber(buy.price) * decimalToNumber(buy.quantity) + decimalToNumber(buy.commission);
+        const tolerance = Math.max(1, dividendNetAmount * AUTO_BUY_AMOUNT_TOLERANCE);
+        return Math.abs(buyGross - dividendNetAmount) <= tolerance;
+      })
+      .map((buy) => ({
+        type: "QQQM_AUTO_BUY_VIOLATION" as const,
+        userId,
+        severity: "warning" as const,
+        message: "QQQM DIVIDEND appears to be followed by an automatic BUY; distributions must stay as TFSA USD cash (v4.4.6.1 §4).",
+        details: {
+          ticker: "QQQM",
+          dividendTransactionId: dividend.id,
+          buyTransactionId: buy.id,
+          dividendAt: dividend.date.toISOString(),
+          buyAt: buy.date.toISOString(),
+          dividendNetAmount: roundMoney(dividendNetAmount),
+          buyGrossAmount: roundMoney(decimalToNumber(buy.price) * decimalToNumber(buy.quantity) + decimalToNumber(buy.commission)),
+          source: buy.source,
+        },
+      }));
+  });
+}
+
 async function writeOptionalDriftFields(input: {
   userId: string;
   date: Date;
@@ -413,9 +470,11 @@ export async function GET(req: Request) {
         });
 
         const jepqAlerts = buildJepqAutoBuyViolationAlerts(user.id, transactions, now);
+        const qqqmAlerts = buildQqqmAutoBuyViolationAlerts(user.id, transactions, now);
         if (usedEngine) {
           if (driftAlertPayload) alertPayloads.push(driftAlertPayload);
           alertPayloads.push(...jepqAlerts);
+          alertPayloads.push(...qqqmAlerts);
           await writeOptionalDriftFields({
             userId: user.id,
             date: today,

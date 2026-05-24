@@ -1,13 +1,13 @@
 "use client";
 
 // SOLE authoritative renderer for "이번 주 실행안" action plan.
-// v4.4.2: Static 70/30 Core (SCHD/QLD or overlay SCHD/TQQQ) + Satellite stream (SGOV/QQQI Settings CAD) + grand total.
+// v4.4.6.1: Static 70/30 Core (SCHD/QLD or overlay SCHD/TQQQ) + Satellite stream (SGOV/QQQM Settings CAD) + grand total.
 // No other component on the AI page should display per-asset weekly buy CAD amounts.
 import { useEffect, useState } from "react";
 import type {
   CoreAllocationPlan,
   ProjectionApiResponse,
-  JepqWeeklyPlan,
+  QqqmWeeklyPlan,
 } from "@/lib/types/ai-projection";
 import { nonCoreSourceLabel } from "@/lib/types/ai-projection";
 import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
@@ -59,7 +59,7 @@ export function ThisWeekActionPlan() {
           </div>
         )}
         {!loading && !error && data?.coreAllocationPlan && (
-          <ActionPlanBody plan={data.coreAllocationPlan} jepqPlan={data.jepqWeeklyPlan} />
+          <ActionPlanBody plan={data.coreAllocationPlan} qqqmPlan={data.qqqmWeeklyPlan} />
         )}
         {!loading && !error && !data?.coreAllocationPlan && (
           <div className="text-xs text-muted-foreground">실행안 데이터가 없습니다.</div>
@@ -69,8 +69,8 @@ export function ThisWeekActionPlan() {
   );
 }
 
-function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan?: JepqWeeklyPlan }) {
-  const nonCoreSum = plan.sgovReserveCAD + plan.jepqBuyCAD;
+function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan?: QqqmWeeklyPlan }) {
+  const nonCoreSum = plan.sgovReserveCAD + plan.qqqmCashAccumCAD;
   const totalOut = plan.totalWeeklyOutCAD ?? plan.weeklyContribCAD + nonCoreSum;
   const overlay = plan.overlayActive;
   const coreTitle = overlay ? "Core (정적 70/30 · 오버레이)" : "Core (정적 70/30)";
@@ -114,12 +114,12 @@ function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan
             </tr>
             <tr className="border-b border-border/50 bg-muted/10">
               <td className="text-left py-1.5 px-2">
-                QQQI
-                {plan.jepqSource && (
-                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(plan.jepqSource)})</span>
+                QQQM
+                {plan.qqqmSource && (
+                  <span className="ml-1 text-[9px] text-muted-foreground">({nonCoreSourceLabel(plan.qqqmSource)})</span>
                 )}
               </td>
-              <td className="text-right py-1.5 px-2">{fmtDollar(plan.jepqBuyCAD)}</td>
+              <td className="text-right py-1.5 px-2">{fmtDollar(plan.qqqmCashAccumCAD)}</td>
             </tr>
           </tbody>
           <tfoot>
@@ -128,7 +128,7 @@ function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan
               <td className="text-right py-1.5 px-2">{fmtDollar(plan.weeklyContribCAD)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/20">
-              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Satellite 추가 (SGOV+QQQI)</td>
+              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Satellite 추가 (SGOV+QQQM)</td>
               <td className="text-right py-1.5 px-2">{fmtDollar(nonCoreSum)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/30">
@@ -157,7 +157,7 @@ function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan
         </div>
         <ul className="divide-y divide-border">
           <MobileRow label="SGOV" value={fmtDollar(plan.sgovReserveCAD)} hint={plan.sgovSource ? nonCoreSourceLabel(plan.sgovSource) : undefined} />
-          <MobileRow label="QQQI" value={fmtDollar(plan.jepqBuyCAD)} hint={plan.jepqSource ? nonCoreSourceLabel(plan.jepqSource) : undefined} />
+          <MobileRow label="QQQM" value={fmtDollar(plan.qqqmCashAccumCAD)} hint={plan.qqqmSource ? nonCoreSourceLabel(plan.qqqmSource) : undefined} />
         </ul>
         <div className="bg-muted/20">
           <ul className="divide-y divide-border">
@@ -173,8 +173,8 @@ function ActionPlanBody({ plan, jepqPlan }: { plan: CoreAllocationPlan; jepqPlan
       </div>
 
       <div className="text-[10px] text-muted-foreground mt-2">
-        v4.4.2 정적 분배: 정상은 SCHD 70 / QLD 30. TQQQ 오버레이 활성(TQQQ &gt; 0) 시 SCHD 70 / TQQQ 30 / QLD 0. SCHD 배당 재투자도 동일 70/30 분배. SGOV·QQQI는 Settings 별도 CAD 스트림. QQQI는 Sangbong TFSA only, hard cap 5%, crisis/rebalance 자금원 사용 금지. 위기 트리거(§6.1, MONTH-END)는 SGOV → TQQQ.
-        {jepqPlan?.reason && <> · QQQI: {jepqPlan.reason}</>}
+        v4.4.6.1 정적 분배: 정상은 SCHD 70 / QLD 30 (주간 380 CAD = SCHD 266 / QLD 114). TQQQ 오버레이 활성(TQQQ &gt; 0) 시 SCHD 70 / TQQQ 30 / QLD 0. SCHD 배당 재투자도 동일 70/30 분배. SGOV는 Settings 별도 CAD 스트림 (룰북-default 주간 contribution 없음 — 보충은 annual rebal / QQQM 12/31 4% skim 경로). QQQM은 Sangbong TFSA only, 주간 45 CAD CAD-accum (분기 NG batch 사용자 외부 처리), cap 없음, 분기 매도 / 차익실현 절대 금지, 연 1회 12/31 skim만 매도. 위기 트리거(§6.1, MONTH-END)는 SGOV → TQQQ (SGOV 0%까지 소진 가능, QQQM 매도 금지).
+        {qqqmPlan?.reason && <> · QQQM: {qqqmPlan.reason}</>}
       </div>
     </>
   );

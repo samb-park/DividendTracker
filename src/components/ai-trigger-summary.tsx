@@ -14,18 +14,18 @@ interface CurrentState {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  jepqCAD: number;
+  qqqmCAD: number;
   qldCoreWeightPct: number;
   schdCoreWeightPct: number;
   sgovTotalWeightPct: number;
-  jepqTotalWeightPct: number;
+  qqqmTotalWeightPct: number;
   flags: {
     hardExit: boolean;
     softExit: boolean;
     crisisT1: boolean;
     crisisT2: boolean;
     sgovBelowTarget: boolean;
-    jepqAtCap: boolean;
+    sgovAboveMax: boolean;
   };
 }
 
@@ -122,7 +122,7 @@ export function AiTriggerSummary() {
           label="SGOV 전체 비중"
           value={fmtPct(cs.sgovTotalWeightPct)}
           tone={cs.flags.sgovBelowTarget ? "amber" : "default"}
-          sub={cs.flags.sgovBelowTarget ? "보충 필요 (<8% target)" : "목표 8% / 바닥 5%"}
+          sub={cs.flags.sgovBelowTarget ? "베이스 미달 (<5%)" : cs.flags.sgovAboveMax ? "상한 초과 (>8%)" : "base 5% / max 8% / min 0%"}
         />
       </div>
       <div className="px-4 pb-3 text-[10px] text-muted-foreground">

@@ -12,12 +12,23 @@
  * a short window after the match.
  */
 import { detectAutoTradeLanguage } from "./rules/autoTradeLanguage";
-import { detectJepqCrisisBuy } from "./rules/jepqCrisisBuy";
-import { detectJepqFixedTarget } from "./rules/jepqFixedTarget";
+import { detectJepqCrisisBuy, detectQqqmCrisisBuy } from "./rules/jepqCrisisBuy";
+import {
+  detectJepqFixedTarget,
+  detectQqqmIncorrectFraming,
+  detectQqqmQuarterlyProfitTaking,
+} from "./rules/qqqmIncorrectFraming";
 import { detectNdxTrigger } from "./rules/ndxTrigger";
 import { detectOptimisticScenario } from "./rules/optimisticScenario";
 import { detectQldWrongBasis } from "./rules/qldWrongBasis";
-import { detectQqqiAutoRouting, detectQqqiCapWarning, detectQqqiFundedByCoreSale, detectLegacyIncomeTicker } from "./rules/qqqiRuleViolations";
+import {
+  detectQqqiAutoRouting,
+  detectQqqiCapWarning,
+  detectQqqiFundedByCoreSale,
+  detectQqqmFundedByCoreSale,
+  detectQqqmAutoRouting,
+  detectLegacyIncomeTicker,
+} from "./rules/qqqiRuleViolations";
 import { detectSchdSell } from "./rules/schdSell";
 import { detectSgovReturnAsset } from "./rules/sgovReturnAsset";
 import type { Detector, Violation, ViolationCode } from "./rules/types";
@@ -43,14 +54,19 @@ const DETECTORS: readonly Detector[] = [
   detectLegacyIncomeTicker,
   detectSchdSell,
   detectJepqCrisisBuy,
+  detectQqqmCrisisBuy,
   detectQqqiCapWarning,
   detectQqqiAutoRouting,
+  detectQqqmAutoRouting,
   detectQqqiFundedByCoreSale,
+  detectQqqmFundedByCoreSale,
   detectSgovReturnAsset,
   detectOptimisticScenario,
   detectNdxTrigger,
   detectQldWrongBasis,
   detectJepqFixedTarget,
+  detectQqqmIncorrectFraming,
+  detectQqqmQuarterlyProfitTaking,
   detectAutoTradeLanguage,
 ];
 
