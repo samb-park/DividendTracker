@@ -6,7 +6,7 @@ import { hasNegationNearby, snippetAround, type Detector, type Violation } from 
  * Suppressed when a negation phrase appears within the lookahead window
  * (e.g. "SCHD 매도 금지", "SCHD를 매도하지 마세요").
  *
- * Rulebook §15 (v4.3.1): SCHD is never sold in static 70/30 / Crisis / Hard Exit.
+ * Rulebook §15 (v4.3.1): SCHD is never sold in static 60/40 / Crisis / year-end flows.
  * The only exception is RRSP meltdown distributions (§11) — those use
  * portfolio withdrawals, not the word "매도".
  *

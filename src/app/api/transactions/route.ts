@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
     if (action === "BUY" && holding.ticker.toUpperCase() === LEGACY_INCOME_TICKER) {
       return NextResponse.json(
-        { error: "Rulebook v4.4.6.1 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
+        { error: "Rulebook v4.5.0 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
         { status: 422 },
       );
     }
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
     if (action === "BUY" && ticker === LEGACY_INCOME_TICKER) {
       return NextResponse.json(
-        { error: "Rulebook v4.4.6.1 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
+        { error: "Rulebook v4.5.0 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
         { status: 422 },
       );
     }

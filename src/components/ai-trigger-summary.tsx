@@ -5,7 +5,7 @@ import { AI_REFRESH_EVENT } from "@/components/ai-page-refresh";
 
 // Compact rebalancing/trigger snapshot. Renders ONLY a 4-stat dashboard so the
 // AI page header gives an at-a-glance status read. All detailed numbers
-// (static-70/30 table, Non-Core CAD, TQQQ exit plan, full trigger list, AI
+// (static-60/40 table, Non-Core CAD, TQQQ exit plan, full trigger list, AI
 // narrative) live in ProjectionCard below — this component intentionally
 // avoids duplicating them.
 interface CurrentState {
@@ -95,9 +95,9 @@ export function AiTriggerSummary() {
   // page header captures the most critical action without duplicating the full
   // trigger list (which lives in ProjectionCard below).
   const qldSub = cs.flags.hardExit
-    ? "Emergency cap — 아래 실행안 참고"
+    ? "Emergency cap 폐지"
     : cs.flags.softExit
-      ? "Soft Exit — 아래 실행안 참고"
+      ? "Soft Exit 폐지"
       : cs.flags.crisisT2
         ? "위기 트리거 T2"
         : cs.flags.crisisT1

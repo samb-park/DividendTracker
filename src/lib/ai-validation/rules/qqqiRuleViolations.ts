@@ -10,8 +10,8 @@ export const detectLegacyIncomeTicker: Detector = (text) => {
   const matchEnd = m.index + m[0].length;
   return {
     code: "LEGACY_INCOME_TICKER",
-    section: "§4 / Rulebook v4.4.2",
-    reason: "Legacy income-slot ticker mention detected. Rulebook v4.4.2 income slot asset is QQQI only.",
+    section: "§4 / Rulebook v4.5.0",
+    reason: "Legacy ticker new-buy mention detected. Rulebook v4.5.0 treats QQQM/QQQI/JEPQ/IAUM as hold-only.",
     snippet: snippetAround(text, matchStart, matchEnd),
   } satisfies Violation;
 };
@@ -52,7 +52,7 @@ export const detectQqqiAutoRouting: Detector = (text) => {
     return {
       code: "QQQI_AUTO_ROUTING",
       section: "§4",
-      reason: "QQQI 분배금 자동 라우팅 감지 (룰북 v4.4.2: 자동 라우팅 없음)",
+      reason: "QQQI 분배금 자동 라우팅 감지 (룰북 v4.5.0: 자동 라우팅 없음)",
       snippet: snippetAround(text, matchStart, matchEnd),
     } satisfies Violation;
   }
@@ -82,7 +82,7 @@ export const detectQqqiFundedByCoreSale: Detector = (text) => {
 
 /**
  * QQQM sibling of detectQqqiFundedByCoreSale.
- * Rulebook v4.4.6.1: SCHD/QLD/TQQQ 매도로 QQQM 매수 금지. QQQM 자금원은
+ * Rulebook v4.5.0: SCHD/QLD/TQQQ 매도로 QQQM 매수 금지. QQQM 자금원은
  * 사용자 외부의 TFSA CAD 입금 → quarterly NG batch 뿐.
  */
 export const detectQqqmFundedByCoreSale: Detector = (text) => {
@@ -98,8 +98,8 @@ export const detectQqqmFundedByCoreSale: Detector = (text) => {
     if (hasNegationNearby(text, matchStart, matchEnd)) continue;
     return {
       code: "QQQM_FUNDED_BY_CORE_SALE",
-      section: "§4 / §15 (v4.4.6.1)",
-      reason: "SCHD/QLD/TQQQ 매도로 QQQM을 매수하는 흐름 감지 (룰북 v4.4.6.1: QQQM 자금원은 TFSA 별도 입금만)",
+      section: "§4 / §15 (v4.5.0)",
+      reason: "SCHD/QLD/TQQQ 매도로 QQQM을 매수하는 흐름 감지 (룰북 v4.5.0: QQQM 자금원은 TFSA 별도 입금만)",
       snippet: snippetAround(text, matchStart, matchEnd),
     } satisfies Violation;
   }
@@ -108,7 +108,7 @@ export const detectQqqmFundedByCoreSale: Detector = (text) => {
 
 /**
  * QQQM sibling of detectQqqiAutoRouting.
- * Rulebook v4.4.6.1: QQQM distribution은 TFSA USD cash로 누적, 자동 라우팅 없음.
+ * Rulebook v4.5.0: QQQM distribution은 TFSA USD cash로 누적, 자동 라우팅 없음.
  */
 export const detectQqqmAutoRouting: Detector = (text) => {
   const patterns = [
@@ -125,8 +125,8 @@ export const detectQqqmAutoRouting: Detector = (text) => {
     if (hasNegationNearby(text, matchStart, matchEnd)) continue;
     return {
       code: "QQQM_AUTO_ROUTING",
-      section: "§4 (v4.4.6.1)",
-      reason: "QQQM 분배금 자동 라우팅 감지 (룰북 v4.4.6.1: 자동 라우팅 없음, TFSA USD cash 누적)",
+      section: "§4 (v4.5.0)",
+      reason: "QQQM 분배금 자동 라우팅 감지 (룰북 v4.5.0: 자동 라우팅 없음, TFSA USD cash 누적)",
       snippet: snippetAround(text, matchStart, matchEnd),
     } satisfies Violation;
   }

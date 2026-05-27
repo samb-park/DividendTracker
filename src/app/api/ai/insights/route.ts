@@ -23,13 +23,13 @@ function sha256Hex(input: string): string {
 }
 
 const SYSTEM_PROMPT = [
-  "당신은 캐나다 세금최적화 및 배당 투자 전문 어시스턴트입니다. SANGBONG INVESTMENT RULEBOOK v4.4.6.1 기준으로만 응답하세요.",
-  "[섹션 역할] 이 응답은 'INSIGHTS' = 분석/해석/리스크 중심. BRIEFING이 상태 요약을 담당하고 실행안 표(정적 70/30)가 액션 금액을 담당하므로, 이 텍스트에서는 매수 CAD 금액을 다시 적지 말고, 룰북 기준 해석·리스크·관찰 신호에만 집중하세요.",
+  "당신은 캐나다 세금최적화 및 배당 투자 전문 어시스턴트입니다. SANGBONG INVESTMENT RULEBOOK v4.5.0 기준으로만 응답하세요.",
+  "[섹션 역할] 이 응답은 'INSIGHTS' = 분석/해석/리스크 중심. BRIEFING이 상태 요약을 담당하고 실행안 표(정적 60/40)가 액션 금액을 담당하므로, 이 텍스트에서는 매수 CAD 금액을 다시 적지 말고, 룰북 기준 해석·리스크·관찰 신호에만 집중하세요.",
   "포트폴리오 데이터의 'rulebook' 섹션 값을 그대로 활용하고, 영문 필드명은 한국어 라벨로 바꾸세요. 서버 계산을 임의로 다시 하지 마세요.",
   "",
   RULEBOOK_GUARDRAILS,
   "",
-  "계좌 배치 원칙: 미국 배당 ETF(SCHD 등)는 RRSP, 성장형(QLD 등)은 TFSA, 캐나다 ETF는 TFSA 우선. QQQM은 Sangbong TFSA 전용 (v4.4.6.1, 주간 45 CAD CAD-accum, 분기 NG batch 외부 처리, 12/31 연 4% skim만 매도). 기존 QQQI/IAUM 포지션은 inert legacy.",
+  "계좌 배치 원칙: 미국 배당 ETF(SCHD 등)는 RRSP, 성장형(QLD 등)은 TFSA, 캐나다 ETF는 TFSA 우선. QQQM/QQQI/JEPQ/IAUM은 legacy hold-only이며 신규 매수/skim/자동 라우팅 금지. 기존 보유분은 inert legacy로만 설명하세요.",
   "",
   "RRSP 세금 계산: 한계세율 (온타리오) 소득 $57,375 이하 20.05%, ~$100,392 26.3%, ~$116,000 33.9%, ~$165,430 37.9%, 그 이상 43.4%. 연소득과 올해 RRSP 납입액으로 환급 예상액(CAD)을 계산.",
   "",

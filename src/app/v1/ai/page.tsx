@@ -10,9 +10,9 @@ import { ErrorBoundary } from "@/components/error-boundary";
 export const dynamic = "force-dynamic";
 
 export default async function AiAssistantPage() {
-  // 정보 구조 (룰북 v4.4.2):
+  // 정보 구조 (룰북 v4.5.0):
   //   1. Top Summary       — 4-stat 스냅샷 (코어/QLD/SGOV)
-  //   2. This Week Action  — 정적 70/30 + Non-Core (sole authority)
+  //   2. This Week Action  — 정적 60/40 + Non-Core (sole authority)
   //   3. Rulebook Status   — 트리거 적용 여부 (구조화 list)
   //   4. AI Briefing/Insights — 짧은 status / 분석 (액션 금액 반복 금지)
   //   5. Projection        — 미래 시나리오 + AI narrative (현재 상태/실행안 반복 금지)
@@ -20,7 +20,7 @@ export default async function AiAssistantPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="text-xs tracking-wide text-muted-foreground">
-          포트폴리오를 룰북 v4.4.2 기준으로 분석하고 이번 주 실행안을 제시합니다.
+          포트폴리오를 룰북 v4.5.0 기준으로 분석하고 이번 주 실행안을 제시합니다.
         </div>
         <AiPageRefreshButton />
       </div>

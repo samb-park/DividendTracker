@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const upperTicker = ticker.trim().toUpperCase();
   if (upperTicker === LEGACY_INCOME_TICKER) {
     return NextResponse.json(
-      { error: "Rulebook v4.4.2 violation: income slot ticker is QQQI only" },
+      { error: "Rulebook v4.5.0 violation: QQQM/QQQI/JEPQ/IAUM are legacy hold-only" },
       { status: 422 },
     );
   }

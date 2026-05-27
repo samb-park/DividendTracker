@@ -303,11 +303,11 @@ model AssetWeightSnapshot {
   schdCAD             Decimal  @db.Decimal(18, 2)
   qldCAD              Decimal  @db.Decimal(18, 2)
   sgovCAD             Decimal  @db.Decimal(18, 2)
-  iaumCAD             Decimal  @db.Decimal(18, 2)              // legacy (v4.4.2 slot; pre-v4.4.6.1)
+  iaumCAD             Decimal  @db.Decimal(18, 2)              // legacy slot; pre-v4.5.0
   tqqqCAD             Decimal  @db.Decimal(18, 2)
   otherCAD            Decimal  @db.Decimal(18, 2)              // non-rulebook tickers, reserved
   cashCAD             Decimal  @db.Decimal(18, 2)
-  // — v4.4.6.1 QQQM satellite (additive, nullable for back-compat)
+  // — v4.5.0 QQQM legacy/hold-only observations (nullable for back-compat)
   qqqmCAD                Decimal? @db.Decimal(18, 2)
   qqqmTotalWeightPct     Decimal? @db.Decimal(6, 3)
   qqqmCumulativeCostUsd  Decimal? @db.Decimal(18, 2)
@@ -370,7 +370,7 @@ model RulebookTriggerEvent {
 /// promptHash = sha256(RULEBOOK_GUARDRAILS + AI_OUTPUT_RULES + structure
 /// constants) so silent guardrail edits are detectable.
 model RulebookVersion {
-  version       String   @id                                  // e.g. "v4.1.10-3"
+  version       String   @id                                  // e.g. "v4.5.0-1"
   promptHash    String
   effectiveFrom DateTime
   changelog     String   @db.Text

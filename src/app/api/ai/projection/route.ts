@@ -180,7 +180,7 @@ async function runProjection(userId: string) {
       getFxRate().catch(() => null),
       prisma.setting.findMany({ where: { key: { startsWith: `${userId}:investment:target:` } } }),
       prisma.setting.findUnique({ where: { key: `${userId}:investment:projection_assumptions` } }),
-      // v4.4.6.1: QQQM BUY transactions feed cumulative USD cost basis for the 12/31 annual skim helper.
+      // v4.5.0: QQQM BUY transactions retained only for legacy cost/holding context; no rulebook skim.
       prisma.transaction.findMany({
         where: {
           action: "BUY",
@@ -314,36 +314,26 @@ async function runProjection(userId: string) {
     sgovUserCAD && sgovUserCAD > 0 ? "user-settings" : "rulebook-inactive";
   // qqqmSourceLabel resolved after rule-default check below.
 
-  // Core: full weekly contribution → STATIC 70/30 (v4.4.6.1). Overlay (TQQQ > 0) swaps QLD → TQQQ.
-  const overlayActive = weights.tqqqCAD > 0;
+  // Core: full weekly contribution → STATIC 60/40 (v4.5.0). No TQQQ overlay.
+  const overlayActive = false;
   const core = computeStaticCoreAllocation(weeklyContribCAD, overlayActive);
   const coreContribCAD = core.schdBuyCAD + core.qldBuyCAD + core.tqqqBuyCAD;
 
-  // SGOV (v4.4.6.1): user-settings only — no rulebook-default weekly refill.
-  // Refill happens via annual rebalance / QQQM 12/31 skim (handled elsewhere).
+  // SGOV (v4.5.0): user-settings only — no rulebook-default weekly refill.
+  // SGOV refill also receives year-end trim proceeds where applicable.
   const sgovUserSet = !!(sgovUserCAD && sgovUserCAD > 0);
   const sgovReserveCAD = sgovUserSet ? sgovUserCAD! : 0;
 
-  // QQQM (v4.4.6.1): TFSA-only, 45 CAD/wk cash accumulation when TFSA room exists. No cap.
-  const qqqmUserSet = !!(qqqmUserCAD && qqqmUserCAD > 0);
+  // QQQM (v4.5.0): legacy/hold-only. Ignore user-settings CAD for new-buy guidance.
+  void qqqmUserCAD;
   const qqqmPlan = computeQqqmWeeklyPlan(tfsaRoomExists);
-  const qqqmRuleAllowed = qqqmPlan.qqqmCashAccumCAD > 0;
-  const qqqmActualCAD = qqqmUserSet
-    ? qqqmUserCAD!
-    : (qqqmRuleAllowed ? RULEBOOK_TARGETS.QQQM_WEEKLY_BUY_CAD : 0);
-  const qqqmSourceLabel: "user-settings" | "rulebook-default" | "rulebook-inactive" = qqqmUserSet
-    ? "user-settings"
-    : (qqqmRuleAllowed ? "rulebook-default" : "rulebook-inactive");
-
-  const qqqmApplyReason = qqqmUserSet
-    ? `사용자 Settings 별도 스트림: $${Math.round(qqqmActualCAD)} CAD/period (source=${qqqmSourceLabel}, Sangbong TFSA only)`
-    : qqqmActualCAD > 0
-      ? `룰북 default: $${Math.round(qqqmActualCAD)} CAD (TFSA room 존재)`
-      : qqqmPlan.reason;
+  const qqqmActualCAD = 0;
+  const qqqmSourceLabel: "user-settings" | "rulebook-default" | "rulebook-inactive" = "rulebook-inactive";
+  const qqqmApplyReason = qqqmPlan.reason;
 
   const totalWeeklyOutCAD = weeklyContribCAD + sgovReserveCAD + qqqmActualCAD;
 
-  // QQQM cumulative USD cost basis + shares (v4.4.6.1 §4 12/31 skim threshold).
+  // QQQM cumulative USD cost basis + shares (legacy context only; v4.5.0 skim removed).
   const qqqmCumulative = computeQqqmCumulative(
     qqqmTxAll.map(tx => ({
       action: "BUY" as const,
@@ -383,11 +373,7 @@ async function runProjection(userId: string) {
     vUsd: Math.round(qqqmSkimEvaluation.vUsd * 100) / 100,
   };
 
-  // v4.4.2 event-driven plans — surfaced only when triggered.
-  //  §6.2 TQQQ Soft Exit (34%) — daily close
-  //  §10  Emergency cap / Hard Exit (38%) — daily close
-  //  §6.1 Crisis Trigger (SGOV → TQQQ) — month-end close
-  //  §5   Annual Rebalance (Case A / B / deadband)
+  // v4.5.0 event plans: retired TQQQ exit compatibility (always inactive), Crisis SGOV → QLD, Annual Rebalance.
   const softExitPlan = computeTqqqSoftExitPlan({
     schdCAD:  weights.schdCAD,
     qldCAD:   weights.qldCAD,
@@ -409,7 +395,7 @@ async function runProjection(userId: string) {
     sgovCAD:    weights.sgovCAD,
     crisisT1:   weights.crisisT1,
     crisisT2:   weights.crisisT2,
-    cycleArmed: weights.tqqqCAD <= 0,
+    cycleArmed: weights.cycleArmable,
     tqqqCAD:    weights.tqqqCAD,
   });
   const rebalPlan = computeAnnualRebalancePlan({
@@ -449,7 +435,7 @@ async function runProjection(userId: string) {
   const SCHD_TYPICAL_YIELD_PCT = 3.5;
   const QLD_TYPICAL_YIELD_PCT  = 0.5;
   const SGOV_TYPICAL_YIELD_PCT = 4.5;
-  // v4.4.6.1: QQQM (Invesco Nasdaq-100) yield ≈ 0.7% (broad equity, NOT the 8% covered-call QQQI default).
+  // v4.5.0: QQQM (Invesco Nasdaq-100) yield ≈ 0.7% (broad equity, NOT the 8% covered-call QQQI default).
   const QQQM_TYPICAL_YIELD_PCT = 0.7;
 
   const scenarios = projectScenariosRulebook({
@@ -542,10 +528,10 @@ async function runProjection(userId: string) {
     reason:                 qqqmApplyReason,
     tfsaRoomExists:         qqqmPlan.tfsaRoomExists,
     account:                "Sangbong TFSA",
-    weeklyDefaultCAD:       RULEBOOK_TARGETS.QQQM_WEEKLY_BUY_CAD,
+    weeklyDefaultCAD:       0,
   };
 
-  // v4.4.2 §6.2 / §10 — Emergency cap takes precedence over Soft Exit. Proceeds order: SGOV → 8% of total → SCHD.
+  // v4.5.0: Soft Exit / Emergency cap removed; keep inactive response shape for old UI clients.
   const tqqqExitPlan = hardExitPlan.active
     ? {
         active:              true as const,
@@ -575,7 +561,8 @@ async function runProjection(userId: string) {
         active:                 true as const,
         tier:                   crisisPlan.tier!,
         sgovSaleCAD:            Math.round(crisisPlan.sgovSaleCAD),
-        tqqqBuyCAD:             Math.round(crisisPlan.tqqqBuyCAD),
+        tqqqBuyCAD:             0,
+        qldBuyCAD:              Math.round(crisisPlan.qldBuyCAD),
         postSgovTotalWeightPct: Math.round(crisisPlan.postSgovTotalWeightPct * 10) / 10,
         reason:                 crisisPlan.reason,
       }
@@ -602,7 +589,7 @@ async function runProjection(userId: string) {
     currentValueCAD: Math.round(currentValueCAD),
     currentAnnualDivCAD: Math.round(annualDivCAD),
     retirementYear,
-    rulebookVersion: "v4.4.6.1",
+    rulebookVersion: "v4.5.0",
   };
 
   // ── AI narrative ──
@@ -611,25 +598,11 @@ async function runProjection(userId: string) {
   const retireLine = retirementYear ? `\n은퇴 목표: ${retirementYear}년 (${yearsToRetirement}년 후)` : "";
 
   const triggerLines: string[] = [];
-  if (weights.hardExit && hardExitPlan.active) {
-    triggerLines.push(
-      `- §10 Emergency cap (성장 버킷 ≥ ${RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT}%, daily close): 현재 ${currentState.growthBucketPct}% (total 기준). ` +
-      `다음 거래일 TQQQ 전량 매도 $${Math.round(hardExitPlan.tqqqSaleCAD).toLocaleString()} CAD + QLD 매도 $${Math.round(hardExitPlan.qldSaleCAD).toLocaleString()} CAD (코어 30%까지) → ` +
-      `proceeds 순서: (1) SGOV 보충 $${Math.round(hardExitPlan.sgovRefillCAD).toLocaleString()} CAD (전체 ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%까지) → ` +
-      `(2) 잔액 SCHD 매수 $${Math.round(hardExitPlan.schdBuyCAD).toLocaleString()} CAD. SCHD 매도 금지. QQQM 매도 절대 금지.`
-    );
-  } else if (weights.softExit && softExitPlan.active) {
-    triggerLines.push(
-      `- §6.2 Soft Exit (성장 버킷 ≥ ${RULEBOOK_TARGETS.SOFT_EXIT_GROWTH_BUCKET_PCT}%, daily close): 현재 ${currentState.growthBucketPct}% (total 기준). ` +
-      `다음 거래일 TQQQ 절반 매도 $${Math.round(softExitPlan.tqqqSaleCAD).toLocaleString()} CAD → ` +
-      `proceeds 순서: (1) SGOV 보충 $${Math.round(softExitPlan.sgovRefillCAD).toLocaleString()} CAD (전체 ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%까지) → ` +
-      `(2) 잔액 SCHD 매수 $${Math.round(softExitPlan.schdBuyCAD).toLocaleString()} CAD. SCHD 매도 금지.`
-    );
-  }
+  // v4.5.0 removed Soft Exit / Emergency cap; no growth-bucket exit trigger lines.
   if (weights.crisisT1 && !weights.crisisT2)
-    triggerLines.push(`- §6.1 Crisis T1 (코어 W ≤ ${RULEBOOK_TARGETS.CRISIS_T1_PCT}%, MONTH-END close): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — SGOV 매도 → TQQQ 매수 (총자산의 ${RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL}%, SGOV 0%까지 소진 가능 — 바닥 없음). QQQM 매도 절대 금지. 사이클 재무장 시에만 발동.`);
+    triggerLines.push(`- §6.1 Crisis T1 (코어 W ≤ ${RULEBOOK_TARGETS.CRISIS_T1_PCT}%, MONTH-END close): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — SGOV 매도 → QLD 매수 (총자산의 ${RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL}%, SGOV 0%까지 소진 가능 — 바닥 없음). QQQM 매도 절대 금지. 사이클 재무장 시에만 발동.`);
   if (weights.crisisT2)
-    triggerLines.push(`- §6.1 Crisis T2 (코어 W ≤ ${RULEBOOK_TARGETS.CRISIS_T2_PCT}%, MONTH-END close): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — SGOV 추가 매도 → TQQQ 매수 (T1+T2 누적 총자산의 ${RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL + RULEBOOK_TARGETS.CRISIS_T2_BUY_PCT_OF_TOTAL}%, SGOV 0%까지 소진 가능). QQQM 매도 절대 금지. 같은 거래일 동시 실행 가능.`);
+    triggerLines.push(`- §6.1 Crisis T2 (코어 W ≤ ${RULEBOOK_TARGETS.CRISIS_T2_PCT}%, MONTH-END close): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — SGOV 추가 매도 → QLD 매수 (T1+T2 누적 총자산의 ${RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL + RULEBOOK_TARGETS.CRISIS_T2_BUY_PCT_OF_TOTAL}%, SGOV 0%까지 소진 가능). QQQM 매도 절대 금지. 같은 거래일 동시 실행 가능.`);
   if (weights.caseAEligible)
     triggerLines.push(`- §5 Case A (W > ${RULEBOOK_TARGETS.REBAL_HIGH_PCT}%): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — 연말(Dec 31) QLD 매도 → SGOV ${RULEBOOK_TARGETS.SGOV_MAX_PCT}% → SCHD. SCHD 매도 금지.`);
   if (weights.caseBEligible)
@@ -637,19 +610,12 @@ async function runProjection(userId: string) {
   if (weights.inDeadband)
     triggerLines.push(`- §5 데드밴드 (${RULEBOOK_TARGETS.REBAL_LOW_PCT} ≤ W ≤ ${RULEBOOK_TARGETS.REBAL_HIGH_PCT}): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — 연말 리밸런스 무행동.`);
   if (weights.sgovBelowTarget)
-    triggerLines.push(`- §8 SGOV 베이스 미달 (base ${RULEBOOK_TARGETS.SGOV_BASE_TARGET_PCT}%): 현재 ${currentState.sgovTotalWeightPct}% (total 기준) — 주간 contribution 없음. 보충은 annual rebalance / QQQM 12/31 4% skim 경로뿐.`);
+    triggerLines.push(`- §8 SGOV 베이스 미달 (base ${RULEBOOK_TARGETS.SGOV_BASE_TARGET_PCT}%): 현재 ${currentState.sgovTotalWeightPct}% (total 기준) — 별도 SGOV 보충 필요액을 직접 계산.`);
   if (weights.sgovAboveMax)
-    triggerLines.push(`- §8 SGOV 상한 초과 (max ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%): 현재 ${currentState.sgovTotalWeightPct}% (total 기준) — annual rebal / QQQM skim refill 중단.`);
+    triggerLines.push(`- §8 SGOV 상한 초과 (max ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%): 현재 ${currentState.sgovTotalWeightPct}% (total 기준) — 8% 초과 상태는 별도 확인 필요.`);
   if (overlayActive)
-    triggerLines.push(`- §5 TQQQ 오버레이 활성 (TQQQ > 0): 이번 주 Core 분배는 SCHD 70 / TQQQ 30 / QLD 0.`);
-  if (qqqmActualCAD > 0)
-    triggerLines.push(`- §4 QQQM 주간 CAD 누적: $${Math.round(qqqmActualCAD)} CAD (Sangbong TFSA, quarterly NG batch 사용자 외부 처리). 사유: ${qqqmApplyReason}.`);
-  // QQQM annual skim eligibility hint
-  if (qqqmSkimEvaluation.eligible) {
-    triggerLines.push(`- §4 QQQM 연 skim 가능 (다음 12/31${nextSkim.isPostponed ? ` → ${nextSkim.nextSkimDateISO} 주말 조정` : ""}, D-${nextSkim.daysUntilSkim}): V_usd > cost basis. 예상 매도 ≈ $${qqqmAnnualSkimPlan.estimatedSkimAmountUsd} USD (proceeds → SGOV ≤ ${RULEBOOK_TARGETS.SGOV_MAX_PCT}% → Core 70/30). cumulativeCostUsd 차감 금지.`);
-  } else if (qqqmCumulative.cumulativeShares > 0) {
-    triggerLines.push(`- §4 QQQM 연 skim 미해당 (다음 12/31, D-${nextSkim.daysUntilSkim}): ${qqqmSkimEvaluation.reason === "not-profitable" ? "USD 기준 손실 (V_usd ≤ cost basis) — skim 보류" : qqqmSkimEvaluation.reason}.`);
-  }
+    triggerLines.push(`- §5 Core 분배: v4.5.0에서는 TQQQ 오버레이 없음. 이번 주 Core는 SCHD 60 / QLD 40.`);
+  // v4.5.0: no QQQM weekly accumulation or annual skim trigger.
   const triggerSummary = triggerLines.length ? triggerLines.join("\n") : "특이 신호 없음 (정상 운용)";
 
   const narrativeUserPrompt = [
@@ -658,31 +624,27 @@ async function runProjection(userId: string) {
     `코어 평가금액: $${currentState.coreCAD.toLocaleString()} CAD (SCHD $${currentState.schdCAD.toLocaleString()} + QLD $${currentState.qldCAD.toLocaleString()})`,
     `QLD 코어 비중 = QLD / (SCHD + QLD) = ${currentState.qldCAD.toLocaleString()} / ${currentState.coreCAD.toLocaleString()} = ${currentState.qldCoreWeightPct}%`,
     `SCHD 코어 비중 = ${currentState.schdCoreWeightPct}%`,
-    `성장 버킷 비중 = (QLD + TQQQ) / 총자산 = ${currentState.growthBucketPct}%  (Soft Exit ≥ ${RULEBOOK_TARGETS.SOFT_EXIT_GROWTH_BUCKET_PCT}%, Emergency cap ≥ ${RULEBOOK_TARGETS.HARD_EXIT_GROWTH_BUCKET_PCT}% — daily close)`,
+    `성장 버킷 비중 = (QLD + TQQQ) / 총자산 = ${currentState.growthBucketPct}%  (v4.5.0: Soft Exit/Emergency cap 폐지)`,
     `SGOV 전체 비중 = ${currentState.sgovTotalWeightPct}%   (base ${RULEBOOK_TARGETS.SGOV_BASE_TARGET_PCT}%, max ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%, min ${RULEBOOK_TARGETS.SGOV_MIN_PCT}% — 바닥 없음, 위기 시 0%까지 소진 가능)`,
-    `QQQM 전체 비중 = ${currentState.qqqmTotalWeightPct}%   (cap 없음, Sangbong TFSA only, 주간 ${RULEBOOK_TARGETS.QQQM_WEEKLY_BUY_CAD} CAD CAD-accum, 연 1회 12/31 ${RULEBOOK_TARGETS.QQQM_ANNUAL_SKIM_PCT}% skim)`,
-    `QQQM 누적 USD cost basis = $${qqqmAnnualSkimPlan.cumulativeCostUsd} USD, 누적 shares = ${qqqmAnnualSkimPlan.cumulativeShares}, 다음 skim 일자 = ${qqqmAnnualSkimPlan.nextSkimDateISO} (D-${nextSkim.daysUntilSkim}${nextSkim.isPostponed ? `, ${nextSkim.postponeReason}` : ""})`,
+    `QQQM 전체 비중 = ${currentState.qqqmTotalWeightPct}%   (legacy hold-only, 신규 매수/12월31일 skim 없음)`,
+    `QQQM 누적 USD cost basis = $${qqqmAnnualSkimPlan.cumulativeCostUsd} USD, 누적 shares = ${qqqmAnnualSkimPlan.cumulativeShares} (legacy tracking only)`,
     `TQQQ 전체 비중 = ${currentState.tqqqTotalWeightPct}%`,
     `연배당: $${Math.round(annualDivCAD).toLocaleString()} CAD, 배당 성장률 ${assumptions.divGrowthPct}%`,
     `연간 납입 $${Math.round(annualContribCAD).toLocaleString()} CAD (${contribFrequency})${goalLine}${retireLine}`,
     ``,
-    `[이번 주 실행안 — Core 정적 70/30 + Satellite 별도 스트림]`,
-    `Core (${overlayActive ? "TQQQ 오버레이: SCHD 70 / TQQQ 30 / QLD 0" : "정상: SCHD 70 / QLD 30"}):`,
-    `  주간 납입금: $${coreAllocationPlan.weeklyContribCAD} CAD (전액 Core 정적 70/30 사용)`,
+    `[이번 주 실행안 — Core 정적 60/40 + Satellite 별도 스트림]`,
+    `Core (정상: SCHD 60 / QLD 40):`,
+    `  주간 납입금: $${coreAllocationPlan.weeklyContribCAD} CAD (전액 Core 정적 60/40 사용)`,
     `  SCHD 매수: $${coreAllocationPlan.schdBuyCAD} CAD`,
     `  QLD  매수: $${coreAllocationPlan.qldBuyCAD} CAD`,
-    `  TQQQ 매수 (overlay): $${coreAllocationPlan.tqqqBuyCAD} CAD`,
+    `  TQQQ VR-Lite 매수: 별도 Friday drawdown tier에서 판단 (Core 분배 아님)`,
     `Satellite (Settings CAD 별도 스트림):`,
-    `  SGOV 매수: $${coreAllocationPlan.sgovReserveCAD} CAD (source=${coreAllocationPlan.sgovSource ?? "rulebook-inactive"}, total 기준; v4.4.6.1: 주간 contribution 없음, 사용자 Settings만 활성)`,
-    `  QQQM CAD 누적: $${coreAllocationPlan.qqqmCashAccumCAD} CAD (account=Sangbong TFSA, source=${coreAllocationPlan.qqqmSource ?? "rulebook-inactive"}, 사유: ${qqqmApplyReason})`,
-    `주간 총 외화 유출: $${coreAllocationPlan.totalWeeklyOutCAD} CAD = weekly $${coreAllocationPlan.weeklyContribCAD} + SGOV $${coreAllocationPlan.sgovReserveCAD} + QQQM $${coreAllocationPlan.qqqmCashAccumCAD}`,
-    hardExitPlan.active
-      ? `\n[§10 Emergency cap — daily close, 다음 거래일]\nTQQQ 전량 매도: $${Math.round(hardExitPlan.tqqqSaleCAD).toLocaleString()} CAD + QLD 매도: $${Math.round(hardExitPlan.qldSaleCAD).toLocaleString()} CAD (코어 30%까지) → SGOV 보충 $${Math.round(hardExitPlan.sgovRefillCAD).toLocaleString()} CAD (전체 ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%까지) → SCHD 매수 $${Math.round(hardExitPlan.schdBuyCAD).toLocaleString()} CAD (proceeds 순서 고정). QQQM 매도 절대 금지.`
-      : softExitPlan.active
-        ? `\n[§6.2 Soft Exit — daily close, 다음 거래일]\nTQQQ 절반 매도: $${Math.round(softExitPlan.tqqqSaleCAD).toLocaleString()} CAD → SGOV 보충 $${Math.round(softExitPlan.sgovRefillCAD).toLocaleString()} CAD (전체 ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%까지) → SCHD 매수 $${Math.round(softExitPlan.schdBuyCAD).toLocaleString()} CAD (proceeds 순서 고정).`
-        : crisisPlan.active
-          ? `\n[§6.1 Crisis Trigger ${crisisPlan.tier} — month-end close, 다음 거래일]\nSGOV 매도: $${Math.round(crisisPlan.sgovSaleCAD).toLocaleString()} CAD → TQQQ 매수 $${Math.round(crisisPlan.tqqqBuyCAD).toLocaleString()} CAD. SGOV 0%까지 소진 가능 (바닥 없음). QQQM 매도 절대 금지. 사이클 데드존: TQQQ=0 AND 성장 버킷 ≥ ${RULEBOOK_TARGETS.CYCLE_RESET_GROWTH_BUCKET_PCT}% 충족 전 재발동 금지.`
-          : "",
+    `  SGOV 매수: $${coreAllocationPlan.sgovReserveCAD} CAD (source=${coreAllocationPlan.sgovSource ?? "rulebook-inactive"}, total 기준; v4.5.0: 주간 contribution 없음, 사용자 Settings만 활성)`,
+    `  QQQM 신규 매수: $0 CAD (legacy hold-only, 사유: ${qqqmApplyReason})`,
+    `주간 총 외화 유출: $${coreAllocationPlan.totalWeeklyOutCAD} CAD = weekly $${coreAllocationPlan.weeklyContribCAD} + SGOV $${coreAllocationPlan.sgovReserveCAD} + QQQM $0`,
+    crisisPlan.active
+      ? `\n[§6.1 Crisis Trigger ${crisisPlan.tier} — month-end close, 다음 거래일]\nSGOV 매도: $${Math.round(crisisPlan.sgovSaleCAD).toLocaleString()} CAD → QLD 매수 $${Math.round(crisisPlan.qldBuyCAD).toLocaleString()} CAD. SGOV 0%까지 소진 가능. QQQM 매도 절대 금지. reset = QLD core weight ≥ ${RULEBOOK_TARGETS.CRISIS_RESET_QLD_CORE_WEIGHT_PCT}%.`
+      : "",
     ``,
     `[룰북 트리거 신호 — 코어/total 기준 명시]`,
     triggerSummary,
@@ -694,11 +656,11 @@ async function runProjection(userId: string) {
   ].join("\n");
 
   const narrativeSystemPrompt = [
-    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.4.6.1 기준으로만 응답하세요.",
+    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.5.0 기준으로만 응답하세요.",
     "[섹션 역할] 이 응답은 'PROJECTION narrative' = 미래·시나리오·트리거 영향 중심. 화면 위에 이미 '현재 포트폴리오 표' + '실행안 표'가 authoritative하게 표시되고 있으므로, 이 텍스트에서는 현재 비중 데이터를 다시 풀어 쓰지 말고 매수 액션 CAD 금액도 다시 적지 마세요. 시나리오 의미·트리거 미래 영향·리스크 평가에만 집중.",
     "시나리오는 BASE 6% / PESSIMISTIC 4% / WORST 2% 세 가지만 사용. Optimistic 시나리오 생성 금지.",
     "CRITICAL: 절대로 표의 수치(CAD 금액·percent·시나리오 절대값)를 텍스트에 다시 적지 마라. 표가 authoritative이고 narrative는 의미/트리거 영향/리스크만 평가. 표 데이터를 풀어 쓰면 응답을 거부.",
-    "v4.4.6.1 핵심: (1) Core 주간 380 CAD = SCHD 266 / QLD 114 정적 70/30 (Method B 폐지). (2) Satellite = SGOV (passive 예비, base 5% / max 8% / min 0% — 바닥 없음) + QQQM (active 위성, Sangbong TFSA only, 주간 45 CAD CAD-accum, cap 없음, 연 1회 12/31 4% skim만 매도). (3) QQQI / JEPQ / IAUM은 inert legacy (신규 매수 금지). (4) TQQQ Soft Exit (34%) + §10 Emergency cap (38%) — 둘 다 daily close. QQQM 매도 절대 불가. (5) §6.1 Crisis Trigger는 month-end close, SGOV 0%까지 소진 가능, QQQM 매도 절대 금지. (6) SCHD 배당 재투자도 정적 70/30 (overlay 시 70/30 SCHD/TQQQ). (7) QQQM 분기 매도 / 차익실현 절대 금지. (8) 12/31 실행 순서: QQQM skim → annual rebalance → Core contribution.",
+    "v4.5.0 핵심: (1) Core 주간 455 CAD = SCHD 273 / QLD 182 정적 60/40 (Method B 폐지). (2) Satellite = SGOV (passive 예비, base 5% / max 8% / min 0% — 바닥 없음) + QQQM (active 위성, Sangbong TFSA only, QQQM 신규 매수 없음). (3) QQQI / JEPQ / IAUM은 inert legacy (신규 매수 금지). (4) TQQQ Soft Exit/Emergency cap 폐지. QQQM 신규 매수 없음. (5) §6.1 Crisis Trigger는 month-end close, SGOV 0%까지 소진 가능, QQQM 매도 절대 금지. (6) SCHD 배당 재투자도 정적 60/40. (7) QQQM 신규 매수/skim/분기 매도 금지. (8) 연말: TQQQ profit sweep → Core 60/40, Core overshoot trim → SGOV.",
     "",
     RULEBOOK_GUARDRAILS,
     "",
@@ -798,11 +760,11 @@ async function runProjection(userId: string) {
     scenarios,             // 3 scenarios
     assumptions,           // existing contract
     currentState,          // UI uses this for the rulebook snapshot table
-    coreAllocationPlan,    // §5 static 70/30 split (overlay-aware) / §4 QQQM / §8 SGOV streams
-    qqqmWeeklyPlan,        // §4 explicit detail (reason / TFSA room)
-    qqqmAnnualSkimPlan,    // §4 12/31 annual skim eligibility + next date
-    tqqqExitPlan,          // §6.2 Soft / §10 Emergency cap (TQQQ → SGOV → SCHD)
-    crisisTriggerPlan,     // §6.1 Crisis T1/T2 (SGOV → TQQQ; SGOV may exhaust to 0%)
+    coreAllocationPlan,    // §5 static 60/40 split / §8 SGOV stream / QQQM hold-only
+    qqqmWeeklyPlan,        // §4 legacy hold-only / no-new-buy detail
+    qqqmAnnualSkimPlan,    // §4 legacy compatibility shape; v4.5.0 always no-skim
+    tqqqExitPlan,          // legacy compatibility shape; v4.5.0 Soft/Emergency exits removed
+    crisisTriggerPlan,     // §6.1 Crisis T1/T2 (SGOV → QLD; SGOV may exhaust to 0%)
     annualRebalancePlan,   // §5 Case A/B / deadband
     triggers: {
       summary: triggerLines,

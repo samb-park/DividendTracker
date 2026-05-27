@@ -9,7 +9,7 @@ import { HoldingDetailPanel } from "./holding-detail-panel";
 import { mergeHoldings } from "@/lib/utils";
 import { buildAllocationPlan } from "@/lib/investment-allocation";
 // NDX-tier override / upper-trigger logic was removed from this page.
-// Rulebook v4.1.8 forbids NDX-based triggers; all rebalance/trigger surfaces
+// Rulebook v4.5.0 forbids NDX-based triggers; all rebalance/trigger surfaces
 // now live in the AI Assistance page (see RulebookStatus + ProjectionCard).
 import { HoldingsTableHeader } from "./holdings-table/holdings-table-header";
 import { HoldingsTableRow } from "./holdings-table/holdings-table-row";
@@ -128,7 +128,7 @@ export function HoldingsTable({
         const nonCore: Record<string, number> = {};
         const isNonCoreSym = (t: string) => {
           const u = t.toUpperCase();
-          // v4.4.6.1: QQQM is the active satellite. QQQI / IAUM are inert legacy
+          // v4.5.0: QQQM / QQQI / JEPQ / IAUM are inert legacy hold-only
           // (held positions remain visible, but isNonCore prevents Core %-target math).
           return u === "SGOV" || u === "QQQM" || u === "QQQI" || u === "IAUM";
         };

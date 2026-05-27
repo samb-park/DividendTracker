@@ -5,7 +5,7 @@ export const revalidate = 300;
 
 const yahooFinance = new YahooFinance();
 
-// RULEBOOK v4.1.8: NDX-based tier triggers are forbidden. Endpoint still returns NDX price/drawdown
+// RULEBOOK v4.5.0: NDX-based tier triggers are forbidden. Endpoint still returns NDX price/drawdown
 // for read-only display purposes, but `tier` is hard-coded to 0 so no caller can branch on it.
 export async function GET() {
   try {

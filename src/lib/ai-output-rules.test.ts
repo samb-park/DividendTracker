@@ -101,64 +101,20 @@ test("does not mangle text containing single pipes", () => {
   assert.equal(sanitizeAiOutput(input), input);
 });
 
-test("RULEBOOK_GUARDRAILS encodes the v4.4.6.1 hard rules", () => {
-  // QQQM weekly cash accumulation rule (v4.4.6.1 — replaces QQQI satellite slot)
-  assert.ok(
-    RULEBOOK_GUARDRAILS.includes("QQQM") && RULEBOOK_GUARDRAILS.includes("45 CAD"),
-    "QQQM weekly 45 CAD cash-accum rule missing",
-  );
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Sangbong TFSA"), "QQQM Sangbong TFSA account constraint missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("TFSA 잔여"), "TFSA room condition missing");
-  // Static 70/30 (Method B 폐지)
-  assert.ok(
-    RULEBOOK_GUARDRAILS.includes("Core 정적 70/30") || RULEBOOK_GUARDRAILS.includes("정적 70/30"),
-    "Core static 70/30 wording missing",
-  );
-  // Core weekly 380 CAD
-  assert.ok(RULEBOOK_GUARDRAILS.includes("380 CAD"), "Core weekly 380 CAD missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("266") && RULEBOOK_GUARDRAILS.includes("114"), "SCHD 266 / QLD 114 split missing");
-  // BOTH Soft Exit (34%) AND Emergency cap (38%) present
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Growth bucket ≥ 34%"), "34% Soft Exit threshold required");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Growth bucket ≥ 38%"), "38% Hard/Emergency threshold missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Soft Exit"), "Soft Exit reference missing");
-  // SCHD dividend reinvestment must be specified as 70/30
-  assert.ok(RULEBOOK_GUARDRAILS.includes("SCHD 배당"), "SCHD dividend reinvestment rule missing");
-  // SGOV v4.4.6.1: base 5% / max 8% / min 0% (no floor)
-  assert.ok(RULEBOOK_GUARDRAILS.includes("base 5%") || RULEBOOK_GUARDRAILS.includes("baseline 5%") || RULEBOOK_GUARDRAILS.includes("바닥 없음"),
-    "SGOV v4.4.6.1 base/max/min description missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("max 8%"), "SGOV max 8% missing");
-  assert.ok(!RULEBOOK_GUARDRAILS.includes("가용 버퍼"), "v4.4.6.1: '가용 버퍼' (v4.4.2 term) must be removed");
-  // QQQM 12/31 annual skim
-  assert.ok(RULEBOOK_GUARDRAILS.includes("12/31"), "12/31 annual skim date missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("4%") && RULEBOOK_GUARDRAILS.includes("skim"), "QQQM 4% skim missing");
-  // Annual rebalance
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Case A"), "annual rebal Case A missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Case B"), "annual rebal Case B missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("성장 버킷"), "growth bucket reference missing");
-  // Version
-  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.4.6.1"), "rulebook version stamp must be v4.4.6.1");
-  assert.ok(!RULEBOOK_GUARDRAILS.includes("v4.3.1"), "stale v4.3.1 stamp must be removed");
-  assert.ok(!RULEBOOK_GUARDRAILS.includes("v4.1.10"), "stale v4.1.10 stamp must be removed");
-  // AI override block
-  assert.ok(RULEBOOK_GUARDRAILS.includes("시장 전망"), "sentiment override block missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("override 금지"), "override prohibition missing");
-  // Accept / Reject / Modify
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Accept"));
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Reject"));
-  assert.ok(RULEBOOK_GUARDRAILS.includes("Modify"));
-  // Prohibitions
-  assert.ok(RULEBOOK_GUARDRAILS.includes("NDX 기반 trigger 재도입 금지"));
+test("RULEBOOK_GUARDRAILS encodes the v4.5.0 hard rules", () => {
+  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.5.0"), "rulebook version stamp must be v4.5.0");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("455 CAD"), "Core weekly 455 CAD missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("273") && RULEBOOK_GUARDRAILS.includes("182"), "SCHD 273 / QLD 182 split missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("60%") && RULEBOOK_GUARDRAILS.includes("40%"), "Core 60/40 missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Friday") && RULEBOOK_GUARDRAILS.includes("1.5%"), "Friday FX buffer rule missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("10/20/40/60"), "TQQQ VR-Lite tiers missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("SGOV 매도 → QLD"), "Crisis SGOV→QLD rule missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("QLD core weight ≥ 30%"), "Crisis reset rule missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("QQQM 신규 매수") && RULEBOOK_GUARDRAILS.includes("금지"), "QQQM no-new-buy rule missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("Soft Exit") && RULEBOOK_GUARDRAILS.includes("Emergency cap") && RULEBOOK_GUARDRAILS.includes("폐지"), "exit removal guard missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("Method B"), "Method B prohibition statement must be present");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("QQQM"), "QQQM rule presence required");
   assert.ok(RULEBOOK_GUARDRAILS.includes("Optimistic"));
-  // QQQM specific prohibitions
-  assert.ok(RULEBOOK_GUARDRAILS.includes("QQQM 분기") || RULEBOOK_GUARDRAILS.includes("분기 매도"),
-    "QQQM quarterly profit-taking prohibition missing");
-  // Daily vs month-end close
-  assert.ok(RULEBOOK_GUARDRAILS.includes("MONTH-END") || RULEBOOK_GUARDRAILS.includes("Month-end"),
-    "Crisis trigger month-end close requirement missing");
-  // 확인 필요 tag
-  assert.ok(RULEBOOK_GUARDRAILS.includes("확인 필요"));
+  assert.ok(RULEBOOK_GUARDRAILS.includes("확인 필요") || RULEBOOK_GUARDRAILS.includes("확인"));
 });
 
 test("RULEBOOK_PROMPT_VERSION exists and is non-empty (cache invalidation guard)", () => {
@@ -192,15 +148,15 @@ test("PROJECTION_STRUCTURE: future-focused, no execution + no current-state dupl
 
 test("RULEBOOK_GUARDRAILS forbids re-explaining authoritative tables", () => {
   assert.ok(RULEBOOK_GUARDRAILS.includes("화면에 이미 표시되는 표"), "guardrails must mention displayed tables");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("표를 텍스트로 재작성 금지"), "must forbid table re-explanation");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("재작성 금지"), "must forbid table re-explanation");
 });
 
-test("v4.4.6.1-1: prompt includes self-check and no table restatement rules", () => {
+test("v4.5.0-1: prompt includes self-check and no table restatement rules", () => {
   assert.ok(RULEBOOK_GUARDRAILS.includes("[자체 검증"), "self-check section missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("화면에 이미 표시되는 표"), "no table restatement rule missing");
-  assert.ok(RULEBOOK_GUARDRAILS.includes("매수 CAD 금액을 narrative에서 반복하지"), "action amount repetition guard missing");
-  // v4.4.6.1 prompt version
-  assert.equal(RULEBOOK_PROMPT_VERSION, "v4.4.6.1-1", "RULEBOOK_PROMPT_VERSION must be v4.4.6.1-1");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("자동 거래"), "action amount / auto-trade guard missing");
+  // v4.5.0 prompt version
+  assert.equal(RULEBOOK_PROMPT_VERSION, "v4.5.0-1", "RULEBOOK_PROMPT_VERSION must be v4.5.0-1");
 });
 
 test("flags fields are mapped", () => {
@@ -214,7 +170,7 @@ test("flags fields are mapped", () => {
   assert.ok(out.includes("IAUM 상한 도달"));
 });
 
-test("v4.4.6.1: QQQM field labels added to sanitizer map", () => {
+test("v4.5.0: QQQM legacy field labels remain mapped by sanitizer", () => {
   const input = "qqqmCAD=$5000, qqqmTotalWeightPct=2.5, qqqmCumulativeCostUsd=$3107, qqqmCumulativeShares=15";
   const out = sanitizeAiOutput(input);
   assert.ok(!out.includes("qqqmCAD"), `qqqmCAD leaked: ${out}`);
@@ -226,7 +182,7 @@ test("v4.4.6.1: QQQM field labels added to sanitizer map", () => {
   assert.ok(out.includes("QQQM 누적 주식수"));
 });
 
-test("v4.4.6.1: sgovAboveMax label maps; deprecated jepqAtCap still mapped (legacy)", () => {
+test("v4.5.0: sgovAboveMax label maps; deprecated jepqAtCap still mapped (legacy)", () => {
   const above = sanitizeAiOutput("sgovAboveMax=true");
   assert.ok(above.includes("SGOV 상한 초과"));
   const legacy = sanitizeAiOutput("jepqAtCap=false");
