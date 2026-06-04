@@ -14,8 +14,17 @@ import { AiAssistantPanel } from "./panels/ai-assistant-panel";
 import { PortfolioPanel } from "./panels/portfolio-panel";
 import { NewsPanel } from "./panels/news-panel";
 import { SectorPanel } from "./panels/sector-panel";
+import { MonitorPanel } from "./panels/monitor-panel";
 
-function CenterContent({ tab, ticker }: { tab: TabKey; ticker: string }) {
+function CenterContent({
+  tab,
+  ticker,
+  onSelectTicker,
+}: {
+  tab: TabKey;
+  ticker: string;
+  onSelectTicker: (t: string) => void;
+}) {
   switch (tab) {
     case "차트":
       return <CandleChartPanel ticker={ticker} />;
@@ -40,7 +49,7 @@ function CenterContent({ tab, ticker }: { tab: TabKey; ticker: string }) {
     case "포트":
       return <PortfolioPanel />;
     case "모니터":
-      return <PanelEmpty kind="no_data" message="멀티 모니터(다중 종목) 화면은 준비 중입니다." />;
+      return <MonitorPanel selected={ticker} onSelect={onSelectTicker} />;
     case "AI":
       return <AiAssistantPanel ticker={ticker} />;
     default:
@@ -94,7 +103,7 @@ export function TerminalShell() {
             className="min-h-[400px] flex-1 lg:min-h-0"
             noPadding
           >
-            <CenterContent tab={tab} ticker={ticker} />
+            <CenterContent tab={tab} ticker={ticker} onSelectTicker={setTicker} />
           </Panel>
         </div>
 
