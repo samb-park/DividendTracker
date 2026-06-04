@@ -102,6 +102,7 @@ export function TerminalShell() {
             title={`${tab}${tab === "차트" ? ` · ${ticker}` : ""}`}
             className="min-h-[400px] flex-1 lg:min-h-0"
             noPadding
+            maximizable
           >
             <CenterContent tab={tab} ticker={ticker} onSelectTicker={setTicker} />
           </Panel>
