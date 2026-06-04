@@ -21,6 +21,7 @@ interface Props {
   isEmpty: boolean; // user holds nothing
   allExcluded: boolean; // holdings exist but none selected
   priceGap: boolean; // a selected ticker is missing a live price
+  freqGuess: boolean; // a selected ticker's payment frequency was guessed (<2 records)
   fxFallback: boolean; // FX rate is a stale/default fallback
   onEdit: () => void;
   onRetry: () => void;
@@ -35,6 +36,7 @@ export function PocketHero({
   isEmpty,
   allExcluded,
   priceGap,
+  freqGuess,
   fxFallback,
   onEdit,
   onRetry,
@@ -131,7 +133,10 @@ export function PocketHero({
       {!error && !loading && !isEmpty && !allExcluded && priceGap && (
         <p className="pk-note warn">일부 종목의 시세를 불러오지 못해 합계에서 제외했습니다.</p>
       )}
-      {!error && !loading && !isEmpty && !allExcluded && !priceGap && fxFallback && (
+      {!error && !loading && !isEmpty && !allExcluded && freqGuess && (
+        <p className="pk-note warn">일부 종목은 배당 이력이 부족해 빈도를 추정했습니다(연환산 부정확할 수 있음).</p>
+      )}
+      {!error && !loading && !isEmpty && !allExcluded && fxFallback && (
         <p className="pk-note warn">환율을 불러오지 못해 기본 환율을 적용했습니다.</p>
       )}
 

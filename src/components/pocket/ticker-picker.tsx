@@ -26,7 +26,9 @@ export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
           ? "시세 없음"
           : !t.hasDividendData
             ? `${t.name} · 배당 데이터 없음`
-            : t.name;
+            : t.lowConfidence
+              ? `${t.name} · 빈도 추정`
+              : t.name;
         return (
           <div
             className="pk-picker-row"

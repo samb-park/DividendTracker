@@ -24,9 +24,14 @@ export const dynamic = "force-dynamic";
  * Client divides the included sum by 365 / 52 / 12 / 1 for D / W / M / Y.
  */
 
-type DivInfo = { annualPerShare: number; frequency: number; currency: string };
+type DivInfo = { annualPerShare: number; frequency: number; currency: string; confident: boolean };
 
-/** Forward annual dividend per share (native currency): latest amount × frequency. */
+/**
+ * Forward annual dividend per share (native currency): latest amount × frequency.
+ * `confident` is false when fewer than 2 dividend records were available — then
+ * detectFrequency() falls back to a quarterly guess, so the annual figure could
+ * be off by up to 4×. The client surfaces this honestly instead of hiding it.
+ */
 async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string): Promise<DivInfo | null> {
   // Primary: dividendhistory.org (confirmed history → frequency, latest amount)
   try {
@@ -34,7 +39,12 @@ async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string
     if (nasdaq && nasdaq.amount != null && nasdaq.history.length > 0) {
       const frequency = detectFrequency(nasdaq.history);
       if (frequency > 0) {
-        return { annualPerShare: nasdaq.amount * frequency, frequency, currency: fallbackCurrency };
+        return {
+          annualPerShare: nasdaq.amount * frequency,
+          frequency,
+          currency: fallbackCurrency,
+          confident: nasdaq.history.length >= 2,
+        };
       }
     }
   } catch {
@@ -60,7 +70,7 @@ async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string
       const frequency = detectFrequency(dividends);
       const lastDiv = dividends[dividends.length - 1];
       const currency = chart.meta?.currency ?? fallbackCurrency;
-      return { annualPerShare: lastDiv.amount * frequency, frequency, currency };
+      return { annualPerShare: lastDiv.amount * frequency, frequency, currency, confident: dividends.length >= 2 };
     }
   } catch {
     /* no dividend data */
@@ -139,6 +149,7 @@ export async function GET() {
         grossAnnualUSD,
         netAnnualUSD,
         frequency: div?.frequency ?? null,
+        frequencyConfident: div?.confident ?? false,
         hasDividendData: div != null,
         priceUnavailable: price == null,
         currency: nativeCurrency,

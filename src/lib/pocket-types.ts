@@ -11,6 +11,7 @@ export interface PositionRunRate {
   grossAnnualUSD: number;
   netAnnualUSD: number;
   frequency: number | null; // null when no dividend schedule could be detected
+  frequencyConfident: boolean; // false when <2 history records → frequency is a guess (annual may be inflated)
   hasDividendData: boolean;
   priceUnavailable: boolean;
   currency: string; // native listing currency (USD/CAD)
@@ -32,6 +33,7 @@ export interface TickerAgg {
   marketValueUSD: number | null;
   hasDividendData: boolean;
   priceUnavailable: boolean;
+  lowConfidence: boolean; // any contributing position annualized from <2 dividend records
 }
 
 export type Basis = "net" | "gross";

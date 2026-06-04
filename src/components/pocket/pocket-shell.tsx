@@ -48,6 +48,7 @@ export function PocketShell() {
     const active = positions.filter((p) => !excludedAccounts.has(p.accountType));
     const map = new Map<string, TickerAgg>();
     for (const p of active) {
+      const lowConf = p.hasDividendData && !p.frequencyConfident;
       const e = map.get(p.ticker);
       if (e) {
         e.grossAnnualUSD += p.grossAnnualUSD;
@@ -55,6 +56,7 @@ export function PocketShell() {
         if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
         e.hasDividendData = e.hasDividendData || p.hasDividendData;
         e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
+        e.lowConfidence = e.lowConfidence || lowConf;
       } else {
         map.set(p.ticker, {
           ticker: p.ticker,
@@ -64,6 +66,7 @@ export function PocketShell() {
           marketValueUSD: p.marketValueUSD,
           hasDividendData: p.hasDividendData,
           priceUnavailable: p.priceUnavailable,
+          lowConfidence: lowConf,
         });
       }
     }
@@ -92,6 +95,7 @@ export function PocketShell() {
       isEmpty: positions.length === 0,
       allExcluded: positions.length > 0 && included.length === 0,
       priceGap: included.some((t) => t.priceUnavailable),
+      freqGuess: included.some((t) => t.lowConfidence),
       fxFallback: data?.fx.fallback ?? false,
     };
   }, [tickerAggs, excluded, basis, positions, data]);
@@ -108,6 +112,7 @@ export function PocketShell() {
           isEmpty={derived.isEmpty}
           allExcluded={derived.allExcluded}
           priceGap={derived.priceGap}
+          freqGuess={derived.freqGuess}
           fxFallback={derived.fxFallback}
           onEdit={() => setEditing(true)}
           onRetry={load}
