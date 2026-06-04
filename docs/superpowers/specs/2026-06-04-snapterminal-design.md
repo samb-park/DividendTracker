@@ -119,4 +119,20 @@ src/app/api/market/indices/route.ts   # (신규) 지수 묶음 실시세 + 정�
 - 브랜드 컬러 #0a8043 계열(green) 유지, `any` 금지, Tailwind 사용, 인라인 스타일 지양
 - 리스크: Yahoo 무료 API 레이트리밋/지연 → `DELAYED` 상태와 캐시 TTL로 정직하게 표기
 - 리스크: echarts SSR → 패널은 `"use client"` + 동적 import 필요시 적용
+
+## 7. 적대적 리뷰(2026-06-04) — 수정/보류
+
+15-에이전트 리뷰 워크플로 결과 12건 제기 / 11건 확정.
+
+**수정 완료:**
+- (rule #1 가짜데이터) `getPrice`가 시세 누락 시 0으로 날조 → `regularMarketPrice == null`이면
+  null 반환. 펀더멘털/캔들 헤더가 0.00 대신 정직 상태 표시. 52주값 0이면 "—".
+- (런타임/누수) 레이아웃 훅: pointercancel 처리 + 언마운트 cleanup, localStorage는 드래그
+  종료 시 1회만 저장(틱마다 쓰기 제거).
+- (레이아웃) 우측 컬럼 펀더멘털 패널 flex-shrink-0 → flex-1 lg:min-h-0 (짧은 뷰포트 클립 방지).
+
+**보류(낮은 우선순위 — 후속):**
+- 접근성: 리사이저/관심종목 행 키보드 조작(tabIndex/onKeyDown/aria-value*). (작업지시상 a11y low)
+- 정직성(real-but-stale): 폴링 실패 시 마지막 시세 유지 → `asOf`/신선도 배지 노출.
+- 방어: `useQuotes` refreshMs 의존성(현재 영향 없음, 동적 symbols 시 useMemo 안정화).
 ```

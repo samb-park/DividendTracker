@@ -111,7 +111,7 @@ export function TerminalShell() {
 
         {/* RIGHT */}
         <div className="flex min-h-0 flex-col gap-1 lg:overflow-hidden">
-          <Panel title="펀더멘털 / FUNDAMENTALS" className="min-h-[220px] flex-shrink-0">
+          <Panel title="펀더멘털 / FUNDAMENTALS" className="min-h-[200px] flex-1 lg:min-h-0">
             <FundamentalsPanel ticker={ticker} />
           </Panel>
           <Panel title="호가 / LEVEL II" className="min-h-[120px] flex-1 lg:min-h-0">

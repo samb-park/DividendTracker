@@ -266,15 +266,19 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[11px]">
         <span className="text-sm font-bold text-foreground">{ticker}</span>
-        {data && (
+        {data && data.meta.currentPrice > 0 && (
           <>
             <span className="tabular-nums text-foreground">{fmtPrice(data.meta.currentPrice)}</span>
-            <span className={cn("tabular-nums", toneClass(data.meta.fromHighPct))}>
-              52H {fmtPct(data.meta.fromHighPct)}
-            </span>
-            <span className="text-muted-foreground">
-              52범위 {fmtPrice(data.meta.week52Low)}–{fmtPrice(data.meta.week52High)}
-            </span>
+            {data.meta.week52High > 0 && (
+              <>
+                <span className={cn("tabular-nums", toneClass(data.meta.fromHighPct))}>
+                  52H {fmtPct(data.meta.fromHighPct)}
+                </span>
+                <span className="text-muted-foreground">
+                  52범위 {fmtPrice(data.meta.week52Low)}–{fmtPrice(data.meta.week52High)}
+                </span>
+              </>
+            )}
           </>
         )}
         <span className="ml-auto flex items-center gap-1.5">

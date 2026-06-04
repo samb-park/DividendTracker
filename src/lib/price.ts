@@ -60,6 +60,9 @@ export async function getPrice(ticker: string): Promise<PriceData | null> {
   try {
     const quote = await yahooFinance.quote(ticker);
     if (!quote) return null;
+    // No live price → treat as no-data (return null → caller 404s), never fabricate
+    // a 0 price/52w range. Mirrors the honest handling in /api/market/quotes.
+    if (quote.regularMarketPrice == null) return null;
     const q = quote as typeof quote & QuoteExtra;
 
     const data: PriceData = {

@@ -77,10 +77,10 @@ export function FundamentalsPanel({ ticker }: { ticker: string }) {
         </div>
         <DataBadge kind="delayed" label={data.currency} />
       </div>
-      <Row label="52주 고점" value={fmtPrice(data.week52High)} />
-      <Row label="52주 저점" value={fmtPrice(data.week52Low)} />
-      <Row label="고점대비" value={fmtPct(data.fromHighPct)} tone={toneClass(data.fromHighPct)} />
-      <Row label="저점대비" value={fmtPct(data.fromLowPct)} tone={toneClass(data.fromLowPct)} />
+      <Row label="52주 고점" value={data.week52High > 0 ? fmtPrice(data.week52High) : "—"} />
+      <Row label="52주 저점" value={data.week52Low > 0 ? fmtPrice(data.week52Low) : "—"} />
+      <Row label="고점대비" value={data.week52High > 0 ? fmtPct(data.fromHighPct) : "—"} tone={data.week52High > 0 ? toneClass(data.fromHighPct) : undefined} />
+      <Row label="저점대비" value={data.week52Low > 0 ? fmtPct(data.fromLowPct) : "—"} tone={data.week52Low > 0 ? toneClass(data.fromLowPct) : undefined} />
       <Row label="배당률" value={data.dividendYield != null ? `${data.dividendYield.toFixed(2)}%` : "—"} />
       <Row label="연배당" value={data.dividendRate != null ? fmtPrice(data.dividendRate) : "—"} />
       <Row label="배당락일" value={data.exDividendDate ?? "—"} />
