@@ -15,6 +15,7 @@ import { PortfolioPanel } from "./panels/portfolio-panel";
 import { NewsPanel } from "./panels/news-panel";
 import { SectorPanel } from "./panels/sector-panel";
 import { MonitorPanel } from "./panels/monitor-panel";
+import { BrokerPanel } from "./panels/broker-panel";
 
 function CenterContent({
   tab,
@@ -38,12 +39,7 @@ function CenterContent({
         />
       );
     case "주문":
-      return (
-        <PanelEmpty
-          kind="api_required"
-          message="브로커 주문/체결 연동이 필요합니다. Alpaca / IBKR / 한국투자증권 어댑터는 다음 슬라이스에서 추가됩니다."
-        />
-      );
+      return <BrokerPanel />;
     case "뉴스":
       return <NewsPanel />;
     case "포트":

@@ -76,6 +76,8 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/health   # 20
 | `OPENROUTER_API_KEY` | 선택 | OpenRouter 사용 시 |
 | `OPENAI_API_KEY` | 선택 | OpenAI 직접 사용 시 |
 | `GITHUB_TOKEN` | 선택 | GitHub Models 사용 시 |
+| `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY` | 선택 | Alpaca 읽기전용 포지션 연동 (주문 탭) |
+| `ALPACA_BASE_URL` | 선택 | Alpaca live 전환(`https://api.alpaca.markets`), 기본 paper |
 
 > 시장 데이터(주가/지수/환율/차트)는 **키 없이** 동작한다(Yahoo Finance + Frankfurter).
 > AI 키가 전혀 없으면 뉴스는 **번역 없이 실제 헤드라인**만 보이고, AI 어시스턴트는
@@ -134,21 +136,25 @@ AI 호출은 **OpenAI 호환 Chat Completions** 규격이다 (`src/lib/openai.ts
 
 ---
 
-## 7. 브로커 API 연동 (설계 / 현황)
+## 7. 브로커 API 연동 (구조 / 현황)
 
-**현황**: 주문/체결/실시간 호가는 무료 실소스가 없어 현재 "API 필요" 상태로만 표시.
-기존 `Questrade` 동기화(`/api/questrade/*`)가 포트폴리오 데이터 소스로 존재한다.
+표준 어댑터 인터페이스(`src/lib/brokers/types.ts` `BrokerAdapter`)와 레지스트리
+(`registry.ts`)를 두고, 터미널 **주문** 탭(`BrokerPanel`)에서 각 브로커의 연동 상태를
+정직하게 표시한다. 키는 **서버 환경변수로만** 주입(클라이언트 전송 금지), 읽기 전용.
 
-**연동 설계(후속 슬라이스)**: 브로커별 어댑터 인터페이스를 두고 표준화한다.
-```
-interface BrokerAdapter {
-  listPositions(): Promise<Position[]>
-  listBalances(): Promise<Balance[]>
-  // (선택) placeOrder(...), streamQuotes(...)
-}
-```
-대상: Alpaca, Interactive Brokers, 한국투자증권 Open API. 키는 6장 보안 원칙대로
-암호화 저장. 수동 입력/수정은 기존 v1 거래/보유 CRUD로 이미 가능.
+| 브로커 | 상태 | 필요 ENV |
+|--------|------|----------|
+| **Alpaca** | ✅ 구현(읽기전용 포지션). 키 설정 시 즉시 동작 | `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY`, (선택)`ALPACA_BASE_URL` |
+| Interactive Brokers | 스텁(미구현) — Client Portal Gateway 필요 | `IBKR_GATEWAY_URL` |
+| 한국투자증권 | 스텁(미구현) — OAuth 토큰+계좌 필요 | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT` |
+
+API: `GET /api/brokers/status`(상태), `GET /api/brokers/[broker]/positions`
+(404 미존재 · 501 미구현 · 200 `{configured:false}` 키없음 · 200 `{positions}` · 502 업스트림오류).
+키가 없으면 가짜 포지션을 만들지 않고 "연동 필요"로 표시한다. 기존 `Questrade` 동기화
+(`/api/questrade/*`)도 포트폴리오 소스로 존재. 수동 입력/수정은 v1 거래/보유 CRUD로 가능.
+
+Alpaca 기본 엔드포인트는 paper(`https://paper-api.alpaca.markets`); live는
+`ALPACA_BASE_URL=https://api.alpaca.markets`로 전환. 주문 실행/체결은 읽기전용 범위 밖(후속).
 
 ---
 
