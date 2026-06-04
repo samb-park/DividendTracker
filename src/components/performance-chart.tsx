@@ -73,7 +73,7 @@ export function PerformanceChart() {
   const [benchmarkError, setBenchmarkError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [allLoaded, setAllLoaded] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [rangeDropOpen, setRangeDropOpen] = useState(false);
   const [benchmarkDropOpen, setBenchmarkDropOpen] = useState(false);
   const [projectionDropOpen, setProjectionDropOpen] = useState(false);
@@ -95,19 +95,24 @@ export function PerformanceChart() {
   }, []);
 
   useEffect(() => {
-    if (range === "all" && allLoaded) return;
+    // Always re-fetch when the range changes. (A prior `allLoaded` cache skipped
+    // the fetch when returning to "all", leaving the previously selected range's
+    // snapshots in state — so e.g. 3m → all left the chart showing 3m data.)
+    // `ignore` drops out-of-order responses when the range is switched rapidly.
+    let ignore = false;
     setLoading(true);
     setFetchError(false);
     fetch(`/api/snapshots?range=${range}`)
       .then((r) => r.json())
       .then((d) => {
+        if (ignore) return;
         setSnapshots(d.snapshots ?? []);
         setContributionEventsCAD(d.contributionEventsCAD ?? []);
-        if (range === "all") setAllLoaded(true);
         setLoading(false);
       })
-      .catch(() => { setFetchError(true); setLoading(false); });
-  }, [range, allLoaded]);
+      .catch(() => { if (!ignore) { setFetchError(true); setLoading(false); } });
+    return () => { ignore = true; };
+  }, [range, reloadNonce]);
 
   useEffect(() => {
     setBenchmarkError(false);
@@ -740,7 +745,7 @@ export function PerformanceChart() {
       ) : fetchError ? (
         <div className="h-36 flex flex-col items-center justify-center text-xs space-y-2 border border-dashed border-border">
           <span className="text-negative">FAILED TO LOAD PERFORMANCE DATA</span>
-          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); setAllLoaded(false); }}>RETRY</button>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => setReloadNonce((n) => n + 1)}>RETRY</button>
         </div>
       ) : !hasSufficientData ? (
         <div className="h-36 flex flex-col items-center justify-center text-muted-foreground text-xs space-y-1 border border-dashed border-border">
