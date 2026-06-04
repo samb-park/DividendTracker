@@ -1,0 +1,368 @@
+/* ===========================================================================
+   /pocket — mobile dividend run-rate surface.
+   Fully scoped to .pocket-root so it never inherits the global IBM Plex Mono
+   font, retro scanline, or 600-weight body. Mirrors the iOS reference: white
+   bg, gray single-letter labels, ultra-bold hero numbers, floating tab bar.
+   =========================================================================== */
+
+/* Kill the global retro scanline overlay + body chrome on this surface only.
+   :has() is supported on iOS Safari 15.4+ / modern Chrome (the target). */
+body:has(.pocket-root)::before { display: none !important; }
+
+.pocket-root {
+  /* Light (reference default) */
+  --pk-bg: #ffffff;
+  --pk-ink: #0a0a0a;
+  --pk-muted: #a3a3a8;
+  --pk-faint: #c9c9ce;
+  --pk-pill-bg: #0a0a0a;
+  --pk-pill-ink: #ffffff;
+  --pk-hairline: rgba(0, 0, 0, 0.08);
+  --pk-tabbar-bg: rgba(247, 247, 248, 0.86);
+  --pk-tabbar-active: rgba(0, 0, 0, 0.06);
+  --pk-warn: #b4530a;
+
+  font-family: -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  background: var(--pk-bg);
+  color: var(--pk-ink);
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.pocket-root[data-pocket-mode="dark"] {
+  --pk-bg: #000000;
+  --pk-ink: #ffffff;
+  --pk-muted: #6e6e73;
+  --pk-faint: #48484a;
+  --pk-pill-bg: #ffffff;
+  --pk-pill-ink: #000000;
+  --pk-hairline: rgba(255, 255, 255, 0.12);
+  --pk-tabbar-bg: rgba(28, 28, 30, 0.86);
+  --pk-tabbar-active: rgba(255, 255, 255, 0.12);
+  --pk-warn: #e08a3c;
+}
+
+/* layout shell ---------------------------------------------------------- */
+.pk-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 26px 0;
+  padding-left: max(26px, env(safe-area-inset-left));
+  padding-right: max(26px, env(safe-area-inset-right));
+}
+
+/* header ---------------------------------------------------------------- */
+.pk-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pk-title {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1.05;
+}
+.pk-edit {
+  appearance: none;
+  border: none;
+  background: var(--pk-pill-bg);
+  color: var(--pk-pill-ink);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  padding: 11px 24px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+  min-height: 44px;
+}
+.pk-edit:active { opacity: 0.6; }
+
+.pk-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+.pk-summary-cell { display: flex; align-items: baseline; gap: 8px; }
+.pk-summary-cell.right { justify-content: flex-end; }
+.pk-summary-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--pk-muted);
+}
+.pk-summary-value {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* hero rows ------------------------------------------------------------- */
+.pk-hero {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 1.5vh, 12px);
+  width: 100%;
+}
+.pk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.42em;
+  width: 100%;
+}
+.pk-row-label {
+  flex: 0 0 auto;
+  color: var(--pk-muted);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  font-size: 52px; /* set imperatively by the fit effect */
+}
+.pk-row-num {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: left;
+  color: var(--pk-ink);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-size: 84px; /* set imperatively by the fit effect */
+}
+
+/* spacers position the hero block lower-center like the reference */
+.pk-spacer-top { flex: 1 1 0; min-height: 12px; }
+.pk-spacer-bottom { flex: 1.25 1 0; min-height: 12px; }
+
+/* status / honest empty + stale states ---------------------------------- */
+.pk-note {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pk-muted);
+  margin-top: 14px;
+  line-height: 1.4;
+}
+.pk-note.warn { color: var(--pk-warn); }
+.pk-skeleton {
+  color: var(--pk-faint);
+  font-weight: 800;
+}
+.pk-retry {
+  appearance: none;
+  margin-top: 14px;
+  border: 1px solid var(--pk-hairline);
+  background: transparent;
+  color: var(--pk-ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* floating tab bar ------------------------------------------------------ */
+.pk-tabbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex;
+  gap: 4px;
+  padding: 7px;
+  border-radius: 999px;
+  background: var(--pk-tabbar-bg);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 0 var(--pk-hairline) inset;
+  z-index: 50;
+}
+.pk-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--pk-muted);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+  min-height: 44px;
+}
+.pk-tab[data-active="true"] {
+  color: var(--pk-ink);
+  font-weight: 700;
+  background: var(--pk-tabbar-active);
+}
+/* clear the floating bar at the bottom of scrollable content */
+.pk-bottom-clearance { height: calc(env(safe-area-inset-bottom, 0px) + 92px); }
+
+/* ticker picker (Edit overlay + Settings) ------------------------------- */
+.pk-picker { display: flex; flex-direction: column; }
+.pk-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--pk-hairline);
+  cursor: pointer;
+}
+.pk-picker-row:last-child { border-bottom: none; }
+.pk-picker-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pk-picker-ticker {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--pk-ink);
+}
+.pk-picker-ticker.off { color: var(--pk-muted); text-decoration: line-through; }
+.pk-picker-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pk-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-picker-amt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  flex: 0 0 auto;
+}
+.pk-picker-amt.off { color: var(--pk-faint); }
+/* checkbox */
+.pk-check {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--pk-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pk-pill-ink);
+  font-size: 15px;
+  line-height: 1;
+}
+.pk-check[data-on="true"] {
+  background: var(--pk-pill-bg);
+  border-color: var(--pk-pill-bg);
+}
+
+/* bottom sheet overlay (Edit) ------------------------------------------- */
+.pk-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 60;
+  animation: pk-fade 0.16s ease-out;
+}
+.pk-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  background: var(--pk-bg);
+  border-top-left-radius: 22px;
+  border-top-right-radius: 22px;
+  padding: 10px 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  max-height: 82dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: pk-slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+}
+.pk-sheet-grip {
+  width: 38px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--pk-faint);
+  margin: 0 auto 6px;
+}
+.pk-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+}
+.pk-sheet-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
+.pk-sheet-done {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--pk-ink);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 2px;
+}
+@keyframes pk-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* settings tab ---------------------------------------------------------- */
+.pk-settings { display: flex; flex-direction: column; gap: 30px; }
+.pk-section-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pk-muted);
+  margin-bottom: 10px;
+}
+.pk-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--pk-tabbar-active);
+  gap: 2px;
+}
+.pk-seg-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--pk-muted);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+  min-height: 40px;
+}
+.pk-seg-btn[data-active="true"] {
+  background: var(--pk-bg);
+  color: var(--pk-ink);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.pk-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pk-field-label { font-size: 17px; font-weight: 600; color: var(--pk-ink); }

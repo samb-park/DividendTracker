@@ -4,6 +4,7 @@ import { yahooFinance } from "@/lib/price";
 import { detectFrequency } from "@/lib/dividend-utils";
 import { getNasdaqDividend } from "@/lib/nasdaq-dividend";
 import { projectDividendMonthsFromAnchor, toLocalNoonDate } from "@/lib/dividend-date";
+import { netFactor } from "@/lib/dividend-withholding";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
@@ -40,27 +41,6 @@ interface DividendItem {
   isCanadianEligible?: boolean; // CAD dividend in non-registered account (may qualify for DTC)
 }
 
-
-// Heuristic: US-listed tickers have no exchange suffix (e.g. AAPL, VTI)
-// Canadian tickers use .TO, .V, etc. Foreign ADRs in USD may have different rates.
-function isUSListed(ticker: string): boolean {
-  return !ticker.includes(".");
-}
-
-function netFactor(accountType: string, currency: string, ticker: string): number {
-  // Only apply US 15% NRA withholding if the stock is US-listed (heuristic: no exchange suffix)
-  const applyUSWithholding = currency === "USD" && isUSListed(ticker);
-  if (accountType === "RRSP") {
-    // Canada-US treaty Art XXI(7): US-listed stocks exempt from NRA withholding
-    if (applyUSWithholding) return 1.0;
-    if (currency === "CAD") return 1.0; // domestic dividends: no foreign withholding
-    return 0.85; // non-US foreign holdings (ADRs, EU stocks): treaty may not apply
-  }
-  if (accountType === "TFSA") return applyUSWithholding ? 0.85 : 1.0; // TFSA not treaty-exempt
-  if (accountType === "FHSA") return applyUSWithholding ? 0.85 : 1.0; // FHSA not treaty-exempt
-  if (accountType === "RESP") return applyUSWithholding ? 0.85 : 1.0; // RESP not treaty-exempt
-  return 1.0; // Margin/Cash — return gross (personal tax handled separately)
-}
 
 function computeSharesHeldAtDate(
   transactions: Array<{ action: "BUY" | "SELL" | "DIVIDEND"; quantity: unknown; date: Date }>,
