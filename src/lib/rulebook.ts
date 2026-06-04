@@ -1,7 +1,7 @@
-// SANGBONG INVESTMENT RULEBOOK v4.5.0 calculation helpers.
+// SANGBONG INVESTMENT RULEBOOK v4.5.1 calculation helpers.
 // Pure functions; all CAD-normalized inputs; all output is JSON-serializable.
 //
-// Rule references (v4.5.0):
+// Rule references (v4.5.1):
 //  - Core         = SCHD + QLD  (weekly Core = 455 CAD = SCHD 273 / QLD 182)
 //  - SGOV         = passive reserve, target 5%, allowed 0–8%; crisis can drain to 0
 //  - TQQQ         = VR-Lite only (Friday 252d drawdown tiers; Monday buy)
@@ -17,7 +17,7 @@
 export const RULEBOOK_TICKERS = {
   CORE: ["SCHD", "QLD"] as const,
   RESERVE: ["SGOV"] as const,                 // passive reserve, base 5%, max 8%, min 0%
-  SATELLITE: [] as const,                     // v4.5.0: no active satellite new buys
+  SATELLITE: [] as const,                     // v4.5.1: no active satellite new buys
   OVERLAY: ["TQQQ"] as const,                  // VR-Lite / legacy holding, not Core overlay
   LEGACY: ["QQQM", "QQQI", "JEPQ", "IAUM"] as const, // hold-only; isNonCoreTicker true; no rulebook gating
 } as const;
@@ -37,29 +37,29 @@ export const RULEBOOK_TARGETS = {
   QLD_OF_CORE_PCT:  40,
   // §5 annual rebalance deadband
   REBAL_HIGH_PCT: 31,   // W > 31% → Case A
-  REBAL_LOW_PCT:  29,   // W < 29% → no-action in v4.5.0
+  REBAL_LOW_PCT:  29,   // W < 29% → no-action in v4.5.1
   // §6.1 crisis triggers (core basis)
   CRISIS_T1_PCT: 25,    // core W ≤ 25% → 2.5% total → QLD
   CRISIS_T2_PCT: 20,    // core W ≤ 20% → additional 2.5% total → QLD
   CRISIS_T1_BUY_PCT_OF_TOTAL: 2.5,
   CRISIS_T2_BUY_PCT_OF_TOTAL: 2.5,
   CRISIS_RESET_QLD_CORE_WEIGHT_PCT: 30,
-  // SGOV (v4.5.0) — base 5% / max 8% / min 0% (no floor)
+  // SGOV (v4.5.1) — base 5% / max 8% / min 0% (no floor)
   SGOV_BASE_TARGET_PCT: 5,            // §8 base target
   SGOV_MAX_PCT: 8,                    // §8 ceiling
   SGOV_MIN_PCT: 0,                    // §8 NO hard floor — crisis may exhaust SGOV to 0
-  // TQQQ VR-Lite (v4.5.0): Friday decision using 252d drawdown; Monday buy handled by user/broker flow.
-  TQQQ_VR_TIER1_DD_PCT: 10,
-  TQQQ_VR_TIER2_DD_PCT: 20,
+  // TQQQ VR-Lite (v4.5.1): Friday decision using 252d drawdown; Monday buy from TFSA SGOV only.
+  TQQQ_VR_TIER1_DD_PCT: 0,
+  TQQQ_VR_TIER2_DD_PCT: 15,
   TQQQ_VR_TIER3_DD_PCT: 30,
-  TQQQ_VR_TIER4_DD_PCT: 40,
+  TQQQ_VR_TIER4_DD_PCT: 50,
   TQQQ_VR_TIER1_USD: 10,
   TQQQ_VR_TIER2_USD: 20,
   TQQQ_VR_TIER3_USD: 40,
   TQQQ_VR_TIER4_USD: 60,
   FX_BUFFER_PCT: 1.5,
   FX_CONVERSION_DAY_OF_WEEK: 5,
-  // Weekly contributions (v4.5.0 — Core = 455 = SCHD 273 / QLD 182)
+  // Weekly contributions (v4.5.1 — Core = 455 = SCHD 273 / QLD 182)
   CORE_WEEKLY_CAD: 455,
   SCHD_WEEKLY_CAD: 273,
   QLD_WEEKLY_CAD: 182,
@@ -104,9 +104,9 @@ export interface RulebookWeights {
   // Trigger flags
   inDeadband: boolean;          // 29 ≤ QLD core W ≤ 31 → no annual rebal action
   caseAEligible: boolean;       // QLD core W > 31 (regardless of overlay)
-  caseBEligible: boolean;       // QLD core W < 29 (no-action in v4.5.0)
-  hardExit: boolean;            // v4.5.0 removed; always false
-  softExit: boolean;            // v4.5.0 removed; always false
+  caseBEligible: boolean;       // QLD core W < 29 (no-action in v4.5.1)
+  hardExit: boolean;            // v4.5.1 removed; always false
+  softExit: boolean;            // v4.5.1 removed; always false
   crisisT1: boolean;            // 20 < core W ≤ 25 (month-end close gate)
   crisisT2: boolean;            // core W ≤ 20      (month-end close gate)
   cycleArmable: boolean;        // QLD core weight ≥ 30 (cycle reset condition met)
@@ -142,7 +142,7 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   const qqqmTotalWeightPct = pct(qqqmCAD, allCAD);
   const tqqqTotalWeightPct = pct(tqqqCAD, allCAD);
 
-  // v4.5.0 abolished the prior Soft Exit / Emergency cap growth-bucket exits.
+  // v4.5.1 abolished the prior Soft Exit / Emergency cap growth-bucket exits.
   const hardExit = false;
   const softExit = false;
   const crisisT2 = qldCoreWeightPct <= RULEBOOK_TARGETS.CRISIS_T2_PCT && coreCAD > 0;
@@ -191,9 +191,9 @@ export function computeRulebookWeights(holdings: RulebookHoldingValue[]): Rulebo
   };
 }
 
-// ── Static Core allocation (v4.5.0) ───────────────────────────────
+// ── Static Core allocation (v4.5.1) ───────────────────────────────
 // Fixed 60/40 split. No Method B, no shortfall logic, no TQQQ overlay.
-// v4.5.0: Core weekly = 455 CAD = SCHD 273 / QLD 182.
+// v4.5.1: Core weekly = 455 CAD = SCHD 273 / QLD 182.
 export interface StaticCoreAllocation {
   contributionCAD: number;
   overlayActive: boolean;
@@ -221,7 +221,7 @@ export function computeStaticCoreAllocation(
   };
 }
 
-// ── SCHD dividend reinvestment (v4.5.0) ──────────────────────────────────
+// ── SCHD dividend reinvestment (v4.5.1) ──────────────────────────────────
 // Rulebook §5 — every SCHD dividend must reinvest as 60/40 static.
 //   dividend × 0.60 → SCHD
 //   dividend × 0.40 → QLD
@@ -238,6 +238,7 @@ export function computeSchdDividendReinvest(
   dividendCAD: number,
   overlayActive: boolean,
 ): SchdDividendReinvestPlan {
+  void overlayActive; // v4.5.1: overlay removed; param kept for call-site compatibility
   const D = Math.max(0, isFinite(dividendCAD) ? dividendCAD : 0);
   const schdPct = RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100;
   const qldPct  = RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100;
@@ -297,11 +298,10 @@ export function computeTqqqVrLiteWeeklyPlan(args: {
   dayOfWeek: number;
 }): TqqqVrLiteWeeklyPlan {
   const dd = Math.max(0, Number.isFinite(args.drawdown252dPct) ? args.drawdown252dPct : 0);
-  let usdBuy = 0;
+  let usdBuy: number = RULEBOOK_TARGETS.TQQQ_VR_TIER1_USD;
   if (dd >= RULEBOOK_TARGETS.TQQQ_VR_TIER4_DD_PCT) usdBuy = RULEBOOK_TARGETS.TQQQ_VR_TIER4_USD;
   else if (dd >= RULEBOOK_TARGETS.TQQQ_VR_TIER3_DD_PCT) usdBuy = RULEBOOK_TARGETS.TQQQ_VR_TIER3_USD;
   else if (dd >= RULEBOOK_TARGETS.TQQQ_VR_TIER2_DD_PCT) usdBuy = RULEBOOK_TARGETS.TQQQ_VR_TIER2_USD;
-  else if (dd >= RULEBOOK_TARGETS.TQQQ_VR_TIER1_DD_PCT) usdBuy = RULEBOOK_TARGETS.TQQQ_VR_TIER1_USD;
   const executeToday = args.dayOfWeek === RULEBOOK_TARGETS.FX_CONVERSION_DAY_OF_WEEK;
   return {
     executeToday,
@@ -312,7 +312,7 @@ export function computeTqqqVrLiteWeeklyPlan(args: {
   };
 }
 
-// ── Retired Soft Exit compatibility helper (v4.5.0 removed) ───
+// ── Retired Soft Exit compatibility helper (v4.5.1 removed) ───
 // Kept for response-shape compatibility; always inactive.
 export interface TqqqSoftExitPlan {
   active: boolean;
@@ -346,7 +346,7 @@ export function computeTqqqSoftExitPlan(args: {
   return { active: true, tqqqSaleCAD: sale, sgovRefillCAD: sgovRefill, schdBuyCAD: schdBuy, postGrowthBucketPct };
 }
 
-// ── Retired Emergency cap compatibility helper (v4.5.0 removed) ───
+// ── Retired Emergency cap compatibility helper (v4.5.1 removed) ───
 // Kept for response-shape compatibility; always inactive.
 export interface TqqqExitPlan {
   active: boolean;
@@ -401,7 +401,7 @@ export function computeTqqqHardExitPlan(args: {
 // Cycle gating: each tier may only fire once per cycle. Cycle resets when
 //   QLD core weight ≥ 30% (caller passes `cycleArmed`).
 // SCHD never sold. QQQM never sold.
-// v4.5.0: SGOV may be exhausted to 0% (NO floor). Sale capped only by available SGOV.
+// v4.5.1: SGOV may be exhausted to 0% (NO floor). Sale capped only by available SGOV.
 export interface CrisisTriggerPlan {
   active: boolean;
   tier: "T1" | "T2" | null;
@@ -449,7 +449,7 @@ export function computeCrisisTriggerPlan(args: {
   };
 }
 
-// ── §5 Annual Rebalance (Dec 31) — v4.5.0 Core 60/40 ──────────
+// ── §5 Annual Rebalance (Dec 31) — v4.5.1 Core 60/40 ──────────
 // Case A: QLD/SCHD overshoot trim proceeds → SGOV.
 // Case B: W < 29 → NO ACTION.
 // Deadband: no action. SCHD is never sold except explicit year-end overshoot trim.
@@ -496,10 +496,11 @@ export function computeAnnualRebalancePlan(args: {
     };
   }
 
-  // Case B (v4.5.0 — NO ACTION).
+  // Case B (v4.5.1 — NO ACTION).
   return noop;
 }
 
+// v4.5.1: TQQQ profit stays inside TFSA and routes to SGOV, not Core.
 export interface TqqqProfitSweepPlan {
   active: boolean;
   tqqqSaleUsd: number;
@@ -515,14 +516,12 @@ export function computeTqqqProfitSweepPlan(args: {
   const market = Math.max(0, Number.isFinite(args.marketValueUsd) ? args.marketValueUsd : 0);
   const cost = Math.max(0, Number.isFinite(args.costBasisUsd) ? args.costBasisUsd : 0);
   const profit = Math.max(0, market - cost);
-  const schdPct = RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100;
-  const qldPct = RULEBOOK_TARGETS.QLD_OF_CORE_PCT / 100;
   return {
     active: profit > 0,
     tqqqSaleUsd: profit,
-    schdBuyUsd: profit * schdPct,
-    qldBuyUsd: profit * qldPct,
-    sgovBuyUsd: 0,
+    schdBuyUsd: 0,
+    qldBuyUsd: 0,
+    sgovBuyUsd: profit,
   };
 }
 
@@ -606,12 +605,12 @@ export function computeMeltdownAllocation(
   };
 }
 
-// ── Legacy QQQM weekly plan (v4.5.0) ─────────────────────────────
+// ── Legacy QQQM weekly plan (v4.5.1) ─────────────────────────────
 // QQQM is hold-only: no new buys, no weekly cash accumulation, no redirects, no skim.
 // QQQM distribution: TFSA USD cash, no auto-routing.
 export interface QqqmWeeklyPlan {
-  qqqmCashAccumCAD: number;    // always 0 in v4.5.0
-  redirectedToCoreCAD: number; // always 0 in v4.5.0
+  qqqmCashAccumCAD: number;    // always 0 in v4.5.1
+  redirectedToCoreCAD: number; // always 0 in v4.5.1
   reason: string;              // 한국어 사유 ("적용" / "TFSA 잔여한도 없음")
   tfsaRoomExists: boolean;
 }
@@ -621,12 +620,12 @@ export function computeQqqmWeeklyPlan(tfsaRoomExists: boolean): QqqmWeeklyPlan {
   return {
     qqqmCashAccumCAD: 0,
     redirectedToCoreCAD: 0,
-    reason: "v4.5.0: QQQM 신규 매수 없음",
+    reason: "v4.5.1: QQQM 신규 매수 없음",
     tfsaRoomExists: false,
   };
 }
 
-// ── QQQM cumulative cost USD / shares (v4.5.0) ────────────────────────────
+// ── QQQM cumulative cost USD / shares (v4.5.1) ────────────────────────────
 // Derived live from Transaction table (no QqqmPosition denormalisation).
 // SELL is prohibited so we only sum BUY rows. DIVIDEND is irrelevant (TFSA USD cash).
 // Cost-basis is cumulative AND IS NEVER REDUCED BY SKIM.
@@ -659,7 +658,7 @@ export function computeQqqmCumulative(transactions: QqqmTransactionLike[]): Qqqm
   return { cumulativeCostUsd: cost, cumulativeShares: shares };
 }
 
-// ── Legacy QQQM annual skim compatibility helper (v4.5.0 removed) ───────────
+// ── Legacy QQQM annual skim compatibility helper (v4.5.1 removed) ───────────
 // Always returns ineligible; kept only so historical callers do not break.
 export interface QqqmAnnualSkimResult {
   eligible: boolean;
@@ -692,7 +691,7 @@ export function computeQqqmAnnualSkim(args: {
   void args.fxUsdToCad;
   return {
     eligible: false,
-    reason: "v4.5.0-removed",
+    reason: "v4.5.1-removed",
     vUsd,
     pUsdAvg,
     skimAmountUsd: 0,
@@ -700,7 +699,7 @@ export function computeQqqmAnnualSkim(args: {
   };
 }
 
-// ── Legacy QQQM next-skim-date helper (not used by v4.5.0 advice) ──────────────
+// ── Legacy QQQM next-skim-date helper (not used by v4.5.1 advice) ──────────────
 // Returns the 12/31 of (this year or next, whichever is upcoming).
 // Trading-day fallback: weekday-only approximation (no holiday calendar exists):
 //   12/31 Mon–Fri → 12/31, isPostponed=false.
@@ -766,7 +765,7 @@ export interface ProjectionScenario {
   points: ProjectionYearPoint[];
 }
 
-// ── Rulebook-based per-asset projection (v2 — v4.5.0) ─────────────────────
+// ── Rulebook-based per-asset projection (v2 — v4.5.1) ─────────────────────
 // Year-by-year simulation that applies §5 static 60/40 contribution, SGOV user stream,
 // §6.1 crisis SGOV→QLD, and year-end rebalance. Soft Exit/Emergency cap/QQQM skim are removed.
 //
@@ -778,7 +777,7 @@ export interface ProjectionScenario {
 //
 // Yields (annual dividend / price) for each asset are caller-provided. SCHD
 // yield grows by safeDivGrowth each year; QLD / SGOV / QQQM stay flat.
-// v4.5.0: QQQM yield default is 0.7% (broad equity), NOT the 8% covered-call.
+// v4.5.1: QQQM yield default is 0.7% (broad equity), NOT the 8% covered-call.
 export interface ProjectionStartStateV2 {
   schdCAD: number;
   qldCAD: number;
@@ -797,7 +796,7 @@ export interface ProjectionInputV2 {
   coreWeeklyCAD: number;
   /** Settings nonCorePlan.cad for SGOV (per Plan period). 0 if not set. */
   sgovWeeklyCAD: number;
-  /** Legacy compatibility only; ignored in v4.5.0 because QQQM new buys are removed. */
+  /** Legacy compatibility only; ignored in v4.5.1 because QQQM new buys are removed. */
   qqqmWeeklyCAD: number;
   /** Whether TFSA room remains; assumed constant for projection horizon (model 한계). */
   tfsaRoomExists: boolean;
@@ -826,7 +825,7 @@ export interface ProjectionYearPointV2 {
   schdCAD: number;
   qldCAD: number;
   sgovCAD: number;
-  qqqmCAD: number;             // v4.5.0
+  qqqmCAD: number;             // v4.5.1
   tqqqCAD: number;
   totalCAD: number;
   qldCoreWeightPct: number;
@@ -839,14 +838,14 @@ export interface ProjectionYearPointV2 {
   annualDivGrossCAD: number;
   monthlyDivCAD: number;
   totalContribCAD: number;
-  // v4.5.0 priority-order event flags
+  // v4.5.1 priority-order event flags
   hardExitApplied: boolean;
   softExitApplied: boolean;    // §6.2 sell-half TQQQ
   crisisT1Applied: boolean;
   crisisT2Applied: boolean;
   caseAApplied: boolean;
   caseBApplied: boolean;
-  qqqmSkimApplied: boolean;    // legacy compatibility; v4.5.0 QQQM skim removed
+  qqqmSkimApplied: boolean;    // legacy compatibility; v4.5.1 QQQM skim removed
   // Retirement phase fields ([10] / [11] / [16])
   withdrawalCAD: number;
   dividendConsumedCAD: number;
@@ -901,11 +900,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
     const qqqmYld = Math.max(0, input.start.qqqmYieldPct) / 100;
     let cumContrib = 0;
 
-    // QQQM cumulative cost basis in CAD-equivalent (projection runs in CAD only; the
-    // 12/31 skim threshold is checked in CAD here as a model proxy — the production
-    // skim helper uses USD via computeQqqmAnnualSkim).
-    let qqqmCostCAD = qqqmCAD; // baseline: treat starting balance as its own cost
-
     // Cycle gating state (in-memory; per scenario)
     let cycleArmed = tqqqCAD <= 0;
     let t1Fired = false;
@@ -921,7 +915,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       let crisisT2Applied = false;
       let caseAApplied = false;
       let caseBApplied = false;
-      let qqqmSkimApplied = false;
+      const qqqmSkimApplied = false;
       let withdrawalCAD = 0;
       let dividendConsumedCAD = 0;
       let pensionCAD = 0;
@@ -955,7 +949,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       cumContrib += annualCore + annualSGOV + annualQQQM;
 
       // (2) Static 60/40 — no TQQQ overlay.
-      const overlayActive = false;
       const schdBuy  = annualCore * (RULEBOOK_TARGETS.SCHD_OF_CORE_PCT / 100);
       const growthBuy = annualCore * (RULEBOOK_TARGETS.QLD_OF_CORE_PCT  / 100);
       const qldBuy  = growthBuy;
@@ -967,7 +960,6 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       sgovCAD = sgovCAD * (1 + SGOV_FIXED_CAGR) + annualSGOV * (1 + SGOV_FIXED_CAGR * dcaFactor);
       // QQQM: broad equity proxy growth = scenario CAGR (held in TFSA so no withholding model needed).
       qqqmCAD = qqqmCAD * (1 + SCHD_CAGR) + annualQQQM * (1 + SCHD_CAGR * dcaFactor);
-      qqqmCostCAD += annualQQQM;  // cumulative CAD-equiv cost (never reduced by skim)
       // TQQQ: leveraged-Nasdaq proxy growth + overlay contributions (if any).
       tqqqCAD = tqqqCAD * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR) + tqqqBuy * (1 + SCHD_CAGR * TQQQ_LEVERAGE_FACTOR * dcaFactor);
 
@@ -981,7 +973,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         { ticker: "TQQQ", valueCAD: tqqqCAD },
       ]);
 
-      // (5) Priority order per rulebook v4.5.0: Crisis → Annual Rebal.
+      // (5) Priority order per rulebook v4.5.1: Crisis → Annual Rebal.
       // QQQM is NEVER touched by any of these.
       if (w.hardExit) {
         const plan = computeTqqqHardExitPlan({
@@ -1009,7 +1001,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
       }
 
       // Crisis trigger (independent — cycle gating prevents repeat within a cycle).
-      // v4.5.0: SGOV may exhaust to 0 (no floor).
+      // v4.5.1: SGOV may exhaust to 0 (no floor).
       if (w.crisisT2 && cycleArmed && !t2Fired) {
         const plan = computeCrisisTriggerPlan({
           totalCAD: totalNow, sgovCAD, crisisT1: false, crisisT2: true, cycleArmed, tqqqCAD,
@@ -1036,7 +1028,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         }
       }
 
-      // (5.5) v4.5.0: QQQM 신규 매수/연 skim 없음. Existing QQQM remains hold-only.
+      // (5.5) v4.5.1: QQQM 신규 매수/연 skim 없음. Existing QQQM remains hold-only.
 
       // Annual rebalance (Dec 31)
       if (true) {
@@ -1060,7 +1052,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
           caseAApplied = true;
           counts.caseA++;
         } else if (reb.action === "case_b") {
-          // v4.5.0: Case B is no-action. Defensive fallthrough — should never hit.
+          // v4.5.1: Case B is no-action. Defensive fallthrough — should never hit.
           qldCAD += reb.qldBuyCAD;
           sgovCAD += reb.sgovDeltaCAD;
           caseBApplied = true;
@@ -1068,7 +1060,7 @@ export function projectScenariosRulebook(input: ProjectionInputV2): ProjectionSc
         }
       }
 
-      // (6) v4.5.0: no age-based QQQM exit.
+      // (6) v4.5.1: no age-based QQQM exit.
 
       // (7) Dividend snapshot (TQQQ pays effectively 0).
       const coreCAD = schdCAD + qldCAD;

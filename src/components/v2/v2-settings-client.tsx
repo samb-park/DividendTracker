@@ -277,7 +277,7 @@ export function V2SettingsClient({ initial }: { initial: V2SettingsData }) {
 
       <Section
         title="Non-Core (Manual Budget)"
-        description="Tickers whose excl is checked are Non-Core — they are excluded from the main Contribution Plan. Set your own per-asset budget (frequency + CAD) to track planned spend separately. v4.5.0: SGOV is reserve/manual; QQQM/QQQI/JEPQ/IAUM are legacy hold-only and should not receive new buy budgets."
+        description="Tickers whose excl is checked are Non-Core — they are excluded from the main Contribution Plan. Set your own per-asset budget (frequency + CAD) to track planned spend separately. v4.5.1: SGOV is reserve/manual; QQQM/QQQI/JEPQ/IAUM are legacy hold-only and should not receive new buy budgets."
         subRight={
           <div className="text-right v2-fineprint v2-tnum" style={{ lineHeight: 1.4 }}>
             <div style={{ color: "hsl(var(--v2-ink-muted-48))" }}>
@@ -533,7 +533,7 @@ function Help() {
         style={{ color: "hsl(var(--v2-ink-muted-80))", paddingLeft: 18, listStyle: "decimal" }}
       >
         <li>excl unchecked = Core. 기본: SCHD, QLD. main Contribution Plan 대상.</li>
-        <li>excl checked = Non-Core. v4.5.0 기본: SGOV (reserve). Legacy hold-only: QQQM, QQQI, IAUM. main Contribution Plan에서 제외.</li>
+        <li>excl checked = Non-Core. v4.5.1 기본: SGOV (reserve). Legacy hold-only: QQQM, QQQI, IAUM. main Contribution Plan에서 제외.</li>
         <li>매 기간 Weekly Contribution은 Core에만 분배 (target % shortfall 기반).</li>
         <li>Non-Core는 사용자가 자체 budget(frequency + CAD)을 입력해 별도 추적. 자동 매수 대상이 아님.</li>
         <li>이전 reserve / redistribution 설정은 보존되지만 더 이상 main contribution에 영향을 주지 않음.</li>

@@ -14,7 +14,7 @@ export interface ProjectionYear {
   totalContribCAD: number;
 }
 
-// Rulebook-based projection point (v4.5.0). Per-asset CAD evolves year-by-year
+// Rulebook-based projection point (v4.5.1). Per-asset CAD evolves year-by-year
 // through static 60/40 contribution / SGOV target-range / TQQQ VR-Lite /
 // Crisis (SGOV→QLD, month-end) / year-end rebalance.
 export interface ProjectionYearV2 {
@@ -108,7 +108,7 @@ export interface CurrentState {
 
 export type NonCoreSource = "user-settings" | "rulebook-default" | "rulebook-inactive";
 
-// v4.5.0 — Static 60/40 Core allocation. No TQQQ overlay.
+// v4.5.1 — Static 60/40 Core allocation. No TQQQ overlay.
 // Satellite stream: SGOV user-settings only. QQQM is hold-only/no-new-buy.
 export interface CoreAllocationPlan {
   weeklyContribCAD: number;
@@ -118,7 +118,7 @@ export interface CoreAllocationPlan {
   tqqqBuyCAD: number;
   overlayActive: boolean;
   sgovReserveCAD: number;
-  /** v4.5.0: always 0; QQQM is hold-only/no-new-buy. */
+  /** v4.5.1: always 0; QQQM is hold-only/no-new-buy. */
   qqqmCashAccumCAD: number;
   sgovSource?: NonCoreSource;
   qqqmSource?: NonCoreSource;
@@ -136,7 +136,7 @@ export interface QqqmWeeklyPlan {
 }
 
 /**
- * v4.5.0 legacy compatibility object. QQQM annual skim is abolished; estimated amount is always 0.
+ * v4.5.1 legacy compatibility object. QQQM annual skim is abolished; estimated amount is always 0.
  */
 export interface QqqmAnnualSkimPlan {
   nextSkimDateISO: string;
@@ -151,7 +151,7 @@ export interface QqqmAnnualSkimPlan {
   vUsd: number;
 }
 
-// v4.5.0: Soft Exit / Emergency cap abolished. Kept for response-shape compatibility; active should remain false.
+// v4.5.1: Soft Exit / Emergency cap abolished. Kept for response-shape compatibility; active should remain false.
 export interface TqqqExitPlanOut {
   active: boolean;
   variant?: "soft" | "hard";
@@ -176,7 +176,7 @@ export interface CrisisTriggerPlanOut {
 }
 
 // AnnualRebalancePlanOut: §5 Dec-31 rebalance with ±1% deadband.
-//   v4.5.0: Core target is 60/40; overshoot trim proceeds route to SGOV. Case B remains no-action.
+//   v4.5.1: Core target is 60/40; overshoot trim proceeds route to SGOV. Case B remains no-action.
 export interface AnnualRebalancePlanOut {
   action: "deadband" | "case_a" | "case_b" | "case_b_no_room";
   qldSaleCAD?: number;

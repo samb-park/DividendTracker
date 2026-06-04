@@ -42,8 +42,8 @@ function test(name: string, fn: () => void) {
   }
 }
 
-// ── v4.5.0 authority regression guards ───────────────────────────────────────
-test("v4.5.0: core is SCHD 60 / QLD 40 with weekly 455 CAD (=273/182)", () => {
+// ── v4.5.1 authority regression guards ───────────────────────────────────────
+test("v4.5.1: core is SCHD 60 / QLD 40 with weekly 455 CAD (=273/182)", () => {
   assert.equal(RULEBOOK_TARGETS.SCHD_OF_CORE_PCT, 60);
   assert.equal(RULEBOOK_TARGETS.QLD_OF_CORE_PCT, 40);
   assert.equal(RULEBOOK_TARGETS.CORE_WEEKLY_CAD, 455);
@@ -52,10 +52,10 @@ test("v4.5.0: core is SCHD 60 / QLD 40 with weekly 455 CAD (=273/182)", () => {
   const a = computeStaticCoreAllocation(RULEBOOK_TARGETS.CORE_WEEKLY_CAD, false);
   assert.ok(close(a.schdBuyCAD, 273));
   assert.ok(close(a.qldBuyCAD, 182));
-  assert.equal(a.tqqqBuyCAD, 0, "v4.5.0 core contribution does not buy TQQQ overlay");
+  assert.equal(a.tqqqBuyCAD, 0, "v4.5.1 core contribution does not buy TQQQ overlay");
 });
 
-test("v4.5.0: all CAD contributions convert Friday with 1.5% FX buffer", () => {
+test("v4.5.1: all CAD contributions convert Friday with 1.5% FX buffer", () => {
   const p = computeFridayFxBufferPlan({ cadAmount: 455, usdCadRate: 1.4, dayOfWeek: 5 });
   assert.equal(p.executeToday, true);
   assert.equal(p.fxBufferPct, 1.5);
@@ -64,16 +64,16 @@ test("v4.5.0: all CAD contributions convert Friday with 1.5% FX buffer", () => {
   assert.equal(notFriday.executeToday, false);
 });
 
-test("v4.5.0: VR-Lite TQQQ Friday drawdown tiers map to USD 10/20/40/60, no cap or dead-zone", () => {
-  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 9, dayOfWeek: 5 }).usdBuy, 0);
-  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 10, dayOfWeek: 5 }).usdBuy, 10);
-  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 20, dayOfWeek: 5 }).usdBuy, 20);
+test("v4.5.1: VR-Lite TQQQ Friday drawdown tiers map to USD 10/20/40/60 with deeper exact boundaries", () => {
+  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 0, dayOfWeek: 5 }).usdBuy, 10);
+  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 14.99, dayOfWeek: 5 }).usdBuy, 10);
+  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 15, dayOfWeek: 5 }).usdBuy, 20);
   assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 30, dayOfWeek: 5 }).usdBuy, 40);
-  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 40, dayOfWeek: 5 }).usdBuy, 60);
-  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 40, dayOfWeek: 1 }).executeToday, false);
+  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 50, dayOfWeek: 5 }).usdBuy, 60);
+  assert.equal(computeTqqqVrLiteWeeklyPlan({ drawdown252dPct: 50, dayOfWeek: 1 }).executeToday, false);
 });
 
-test("v4.5.0: crisis trigger sells SGOV to buy QLD, not TQQQ, and resets at QLD core >= 30", () => {
+test("v4.5.1: crisis trigger sells SGOV to buy QLD, not TQQQ, and resets at QLD core >= 30", () => {
   const plan = computeCrisisTriggerPlan({
     totalCAD: 10000,
     sgovCAD: 600,
@@ -83,12 +83,12 @@ test("v4.5.0: crisis trigger sells SGOV to buy QLD, not TQQQ, and resets at QLD 
     tqqqCAD: 0,
   });
   assert.equal(plan.active, true);
-  assert.equal(plan.tqqqBuyCAD, 0, "v4.5.0 crisis no longer buys TQQQ");
+  assert.equal(plan.tqqqBuyCAD, 0, "v4.5.1 crisis no longer buys TQQQ");
   assert.equal((plan as unknown as { qldBuyCAD: number }).qldBuyCAD, 250);
   assert.equal((plan as unknown as { resetRule: string }).resetRule, "QLD_CORE_WEIGHT_GTE_30");
 });
 
-test("v4.5.0: Emergency cap / QQQM new-buy / Method B constants are absent", () => {
+test("v4.5.1: Emergency cap / QQQM new-buy / Method B constants are absent", () => {
   const tgts = RULEBOOK_TARGETS as Record<string, unknown>;
   assert.equal(tgts.HARD_EXIT_GROWTH_BUCKET_PCT, undefined);
   assert.equal(tgts.SOFT_EXIT_GROWTH_BUCKET_PCT, undefined);
@@ -97,16 +97,16 @@ test("v4.5.0: Emergency cap / QQQM new-buy / Method B constants are absent", () 
   assert.equal(tgts.QQQM_ANNUAL_SKIM_PCT, undefined);
 });
 
-test("v4.5.0: year-end TQQQ profit sweep sells 100% of profit to Core 60/40 only", () => {
+test("v4.5.1: year-end TQQQ profit sweep sells 100% of profit to TFSA SGOV", () => {
   const p = computeTqqqProfitSweepPlan({ marketValueUsd: 1600, costBasisUsd: 1000 });
   assert.equal(p.active, true);
   assert.equal(p.tqqqSaleUsd, 600);
-  assert.equal(p.schdBuyUsd, 360);
-  assert.equal(p.qldBuyUsd, 240);
-  assert.equal(p.sgovBuyUsd, 0);
+  assert.equal(p.schdBuyUsd, 0);
+  assert.equal(p.qldBuyUsd, 0);
+  assert.equal(p.sgovBuyUsd, 600);
 });
 
-test("v4.5.0: year-end SCHD/QLD overshoot trim routes proceeds to SGOV", () => {
+test("v4.5.1: year-end SCHD/QLD overshoot trim routes proceeds to SGOV", () => {
   const p = computeCoreOvershootTrimPlan({ schdCAD: 7000, qldCAD: 3000, sgovCAD: 0, totalCAD: 10000 });
   assert.equal(p.active, true);
   assert.equal(p.sellTicker, "SCHD");
@@ -154,7 +154,7 @@ test("QLD crisis tiers split at 25% / 20% core weight", () => {
   assert.equal(t2.crisisT2, true);
 });
 
-test("v4.5.0: SGOV base target flag flips below 5% total weight (was 8% in v4.4.2)", () => {
+test("v4.5.1: SGOV base target flag flips below 5% total weight (was 8% in v4.4.2)", () => {
   const below = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 80 },
     { ticker: "QLD",  valueCAD: 20 },
@@ -169,7 +169,7 @@ test("v4.5.0: SGOV base target flag flips below 5% total weight (was 8% in v4.4.
   assert.equal(ok.sgovBelowTarget, false);
 });
 
-test("v4.5.0: SGOV above-max flag flips above 8% total weight (replaces old floor flag)", () => {
+test("v4.5.1: SGOV above-max flag flips above 8% total weight (replaces old floor flag)", () => {
   const above = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 60 },
     { ticker: "QLD",  valueCAD: 30 },
@@ -184,14 +184,14 @@ test("v4.5.0: SGOV above-max flag flips above 8% total weight (replaces old floo
   assert.equal(safe.sgovAboveMax, false);
 });
 
-test("v4.5.0: regression guard — sgovBelowFloor / jepqAtCap fields removed from RulebookWeights", () => {
+test("v4.5.1: regression guard — sgovBelowFloor / jepqAtCap fields removed from RulebookWeights", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 70 },
     { ticker: "QLD",  valueCAD: 30 },
     { ticker: "SGOV", valueCAD: 4 },
   ]) as unknown as Record<string, unknown>;
-  assert.equal(w.sgovBelowFloor, undefined, "v4.5.0 removed sgovBelowFloor (no SGOV floor)");
-  assert.equal(w.jepqAtCap, undefined, "v4.5.0 removed jepqAtCap (QQQM has no cap)");
+  assert.equal(w.sgovBelowFloor, undefined, "v4.5.1 removed sgovBelowFloor (no SGOV floor)");
+  assert.equal(w.jepqAtCap, undefined, "v4.5.1 removed jepqAtCap (QQQM has no cap)");
 });
 
 test("growth bucket = (QLD + TQQQ) / Total", () => {
@@ -234,7 +234,7 @@ test("deadband: exact W=31.0 → inDeadband true (FP-safe)", () => {
   assert.equal(w.caseAEligible, false);
 });
 
-test("v4.5.0: Case B eligibility is W<29 and remains no-action even if TQQQ exists", () => {
+test("v4.5.1: Case B eligibility is W<29 and remains no-action even if TQQQ exists", () => {
   const withTqqq = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 75 },
     { ticker: "QLD",  valueCAD: 25 },
@@ -248,25 +248,25 @@ test("v4.5.0: Case B eligibility is W<29 and remains no-action even if TQQQ exis
   assert.equal(withoutTqqq.caseBEligible, true);
 });
 
-test("v4.5.0: growth bucket no longer triggers Soft/Emergency exit", () => {
+test("v4.5.1: growth bucket no longer triggers Soft/Emergency exit", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 100 },
     { ticker: "QLD",  valueCAD: 30 },
     { ticker: "TQQQ", valueCAD: 30 },  // growth bucket 60/160 = 37.5%
   ]);
   assert.equal(w.hardExit, false, "37.5% must not trigger Emergency cap");
-  assert.equal(w.softExit, false, "v4.5.0 removed Soft Exit");
+  assert.equal(w.softExit, false, "v4.5.1 removed Soft Exit");
   const wHard = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 100 },
     { ticker: "QLD",  valueCAD: 35 },
     { ticker: "TQQQ", valueCAD: 35 },  // 70/170 = 41.2% → emergency cap
   ]);
   assert.equal(wHard.softExit, false, "hard supersedes soft");
-  assert.equal(wHard.hardExit, false, "v4.5.0 removed Emergency cap");
+  assert.equal(wHard.hardExit, false, "v4.5.1 removed Emergency cap");
 });
 
 // ── computeStaticCoreAllocation (unchanged from v4.3.1) ─────────────────────
-test("v4.5.0 static core: SCHD 60 / QLD 40 (normal)", () => {
+test("v4.5.1 static core: SCHD 60 / QLD 40 (normal)", () => {
   const a = computeStaticCoreAllocation(100, false);
   assert.ok(close(a.schdBuyCAD, 60));
   assert.ok(close(a.qldBuyCAD, 40));
@@ -274,7 +274,7 @@ test("v4.5.0 static core: SCHD 60 / QLD 40 (normal)", () => {
   assert.equal(a.overlayActive, false);
 });
 
-test("v4.5.0 static core ignores legacy overlay: SCHD 60 / QLD 40 / TQQQ 0", () => {
+test("v4.5.1 static core ignores legacy overlay: SCHD 60 / QLD 40 / TQQQ 0", () => {
   const a = computeStaticCoreAllocation(100, true);
   assert.ok(close(a.schdBuyCAD, 60));
   assert.ok(close(a.qldBuyCAD, 40));
@@ -282,14 +282,14 @@ test("v4.5.0 static core ignores legacy overlay: SCHD 60 / QLD 40 / TQQQ 0", () 
   assert.equal(a.overlayActive, false);
 });
 
-test("v4.5.0 static core: zero contribution → zero buys", () => {
+test("v4.5.1 static core: zero contribution → zero buys", () => {
   const a = computeStaticCoreAllocation(0, false);
   assert.equal(a.schdBuyCAD, 0);
   assert.equal(a.qldBuyCAD, 0);
   assert.equal(a.tqqqBuyCAD, 0);
 });
 
-test("v4.5.0: weekly Core contribution is 455 CAD (= SCHD 273 / QLD 182)", () => {
+test("v4.5.1: weekly Core contribution is 455 CAD (= SCHD 273 / QLD 182)", () => {
   assert.equal(RULEBOOK_TARGETS.CORE_WEEKLY_CAD, 455);
   assert.equal(RULEBOOK_TARGETS.SCHD_WEEKLY_CAD, 273);
   assert.equal(RULEBOOK_TARGETS.QLD_WEEKLY_CAD, 182);
@@ -299,14 +299,14 @@ test("v4.5.0: weekly Core contribution is 455 CAD (= SCHD 273 / QLD 182)", () =>
   assert.ok(close(a.qldBuyCAD, RULEBOOK_TARGETS.QLD_WEEKLY_CAD));
 });
 
-test("v4.5.0: regression — removed constants are no longer present", () => {
+test("v4.5.1: regression — removed constants are no longer present", () => {
   const tgts = RULEBOOK_TARGETS as Record<string, unknown>;
-  assert.equal(tgts.SGOV_FLOOR_PCT, undefined, "v4.5.0: SGOV_FLOOR_PCT removed (no floor)");
-  assert.equal(tgts.SGOV_DEPLOYABLE_BUFFER_PCT, undefined, "v4.5.0: SGOV_DEPLOYABLE_BUFFER_PCT removed");
-  assert.equal(tgts.SGOV_WEEKLY_REFILL_CAD, undefined, "v4.5.0: SGOV_WEEKLY_REFILL_CAD removed (no weekly refill)");
-  assert.equal(tgts.SGOV_TARGET_PCT, undefined, "v4.5.0: SGOV_TARGET_PCT renamed → SGOV_BASE_TARGET_PCT + SGOV_MAX_PCT");
-  assert.equal(tgts.QQQI_MAX_PCT, undefined, "v4.5.0: QQQI_MAX_PCT removed (QQQM has no cap)");
-  assert.equal(tgts.QQQI_WEEKLY_BUY_CAD, undefined, "v4.5.0: QQQI_WEEKLY_BUY_CAD removed");
+  assert.equal(tgts.SGOV_FLOOR_PCT, undefined, "v4.5.1: SGOV_FLOOR_PCT removed (no floor)");
+  assert.equal(tgts.SGOV_DEPLOYABLE_BUFFER_PCT, undefined, "v4.5.1: SGOV_DEPLOYABLE_BUFFER_PCT removed");
+  assert.equal(tgts.SGOV_WEEKLY_REFILL_CAD, undefined, "v4.5.1: SGOV_WEEKLY_REFILL_CAD removed (no weekly refill)");
+  assert.equal(tgts.SGOV_TARGET_PCT, undefined, "v4.5.1: SGOV_TARGET_PCT renamed → SGOV_BASE_TARGET_PCT + SGOV_MAX_PCT");
+  assert.equal(tgts.QQQI_MAX_PCT, undefined, "v4.5.1: QQQI_MAX_PCT removed (QQQM has no cap)");
+  assert.equal(tgts.QQQI_WEEKLY_BUY_CAD, undefined, "v4.5.1: QQQI_WEEKLY_BUY_CAD removed");
   assert.equal(tgts.IAUM_MAX_PCT, undefined);
   assert.equal(tgts.IAUM_WEEKLY_BUY_CAD, undefined);
   assert.equal(tgts.SOFT_EXIT_GROWTH_BUCKET_PCT, undefined);
@@ -317,8 +317,8 @@ test("v4.5.0: regression — removed constants are no longer present", () => {
   assert.equal(tgts.QQQM_ANNUAL_SKIM_PCT, undefined);
 });
 
-// ── computeQqqmWeeklyPlan (§4 — v4.5.0) ──────────────────────────────────
-test("v4.5.0: computeQqqmWeeklyPlan no longer creates QQQM buy even with TFSA room", () => {
+// ── computeQqqmWeeklyPlan (§4 — v4.5.1) ──────────────────────────────────
+test("v4.5.1: computeQqqmWeeklyPlan no longer creates QQQM buy even with TFSA room", () => {
   const p = computeQqqmWeeklyPlan(true);
   assert.equal(p.qqqmCashAccumCAD, 0);
   assert.equal(p.redirectedToCoreCAD, 0);
@@ -326,22 +326,22 @@ test("v4.5.0: computeQqqmWeeklyPlan no longer creates QQQM buy even with TFSA ro
   assert.ok(p.reason.includes("신규 매수 없음"));
 });
 
-test("v4.5.0: QQQM weekly does not redirect when TFSA room missing", () => {
+test("v4.5.1: QQQM weekly does not redirect when TFSA room missing", () => {
   const p = computeQqqmWeeklyPlan(false);
   assert.equal(p.qqqmCashAccumCAD, 0);
   assert.equal(p.redirectedToCoreCAD, 0);
   assert.ok(p.reason.includes("신규 매수 없음"));
 });
 
-test("v4.5.0: QQQM has no new-buy path", () => {
+test("v4.5.1: QQQM has no new-buy path", () => {
   // QQQM 비중이 5%, 10%, 50%이든 비중 인자 자체가 더 이상 함수 시그너처에 없다.
   // 호출이 TFSA room true면 무조건 45가 적용된다.
   const p = computeQqqmWeeklyPlan(true);
-  assert.equal(p.qqqmCashAccumCAD, 0, "v4.5.0: no new QQQM buy");
+  assert.equal(p.qqqmCashAccumCAD, 0, "v4.5.1: no new QQQM buy");
 });
 
-// ── computeSchdDividendReinvest (§5 v4.5.0) ──────────────────────────────
-test("v4.5.0 SCHD dividend reinvest: 60/40 SCHD/QLD (normal)", () => {
+// ── computeSchdDividendReinvest (§5 v4.5.1) ──────────────────────────────
+test("v4.5.1 SCHD dividend reinvest: 60/40 SCHD/QLD (normal)", () => {
   const r = computeSchdDividendReinvest(100, false);
   assert.ok(close(r.schdBuyCAD, 60));
   assert.ok(close(r.qldBuyCAD, 40));
@@ -349,14 +349,14 @@ test("v4.5.0 SCHD dividend reinvest: 60/40 SCHD/QLD (normal)", () => {
   assert.equal(r.overlayActive, false);
 });
 
-test("v4.5.0 SCHD dividend reinvest ignores overlay: 60/40 SCHD/QLD", () => {
+test("v4.5.1 SCHD dividend reinvest ignores overlay: 60/40 SCHD/QLD", () => {
   const r = computeSchdDividendReinvest(100, true);
   assert.ok(close(r.schdBuyCAD, 60));
   assert.ok(close(r.qldBuyCAD, 40));
   assert.equal(r.tqqqBuyCAD, 0);
 });
 
-test("v4.5.0 SCHD dividend never routes to SGOV / QQQM / QQQI", () => {
+test("v4.5.1 SCHD dividend never routes to SGOV / QQQM / QQQI", () => {
   const r = computeSchdDividendReinvest(100, false) as unknown as Record<string, unknown>;
   assert.equal(r.sgovBuyCAD, undefined);
   assert.equal(r.qqqmBuyCAD, undefined);
@@ -394,7 +394,7 @@ test("Worst scenario produces lower portfolio than Base at year 20", () => {
   assert.ok(baseY20 > worstY20);
 });
 
-test("RULEBOOK_TARGETS exposes documented v4.5.0 thresholds", () => {
+test("RULEBOOK_TARGETS exposes documented v4.5.1 thresholds", () => {
   assert.equal(RULEBOOK_TARGETS.SCHD_OF_CORE_PCT, 60);
   assert.equal(RULEBOOK_TARGETS.QLD_OF_CORE_PCT, 40);
   assert.equal(RULEBOOK_TARGETS.REBAL_HIGH_PCT, 31);
@@ -412,7 +412,7 @@ test("RULEBOOK_TARGETS exposes documented v4.5.0 thresholds", () => {
   assert.equal((RULEBOOK_TARGETS as Record<string, unknown>).QQQM_SKIM_DAY, undefined);
 });
 
-test("v4.5.0: SGOV at 6% → sgovBelowTarget false (above base 5%)", () => {
+test("v4.5.1: SGOV at 6% → sgovBelowTarget false (above base 5%)", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 64 },
     { ticker: "QLD",  valueCAD: 30 },
@@ -422,7 +422,7 @@ test("v4.5.0: SGOV at 6% → sgovBelowTarget false (above base 5%)", () => {
   assert.equal(w.sgovBelowTarget, false);
 });
 
-test("v4.5.0: SGOV at exactly 5% → sgovBelowTarget false (at base)", () => {
+test("v4.5.1: SGOV at exactly 5% → sgovBelowTarget false (at base)", () => {
   const w = computeRulebookWeights([
     { ticker: "SCHD", valueCAD: 65 },
     { ticker: "QLD",  valueCAD: 30 },
@@ -433,8 +433,8 @@ test("v4.5.0: SGOV at exactly 5% → sgovBelowTarget false (at base)", () => {
   assert.equal(w.sgovBelowTarget, false);
 });
 
-// ── computeCrisisTriggerPlan (§6.1 — SGOV → QLD; v4.5.0: no floor) ──────
-test("v4.5.0: §6.1 Crisis T1 buys 2.5% of total CAD into QLD from SGOV", () => {
+// ── computeCrisisTriggerPlan (§6.1 — SGOV → QLD; v4.5.1: no floor) ──────
+test("v4.5.1: §6.1 Crisis T1 buys 2.5% of total CAD into QLD from SGOV", () => {
   const plan = computeCrisisTriggerPlan({
     totalCAD: 1000, sgovCAD: 100,
     crisisT1: true, crisisT2: false, cycleArmed: true, tqqqCAD: 0,
@@ -446,9 +446,9 @@ test("v4.5.0: §6.1 Crisis T1 buys 2.5% of total CAD into QLD from SGOV", () => 
   assert.equal(plan.tier, "T1");
 });
 
-test("v4.5.0: SGOV may fall to 0 during crisis (no floor; bounded only by holding)", () => {
+test("v4.5.1: SGOV may fall to 0 during crisis (no floor; bounded only by holding)", () => {
   // SGOV=20 of total 2000 (1%). T2 requested = 5% of 2000 = 100. Capped at sgov=20.
-  // v4.4.2 had a 5% floor; v4.5.0 removes it — sale just caps at available SGOV.
+  // v4.4.2 had a 5% floor; v4.5.1 removes it — sale just caps at available SGOV.
   const plan = computeCrisisTriggerPlan({
     totalCAD: 2000, sgovCAD: 20,
     crisisT1: false, crisisT2: true, cycleArmed: true, tqqqCAD: 0,
@@ -468,8 +468,8 @@ test("§6.1 Crisis: blocked when cycle not armed", () => {
   assert.equal(plan.reason, "cycle-not-armed");
 });
 
-// ── computeAnnualRebalancePlan (§5 — Dec 31 only, v4.5.0) ─────────────────
-test("v4.5.0: annual rebalance routes QLD overshoot trim proceeds to SGOV", () => {
+// ── computeAnnualRebalancePlan (§5 — Dec 31 only, v4.5.1) ─────────────────
+test("v4.5.1: annual rebalance routes QLD overshoot trim proceeds to SGOV", () => {
   // SCHD 50, QLD 50 → core 100; target QLD is 40%.
   // Sale = (50 - 0.40*100) / 0.60 ≈ 16.667, all proceeds to SGOV.
   const plan = computeAnnualRebalancePlan({
@@ -482,7 +482,7 @@ test("v4.5.0: annual rebalance routes QLD overshoot trim proceeds to SGOV", () =
   assert.equal(plan.schdBuyCAD, 0);
 });
 
-test("v4.5.0: Case A ignores SGOV cap for trim routing; proceeds still go to SGOV", () => {
+test("v4.5.1: Case A ignores SGOV cap for trim routing; proceeds still go to SGOV", () => {
   const plan = computeAnnualRebalancePlan({
     schdCAD: 50, qldCAD: 50, tqqqCAD: 0, sgovCAD: 2, totalCAD: 102,
     caseAEligible: true, caseBEligible: false,
@@ -492,7 +492,7 @@ test("v4.5.0: Case A ignores SGOV cap for trim routing; proceeds still go to SGO
   assert.equal(plan.schdBuyCAD, 0);
 });
 
-test("v4.5.0: Hard Exit compatibility helper is always inactive", () => {
+test("v4.5.1: Hard Exit compatibility helper is always inactive", () => {
   const plan = computeTqqqHardExitPlan({
     schdCAD: 40, qldCAD: 40, tqqqCAD: 20, sgovCAD: 0, totalCAD: 100, hardExit: true,
   });
@@ -500,12 +500,12 @@ test("v4.5.0: Hard Exit compatibility helper is always inactive", () => {
   assert.equal(plan.sgovRefillCAD, 0);
 });
 
-test("v4.5.0 §5 Case B: NO ACTION (preserves v4.4.2 behaviour)", () => {
+test("v4.5.1 §5 Case B: NO ACTION (preserves v4.4.2 behaviour)", () => {
   const plan = computeAnnualRebalancePlan({
     schdCAD: 75, qldCAD: 25, tqqqCAD: 0, sgovCAD: 10, totalCAD: 110,
     caseAEligible: false, caseBEligible: true,
   });
-  assert.equal(plan.action, "deadband", "v4.5.0: Case B is no-action");
+  assert.equal(plan.action, "deadband", "v4.5.1: Case B is no-action");
   assert.equal(plan.qldBuyCAD, 0);
   assert.equal(plan.sgovDeltaCAD, 0);
   assert.equal(plan.schdBuyCAD, 0);
@@ -524,8 +524,8 @@ test("§11 Meltdown: SCHD insufficient → QLD covers remainder", () => {
   assert.equal(m.fromQld, 30000);
 });
 
-// ── computeQqqmCumulative (§4 — v4.5.0) ──────────────────────────────────
-test("v4.5.0: computeQqqmCumulative sums BUY rows only (SELL/DIVIDEND ignored)", () => {
+// ── computeQqqmCumulative (§4 — v4.5.1) ──────────────────────────────────
+test("v4.5.1: computeQqqmCumulative sums BUY rows only (SELL/DIVIDEND ignored)", () => {
   const out = computeQqqmCumulative([
     { action: "BUY", ticker: "QQQM", quantity: 10, price: 200, commission: 5 },
     { action: "BUY", ticker: "QQQM", quantity: 5, price: 220, commission: 2 },
@@ -539,30 +539,30 @@ test("v4.5.0: computeQqqmCumulative sums BUY rows only (SELL/DIVIDEND ignored)",
   assert.ok(close(out.cumulativeShares, 15));
 });
 
-// ── computeQqqmAnnualSkim (§4 — v4.5.0) ──────────────────────────────────
-test("v4.5.0: QQQM annual skim is removed even if profitable", () => {
+// ── computeQqqmAnnualSkim (§4 — v4.5.1) ──────────────────────────────────
+test("v4.5.1: QQQM annual skim is removed even if profitable", () => {
   const r = computeQqqmAnnualSkim({
     cumulativeCostUsd: 22000,
     cumulativeShares: 100,
     closeUsd: 250,
   });
   assert.equal(r.eligible, false);
-  assert.equal(r.reason, "v4.5.0-removed");
+  assert.equal(r.reason, "v4.5.1-removed");
   assert.equal(r.skimAmountUsd, 0);
 });
 
-test("v4.5.0: QQQM skim remains removed when at a loss", () => {
+test("v4.5.1: QQQM skim remains removed when at a loss", () => {
   const r = computeQqqmAnnualSkim({
     cumulativeCostUsd: 22000,
     cumulativeShares: 100,
     closeUsd: 200,
   });
   assert.equal(r.eligible, false);
-  assert.equal(r.reason, "v4.5.0-removed");
+  assert.equal(r.reason, "v4.5.1-removed");
   assert.equal(r.skimAmountUsd, 0);
 });
 
-test("v4.5.0: computeQqqmAnnualSkim does not reduce cumulativeCostUsd", () => {
+test("v4.5.1: computeQqqmAnnualSkim does not reduce cumulativeCostUsd", () => {
   // The helper is pure and stateless. The skim result returns skimAmountUsd
   // but never returns a "new cumulativeCostUsd" — the invariant is documented
   // by the absence of any such field plus this regression check.
@@ -575,7 +575,7 @@ test("v4.5.0: computeQqqmAnnualSkim does not reduce cumulativeCostUsd", () => {
   assert.equal(r.updatedCumulativeCostUsd, undefined);
 });
 
-test("v4.5.0: removed QQQM skim returns no SGOV refill ceiling", () => {
+test("v4.5.1: removed QQQM skim returns no SGOV refill ceiling", () => {
   const r = computeQqqmAnnualSkim({
     cumulativeCostUsd: 22000,
     cumulativeShares: 100,
@@ -587,8 +587,8 @@ test("v4.5.0: removed QQQM skim returns no SGOV refill ceiling", () => {
   assert.equal(r.sgovRefillCadCap, 0);
 });
 
-// ── computeNextQqqmSkimDate (§4 — v4.5.0 weekday-only approximation) ─────
-test("v4.5.0: computeNextQqqmSkimDate weekday cases", () => {
+// ── computeNextQqqmSkimDate (§4 — v4.5.1 weekday-only approximation) ─────
+test("v4.5.1: computeNextQqqmSkimDate weekday cases", () => {
   // 2026-12-31 = Thursday (weekday) → returns 12/31, isPostponed=false.
   const thurs = computeNextQqqmSkimDate(new Date("2026-06-01T00:00:00Z"));
   assert.equal(thurs.nextSkimDateISO, "2026-12-31");
@@ -613,7 +613,7 @@ test("v4.5.0: computeNextQqqmSkimDate weekday cases", () => {
   assert.equal(sat.postponeReason, "weekend-12-30");
 });
 
-test("v4.5.0: computeNextQqqmSkimDate after 12/31 rolls to next year", () => {
+test("v4.5.1: computeNextQqqmSkimDate after 12/31 rolls to next year", () => {
   // At UTC midnight on 12/31, the function returns 12/31 (still upcoming).
   const onYearEnd = computeNextQqqmSkimDate(new Date("2026-12-31T00:00:00Z"));
   assert.equal(onYearEnd.nextSkimDateISO, "2026-12-31");
@@ -623,7 +623,7 @@ test("v4.5.0: computeNextQqqmSkimDate after 12/31 rolls to next year", () => {
   assert.equal(newYear.nextSkimDateISO, "2027-12-31");
 });
 
-// ── projectScenariosRulebook (v4.5.0 per-asset) ────────────────────────────
+// ── projectScenariosRulebook (v4.5.1 per-asset) ────────────────────────────
 const baseProjectionInput = (overrides: Partial<Parameters<typeof projectScenariosRulebook>[0]> = {}) => ({
   start: {
     schdCAD: 35000,
@@ -647,14 +647,14 @@ const baseProjectionInput = (overrides: Partial<Parameters<typeof projectScenari
   ...overrides,
 });
 
-test("projectScenariosRulebook v4.5.0: returns 3 scenarios with distinct CAGRs", () => {
+test("projectScenariosRulebook v4.5.1: returns 3 scenarios with distinct CAGRs", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   assert.equal(out.length, 3);
   const ids = out.map(s => s.id).sort();
   assert.deepEqual(ids, ["base", "pessimistic", "worst"]);
 });
 
-test("projectScenariosRulebook v4.5.0: scenarios diverge in totalCAD over time", () => {
+test("projectScenariosRulebook v4.5.1: scenarios diverge in totalCAD over time", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   const base20 = out.find(s => s.id === "base")!.points.at(-1)!.totalCAD;
   const pess20 = out.find(s => s.id === "pessimistic")!.points.at(-1)!.totalCAD;
@@ -663,7 +663,7 @@ test("projectScenariosRulebook v4.5.0: scenarios diverge in totalCAD over time",
   assert.ok(pess20 > worst20);
 });
 
-test("projectScenariosRulebook v4.5.0: SCHD never decreases — no SCHD sale rule", () => {
+test("projectScenariosRulebook v4.5.1: SCHD never decreases — no SCHD sale rule", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   for (const s of out) {
     let prev = -1;
@@ -674,7 +674,7 @@ test("projectScenariosRulebook v4.5.0: SCHD never decreases — no SCHD sale rul
   }
 });
 
-test("projectScenariosRulebook v4.5.0: per-asset values sum to totalCAD", () => {
+test("projectScenariosRulebook v4.5.1: per-asset values sum to totalCAD", () => {
   const out = projectScenariosRulebook(baseProjectionInput());
   for (const s of out) {
     for (const p of s.points) {
@@ -684,7 +684,7 @@ test("projectScenariosRulebook v4.5.0: per-asset values sum to totalCAD", () => 
   }
 });
 
-test("projectScenariosRulebook v4.5.0: QQQM gating — when no TFSA room, QQQM contribution stops", () => {
+test("projectScenariosRulebook v4.5.1: QQQM gating — when no TFSA room, QQQM contribution stops", () => {
   const out = projectScenariosRulebook(baseProjectionInput({
     tfsaRoomExists: false,
     yearPoints: [1, 5],
@@ -696,7 +696,7 @@ test("projectScenariosRulebook v4.5.0: QQQM gating — when no TFSA room, QQQM c
   assert.equal(y5.qqqmCAD, 0, "QQQM should remain 0 when TFSA room missing");
 });
 
-test("v4.5.0: no QQQM skim in March / June / September (annual model — yearly checkpoints only)", () => {
+test("v4.5.1: no QQQM skim in March / June / September (annual model — yearly checkpoints only)", () => {
   // projectScenariosRulebook is year-stride: every iteration is one calendar year.
   // The 12/31 skim helper inside the loop fires at most once per simulated year.
   // We assert that within a single-year horizon there is exactly 0 or 1 skim event,
@@ -716,7 +716,7 @@ test("v4.5.0: no QQQM skim in March / June / September (annual model — yearly 
   }
 });
 
-test("v4.5.0: no QQQM sale during T1 / T2 crisis", () => {
+test("v4.5.1: no QQQM sale during T1 / T2 crisis", () => {
   // Construct a deeply broken core (QLD 19% core → T2) with TQQQ=0 to arm cycle.
   // Crisis sales must come from SGOV only — QQQM may grow but NEVER decrease here.
   const out = projectScenariosRulebook(baseProjectionInput({
@@ -740,7 +740,7 @@ test("v4.5.0: no QQQM sale during T1 / T2 crisis", () => {
   }
 });
 
-test("v4.5.0: no QQQM sale during Emergency Cap", () => {
+test("v4.5.1: no QQQM sale during Emergency Cap", () => {
   // Force Emergency cap (growth bucket ≥ 38%) — QQQM stays untouched while TQQQ + QLD unwind.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
@@ -756,7 +756,7 @@ test("v4.5.0: no QQQM sale during Emergency Cap", () => {
   }));
   const base = out.find(s => s.id === "base")!;
   // Verify Emergency cap fired AND that QQQM was not sold (only grew via CAGR).
-  assert.equal(base.triggerCounts.hardExit, 0, "v4.5.0: Emergency cap removed");
+  assert.equal(base.triggerCounts.hardExit, 0, "v4.5.1: Emergency cap removed");
   let prev = 4000;
   for (const p of base.points) {
     assert.ok(p.qqqmCAD >= prev - 1, `QQQM untouched during Emergency cap (year ${p.year})`);
@@ -764,7 +764,7 @@ test("v4.5.0: no QQQM sale during Emergency Cap", () => {
   }
 });
 
-test("v4.5.0: SGOV may fall to 0 during crisis (no floor)", () => {
+test("v4.5.1: SGOV may fall to 0 during crisis (no floor)", () => {
   // Tiny SGOV, deep crisis: T2 + (no contribution) → SGOV drains completely.
   const out = projectScenariosRulebook(baseProjectionInput({
     start: {
@@ -785,7 +785,7 @@ test("v4.5.0: SGOV may fall to 0 during crisis (no floor)", () => {
   assert.ok(lowestSgov <= 250, `SGOV should be drained below 250 (no floor), lowest=${lowestSgov}`);
 });
 
-test("v4.5.0: annual rebalance refills SGOV only up to 8% (max)", () => {
+test("v4.5.1: annual rebalance refills SGOV only up to 8% (max)", () => {
   // Force Case A (QLD overshoot) with SGOV at 0. The annual rebal step inside the engine
   // must refill SGOV up to 8% of total but not beyond. Single-year run.
   const out = projectScenariosRulebook(baseProjectionInput({

@@ -180,7 +180,7 @@ async function runProjection(userId: string) {
       getFxRate().catch(() => null),
       prisma.setting.findMany({ where: { key: { startsWith: `${userId}:investment:target:` } } }),
       prisma.setting.findUnique({ where: { key: `${userId}:investment:projection_assumptions` } }),
-      // v4.5.0: QQQM BUY transactions retained only for legacy cost/holding context; no rulebook skim.
+      // v4.5.1: QQQM BUY transactions retained only for legacy cost/holding context; no rulebook skim.
       prisma.transaction.findMany({
         where: {
           action: "BUY",
@@ -314,17 +314,17 @@ async function runProjection(userId: string) {
     sgovUserCAD && sgovUserCAD > 0 ? "user-settings" : "rulebook-inactive";
   // qqqmSourceLabel resolved after rule-default check below.
 
-  // Core: full weekly contribution → STATIC 60/40 (v4.5.0). No TQQQ overlay.
+  // Core: full weekly contribution → STATIC 60/40 (v4.5.1). No TQQQ overlay.
   const overlayActive = false;
   const core = computeStaticCoreAllocation(weeklyContribCAD, overlayActive);
   const coreContribCAD = core.schdBuyCAD + core.qldBuyCAD + core.tqqqBuyCAD;
 
-  // SGOV (v4.5.0): user-settings only — no rulebook-default weekly refill.
+  // SGOV (v4.5.1): user-settings only — no rulebook-default weekly refill.
   // SGOV refill also receives year-end trim proceeds where applicable.
   const sgovUserSet = !!(sgovUserCAD && sgovUserCAD > 0);
   const sgovReserveCAD = sgovUserSet ? sgovUserCAD! : 0;
 
-  // QQQM (v4.5.0): legacy/hold-only. Ignore user-settings CAD for new-buy guidance.
+  // QQQM (v4.5.1): legacy/hold-only. Ignore user-settings CAD for new-buy guidance.
   void qqqmUserCAD;
   const qqqmPlan = computeQqqmWeeklyPlan(tfsaRoomExists);
   const qqqmActualCAD = 0;
@@ -333,7 +333,7 @@ async function runProjection(userId: string) {
 
   const totalWeeklyOutCAD = weeklyContribCAD + sgovReserveCAD + qqqmActualCAD;
 
-  // QQQM cumulative USD cost basis + shares (legacy context only; v4.5.0 skim removed).
+  // QQQM cumulative USD cost basis + shares (legacy context only; v4.5.1 skim removed).
   const qqqmCumulative = computeQqqmCumulative(
     qqqmTxAll.map(tx => ({
       action: "BUY" as const,
@@ -373,7 +373,7 @@ async function runProjection(userId: string) {
     vUsd: Math.round(qqqmSkimEvaluation.vUsd * 100) / 100,
   };
 
-  // v4.5.0 event plans: retired TQQQ exit compatibility (always inactive), Crisis SGOV → QLD, Annual Rebalance.
+  // v4.5.1 event plans: retired TQQQ exit compatibility (always inactive), Crisis SGOV → QLD, Annual Rebalance.
   const softExitPlan = computeTqqqSoftExitPlan({
     schdCAD:  weights.schdCAD,
     qldCAD:   weights.qldCAD,
@@ -435,7 +435,7 @@ async function runProjection(userId: string) {
   const SCHD_TYPICAL_YIELD_PCT = 3.5;
   const QLD_TYPICAL_YIELD_PCT  = 0.5;
   const SGOV_TYPICAL_YIELD_PCT = 4.5;
-  // v4.5.0: QQQM (Invesco Nasdaq-100) yield ≈ 0.7% (broad equity, NOT the 8% covered-call QQQI default).
+  // v4.5.1: QQQM (Invesco Nasdaq-100) yield ≈ 0.7% (broad equity, NOT the 8% covered-call QQQI default).
   const QQQM_TYPICAL_YIELD_PCT = 0.7;
 
   const scenarios = projectScenariosRulebook({
@@ -531,7 +531,7 @@ async function runProjection(userId: string) {
     weeklyDefaultCAD:       0,
   };
 
-  // v4.5.0: Soft Exit / Emergency cap removed; keep inactive response shape for old UI clients.
+  // v4.5.1: Soft Exit / Emergency cap removed; keep inactive response shape for old UI clients.
   const tqqqExitPlan = hardExitPlan.active
     ? {
         active:              true as const,
@@ -589,7 +589,7 @@ async function runProjection(userId: string) {
     currentValueCAD: Math.round(currentValueCAD),
     currentAnnualDivCAD: Math.round(annualDivCAD),
     retirementYear,
-    rulebookVersion: "v4.5.0",
+    rulebookVersion: "v4.5.1",
   };
 
   // ── AI narrative ──
@@ -598,7 +598,7 @@ async function runProjection(userId: string) {
   const retireLine = retirementYear ? `\n은퇴 목표: ${retirementYear}년 (${yearsToRetirement}년 후)` : "";
 
   const triggerLines: string[] = [];
-  // v4.5.0 removed Soft Exit / Emergency cap; no growth-bucket exit trigger lines.
+  // v4.5.1 removed Soft Exit / Emergency cap; no growth-bucket exit trigger lines.
   if (weights.crisisT1 && !weights.crisisT2)
     triggerLines.push(`- §6.1 Crisis T1 (코어 W ≤ ${RULEBOOK_TARGETS.CRISIS_T1_PCT}%, MONTH-END close): 현재 ${currentState.qldCoreWeightPct}% (코어 기준) — SGOV 매도 → QLD 매수 (총자산의 ${RULEBOOK_TARGETS.CRISIS_T1_BUY_PCT_OF_TOTAL}%, SGOV 0%까지 소진 가능 — 바닥 없음). QQQM 매도 절대 금지. 사이클 재무장 시에만 발동.`);
   if (weights.crisisT2)
@@ -614,8 +614,8 @@ async function runProjection(userId: string) {
   if (weights.sgovAboveMax)
     triggerLines.push(`- §8 SGOV 상한 초과 (max ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%): 현재 ${currentState.sgovTotalWeightPct}% (total 기준) — 8% 초과 상태는 별도 확인 필요.`);
   if (overlayActive)
-    triggerLines.push(`- §5 Core 분배: v4.5.0에서는 TQQQ 오버레이 없음. 이번 주 Core는 SCHD 60 / QLD 40.`);
-  // v4.5.0: no QQQM weekly accumulation or annual skim trigger.
+    triggerLines.push(`- §5 Core 분배: v4.5.1에서는 TQQQ 오버레이 없음. 이번 주 Core는 SCHD 60 / QLD 40.`);
+  // v4.5.1: no QQQM weekly accumulation or annual skim trigger.
   const triggerSummary = triggerLines.length ? triggerLines.join("\n") : "특이 신호 없음 (정상 운용)";
 
   const narrativeUserPrompt = [
@@ -624,7 +624,7 @@ async function runProjection(userId: string) {
     `코어 평가금액: $${currentState.coreCAD.toLocaleString()} CAD (SCHD $${currentState.schdCAD.toLocaleString()} + QLD $${currentState.qldCAD.toLocaleString()})`,
     `QLD 코어 비중 = QLD / (SCHD + QLD) = ${currentState.qldCAD.toLocaleString()} / ${currentState.coreCAD.toLocaleString()} = ${currentState.qldCoreWeightPct}%`,
     `SCHD 코어 비중 = ${currentState.schdCoreWeightPct}%`,
-    `성장 버킷 비중 = (QLD + TQQQ) / 총자산 = ${currentState.growthBucketPct}%  (v4.5.0: Soft Exit/Emergency cap 폐지)`,
+    `성장 버킷 비중 = (QLD + TQQQ) / 총자산 = ${currentState.growthBucketPct}%  (v4.5.1: Soft Exit/Emergency cap 폐지)`,
     `SGOV 전체 비중 = ${currentState.sgovTotalWeightPct}%   (base ${RULEBOOK_TARGETS.SGOV_BASE_TARGET_PCT}%, max ${RULEBOOK_TARGETS.SGOV_MAX_PCT}%, min ${RULEBOOK_TARGETS.SGOV_MIN_PCT}% — 바닥 없음, 위기 시 0%까지 소진 가능)`,
     `QQQM 전체 비중 = ${currentState.qqqmTotalWeightPct}%   (legacy hold-only, 신규 매수/12월31일 skim 없음)`,
     `QQQM 누적 USD cost basis = $${qqqmAnnualSkimPlan.cumulativeCostUsd} USD, 누적 shares = ${qqqmAnnualSkimPlan.cumulativeShares} (legacy tracking only)`,
@@ -639,7 +639,7 @@ async function runProjection(userId: string) {
     `  QLD  매수: $${coreAllocationPlan.qldBuyCAD} CAD`,
     `  TQQQ VR-Lite 매수: 별도 Friday drawdown tier에서 판단 (Core 분배 아님)`,
     `Satellite (Settings CAD 별도 스트림):`,
-    `  SGOV 매수: $${coreAllocationPlan.sgovReserveCAD} CAD (source=${coreAllocationPlan.sgovSource ?? "rulebook-inactive"}, total 기준; v4.5.0: 주간 contribution 없음, 사용자 Settings만 활성)`,
+    `  SGOV 매수: $${coreAllocationPlan.sgovReserveCAD} CAD (source=${coreAllocationPlan.sgovSource ?? "rulebook-inactive"}, total 기준; v4.5.1: 주간 contribution 없음, 사용자 Settings만 활성)`,
     `  QQQM 신규 매수: $0 CAD (legacy hold-only, 사유: ${qqqmApplyReason})`,
     `주간 총 외화 유출: $${coreAllocationPlan.totalWeeklyOutCAD} CAD = weekly $${coreAllocationPlan.weeklyContribCAD} + SGOV $${coreAllocationPlan.sgovReserveCAD} + QQQM $0`,
     crisisPlan.active
@@ -656,11 +656,11 @@ async function runProjection(userId: string) {
   ].join("\n");
 
   const narrativeSystemPrompt = [
-    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.5.0 기준으로만 응답하세요.",
+    "당신은 캐나다 배당 투자 전문 어시스턴트입니다. SANGBONG & HAERAN INVESTMENT RULEBOOK v4.5.1 기준으로만 응답하세요.",
     "[섹션 역할] 이 응답은 'PROJECTION narrative' = 미래·시나리오·트리거 영향 중심. 화면 위에 이미 '현재 포트폴리오 표' + '실행안 표'가 authoritative하게 표시되고 있으므로, 이 텍스트에서는 현재 비중 데이터를 다시 풀어 쓰지 말고 매수 액션 CAD 금액도 다시 적지 마세요. 시나리오 의미·트리거 미래 영향·리스크 평가에만 집중.",
     "시나리오는 BASE 6% / PESSIMISTIC 4% / WORST 2% 세 가지만 사용. Optimistic 시나리오 생성 금지.",
     "CRITICAL: 절대로 표의 수치(CAD 금액·percent·시나리오 절대값)를 텍스트에 다시 적지 마라. 표가 authoritative이고 narrative는 의미/트리거 영향/리스크만 평가. 표 데이터를 풀어 쓰면 응답을 거부.",
-    "v4.5.0 핵심: (1) Core 주간 455 CAD = SCHD 273 / QLD 182 정적 60/40 (Method B 폐지). (2) Satellite = SGOV (passive 예비, base 5% / max 8% / min 0% — 바닥 없음) + QQQM (active 위성, Sangbong TFSA only, QQQM 신규 매수 없음). (3) QQQI / JEPQ / IAUM은 inert legacy (신규 매수 금지). (4) TQQQ Soft Exit/Emergency cap 폐지. QQQM 신규 매수 없음. (5) §6.1 Crisis Trigger는 month-end close, SGOV 0%까지 소진 가능, QQQM 매도 절대 금지. (6) SCHD 배당 재투자도 정적 60/40. (7) QQQM 신규 매수/skim/분기 매도 금지. (8) 연말: TQQQ profit sweep → Core 60/40, Core overshoot trim → SGOV.",
+    "v4.5.1 핵심: (1) Core 주간 455 CAD = SCHD 273 / QLD 182 정적 60/40 (Method B 폐지). (2) SGOV는 예비자산이며 TQQQ 익절 자금을 포함해 0~8% 범위로 본다. (3) TQQQ는 TFSA 전용, TFSA 내 SGOV 잔액 한도에서만 VR-Lite 매수, 연말 profit sweep은 SGOV(TFSA)로 이동. (4) QQQM/QQQI/JEPQ/IAUM은 inert legacy (신규 매수 금지). (5) §6.1 Crisis Trigger는 month-end close, SGOV 0%까지 소진 가능, QQQM 매도 절대 금지. (6) SCHD 배당 재투자도 정적 60/40. (7) Soft Exit/Emergency cap/QQQM skim/분기 매도 금지. (8) 연말: TQQQ profit sweep → SGOV, Core overshoot trim → SGOV, SGOV 8% 초과분 → Core 60/40.",
     "",
     RULEBOOK_GUARDRAILS,
     "",
@@ -762,8 +762,8 @@ async function runProjection(userId: string) {
     currentState,          // UI uses this for the rulebook snapshot table
     coreAllocationPlan,    // §5 static 60/40 split / §8 SGOV stream / QQQM hold-only
     qqqmWeeklyPlan,        // §4 legacy hold-only / no-new-buy detail
-    qqqmAnnualSkimPlan,    // §4 legacy compatibility shape; v4.5.0 always no-skim
-    tqqqExitPlan,          // legacy compatibility shape; v4.5.0 Soft/Emergency exits removed
+    qqqmAnnualSkimPlan,    // §4 legacy compatibility shape; v4.5.1 always no-skim
+    tqqqExitPlan,          // legacy compatibility shape; v4.5.1 Soft/Emergency exits removed
     crisisTriggerPlan,     // §6.1 Crisis T1/T2 (SGOV → QLD; SGOV may exhaust to 0%)
     annualRebalancePlan,   // §5 Case A/B / deadband
     triggers: {

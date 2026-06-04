@@ -101,13 +101,15 @@ test("does not mangle text containing single pipes", () => {
   assert.equal(sanitizeAiOutput(input), input);
 });
 
-test("RULEBOOK_GUARDRAILS encodes the v4.5.0 hard rules", () => {
-  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.5.0"), "rulebook version stamp must be v4.5.0");
+test("RULEBOOK_GUARDRAILS encodes the v4.5.1 hard rules", () => {
+  assert.ok(RULEBOOK_GUARDRAILS.includes("v4.5.1"), "rulebook version stamp must be v4.5.1");
   assert.ok(RULEBOOK_GUARDRAILS.includes("455 CAD"), "Core weekly 455 CAD missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("273") && RULEBOOK_GUARDRAILS.includes("182"), "SCHD 273 / QLD 182 split missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("60%") && RULEBOOK_GUARDRAILS.includes("40%"), "Core 60/40 missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("Friday") && RULEBOOK_GUARDRAILS.includes("1.5%"), "Friday FX buffer rule missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("10/20/40/60"), "TQQQ VR-Lite tiers missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("TFSA 전용"), "TQQQ TFSA-only guard missing");
+  assert.ok(RULEBOOK_GUARDRAILS.includes("profit 100%") && RULEBOOK_GUARDRAILS.includes("SGOV"), "TQQQ profit-to-SGOV routing missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("SGOV 매도 → QLD"), "Crisis SGOV→QLD rule missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("QLD core weight ≥ 30%"), "Crisis reset rule missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("QQQM 신규 매수") && RULEBOOK_GUARDRAILS.includes("금지"), "QQQM no-new-buy rule missing");
@@ -151,12 +153,12 @@ test("RULEBOOK_GUARDRAILS forbids re-explaining authoritative tables", () => {
   assert.ok(RULEBOOK_GUARDRAILS.includes("재작성 금지"), "must forbid table re-explanation");
 });
 
-test("v4.5.0-1: prompt includes self-check and no table restatement rules", () => {
+test("v4.5.1-1: prompt includes self-check and no table restatement rules", () => {
   assert.ok(RULEBOOK_GUARDRAILS.includes("[자체 검증"), "self-check section missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("화면에 이미 표시되는 표"), "no table restatement rule missing");
   assert.ok(RULEBOOK_GUARDRAILS.includes("자동 거래"), "action amount / auto-trade guard missing");
-  // v4.5.0 prompt version
-  assert.equal(RULEBOOK_PROMPT_VERSION, "v4.5.0-1", "RULEBOOK_PROMPT_VERSION must be v4.5.0-1");
+  // v4.5.1 prompt version
+  assert.equal(RULEBOOK_PROMPT_VERSION, "v4.5.1-1", "RULEBOOK_PROMPT_VERSION must be v4.5.1-1");
 });
 
 test("flags fields are mapped", () => {
@@ -170,7 +172,7 @@ test("flags fields are mapped", () => {
   assert.ok(out.includes("IAUM 상한 도달"));
 });
 
-test("v4.5.0: QQQM legacy field labels remain mapped by sanitizer", () => {
+test("v4.5.1: QQQM legacy field labels remain mapped by sanitizer", () => {
   const input = "qqqmCAD=$5000, qqqmTotalWeightPct=2.5, qqqmCumulativeCostUsd=$3107, qqqmCumulativeShares=15";
   const out = sanitizeAiOutput(input);
   assert.ok(!out.includes("qqqmCAD"), `qqqmCAD leaked: ${out}`);
@@ -182,7 +184,7 @@ test("v4.5.0: QQQM legacy field labels remain mapped by sanitizer", () => {
   assert.ok(out.includes("QQQM 누적 주식수"));
 });
 
-test("v4.5.0: sgovAboveMax label maps; deprecated jepqAtCap still mapped (legacy)", () => {
+test("v4.5.1: sgovAboveMax label maps; deprecated jepqAtCap still mapped (legacy)", () => {
   const above = sanitizeAiOutput("sgovAboveMax=true");
   assert.ok(above.includes("SGOV 상한 초과"));
   const legacy = sanitizeAiOutput("jepqAtCap=false");

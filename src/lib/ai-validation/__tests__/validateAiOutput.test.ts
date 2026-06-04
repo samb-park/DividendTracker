@@ -161,7 +161,7 @@ test("QQQI_FIXED_TARGET detects 5% target language", () => {
   );
 });
 
-// ── v4.5.0 QQQM legacy hold-only detectors ─────────────────────────────────
+// ── v4.5.1 QQQM legacy hold-only detectors ─────────────────────────────────
 test("QQQM_INCORRECT_FRAMING detects QQQM 5% cap framing", () => {
   expectViolation("QQQM은 5% cap을 항상 유지하세요.", "QQQM_INCORRECT_FRAMING");
 });

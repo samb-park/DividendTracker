@@ -108,7 +108,7 @@ function Body({
   const crisisStatus: Status = f.crisisT2 ? "applied" : f.crisisT1 ? "applied" : "inactive";
   const crisisHint = f.crisisT2 ? "T2 (≤20% core) — 누적 5%" : f.crisisT1 ? "T1 (≤25% core) — 2.5%" : "정상 범위";
 
-  // v4.5.0: SGOV target 5% / allowed range 0~8%. Crisis uses SGOV → QLD.
+  // v4.5.1: SGOV target 5% / allowed range 0~8%. Crisis uses SGOV → QLD.
   const sgovBaseStatus: Status = f.sgovBelowTarget ? "pending" : "inactive";
   const sgovBaseLabel  = f.sgovBelowTarget ? "베이스 미달 (<5%)" : "정상 (≥5%)";
   const sgovAboveStatus: Status = f.sgovAboveMax ? "pending" : "inactive";
@@ -156,7 +156,7 @@ function Body({
         title="연말 리밸런스"
         status={annualStatus}
         statusLabel={annualLabel}
-        hint="v4.5.0 Core 목표 60/40 · overshoot trim proceeds → SGOV · SCHD 매도 금지"
+        hint="v4.5.1 Core 목표 60/40 · overshoot trim proceeds → SGOV · SCHD 매도 금지"
       />
     </ul>
   );

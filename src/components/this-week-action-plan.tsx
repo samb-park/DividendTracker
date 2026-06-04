@@ -1,7 +1,7 @@
 "use client";
 
 // SOLE authoritative renderer for "이번 주 실행안" action plan.
-// v4.5.0: Static 60/40 Core (SCHD/QLD) + SGOV user stream + QQQM hold-only/no-new-buy display.
+// v4.5.1: Static 60/40 Core (SCHD/QLD) + SGOV user stream + QQQM hold-only/no-new-buy display.
 // No other component on the AI page should display per-asset weekly buy CAD amounts.
 import { useEffect, useState } from "react";
 import type {
@@ -171,7 +171,7 @@ function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan
       </div>
 
       <div className="text-[10px] text-muted-foreground mt-2">
-        v4.5.0 정적 분배: Core 주간 455 CAD = SCHD 273 / QLD 182 (60/40). TQQQ 오버레이 없음. SCHD 배당 재투자도 SCHD 60 / QLD 40. SGOV는 Settings 별도 CAD 스트림이며, QQQM/QQQI/JEPQ/IAUM 신규 매수는 금지(기존 보유분 hold-only).
+        v4.5.1 정적 분배: Core 주간 455 CAD = SCHD 273 / QLD 182 (60/40). TQQQ 오버레이 없음. SCHD 배당 재투자도 SCHD 60 / QLD 40. SGOV는 Settings 별도 CAD 스트림이며, QQQM/QQQI/JEPQ/IAUM 신규 매수는 금지(기존 보유분 hold-only).
       </div>
     </>
   );

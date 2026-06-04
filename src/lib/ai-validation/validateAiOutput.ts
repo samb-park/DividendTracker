@@ -36,7 +36,7 @@ import type { Detector, Violation, ViolationCode } from "./rules/types";
 export type { Violation, ViolationCode };
 
 export interface ValidationContext {
-  /** Active rulebook version (e.g. "v4.5.0-1"). Reserved for future per-version rule sets. */
+  /** Active rulebook version (e.g. "v4.5.1-1"). Reserved for future per-version rule sets. */
   rulebookVersion?: string;
 }
 

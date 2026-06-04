@@ -132,7 +132,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
   // Sum is over Core tickers only (Satellite SGOV/QQQM + legacy QQQI/IAUM use CAD, not %).
   const isNonCoreSym = (t: string) => {
     const u = t.toUpperCase();
-    // v4.5.0: SGOV reserve + QQQM/QQQI/JEPQ/IAUM inert legacy hold-only.
+    // v4.5.1: SGOV reserve + QQQM/QQQI/JEPQ/IAUM inert legacy hold-only.
     return u === "SGOV" || u === "QQQM" || u === "QQQI" || u === "IAUM";
   };
   const targetTotal = useMemo(
@@ -614,16 +614,16 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
           return (
             <div className="space-y-5">
               <div className="text-[10px] text-muted-foreground">
-                Glide path, trigger bands, and account mapping for mechanical investing.
+                Static target, trigger bands, and account mapping for mechanical investing.
               </div>
 
               {/* Glide Path */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-medium text-primary tracking-wide">GLIDE PATH</div>
+                    <div className="text-xs font-medium text-primary tracking-wide">STATIC TARGET</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      Auto-update allocation targets based on age
+                      Rulebook v4.5.1 keeps SCHD 60 / QLD 40 at every age
                     </div>
                   </div>
                   <button
@@ -915,7 +915,7 @@ export function SettingsClient({ portfolios: initialPortfolios }: { portfolios: 
               const isExcluded = t.excluded ?? false;
               // Core/Non-Core is determined by ticker symbol (rulebook reserve list).
               const tickerUpper = ticker.toUpperCase();
-              const isNonCore = tickerUpper === "SGOV" || tickerUpper === "QQQM" || tickerUpper === "QQQI" || tickerUpper === "IAUM";  // v4.5.0: QQQM/QQQI/IAUM legacy hold-only.
+              const isNonCore = tickerUpper === "SGOV" || tickerUpper === "QQQM" || tickerUpper === "QQQI" || tickerUpper === "IAUM";  // v4.5.1: QQQM/QQQI/IAUM legacy hold-only.
               const plan = t.nonCorePlan ?? { frequency: contribFreq, cad: "" };
               const periodLabel = contribFreq === "weekly" ? "주간" : contribFreq === "biweekly" ? "격주" : "월간";
               return (

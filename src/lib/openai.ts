@@ -557,7 +557,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     ? Math.round(((totalValueCAD - totalCostCAD) / totalCostCAD) * 1000) / 10
     : 0;
 
-  // ── RULEBOOK v4.5.0 weights & static 60/40 core allocation ──
+  // ── RULEBOOK v4.5.1 weights & static 60/40 core allocation ──
   // Aggregate ticker values across all accounts for rulebook calc.
   const tickerValueCAD = new Map<string, number>();
   for (const acct of accountSummaries) {
@@ -580,7 +580,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     } catch { /* ignore */ }
   }
 
-  // Weekly contribution split (v4.5.0):
+  // Weekly contribution split (v4.5.1):
   //   1) Core STATIC 60/40 with the FULL weekly contribution (Core target = 455 CAD/wk = SCHD 273 / QLD 182).
   //      No TQQQ overlay.
   //   2) §8 SGOV non-core stream: no rulebook-default contribution; user Settings CAD still passes through.
@@ -594,13 +594,13 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   const core = computeStaticCoreAllocation(weeklyContribCAD, overlayActive);
   const coreContribCAD = core.schdBuyCAD + core.qldBuyCAD + core.tqqqBuyCAD;
 
-  // SGOV: user-settings only in v4.5.0 (no rulebook-default weekly refill).
+  // SGOV: user-settings only in v4.5.1 (no rulebook-default weekly refill).
   const sgovUserCAD = nonCoreCADByTicker["SGOV"];
   const sgovUserSet = !!(sgovUserCAD && sgovUserCAD > 0);
   const sgovAllocCAD = sgovUserSet ? sgovUserCAD! : 0;
   const sgovSourceLabel = sgovUserSet ? "user-settings" : "rulebook-inactive";
 
-  // QQQM: v4.5.0 legacy hold-only; ignore any user-settings CAD for new-buy guidance.
+  // QQQM: v4.5.1 legacy hold-only; ignore any user-settings CAD for new-buy guidance.
   const qqqmPlan = computeQqqmWeeklyPlan(tfsaRoomExists);
   const qqqmActualCAD = 0;
   const qqqmSourceLabel = "rulebook-inactive";
@@ -609,7 +609,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   // Total weekly outflow: Plan + Non-Core additive streams.
   const totalWeeklyOutCAD = weeklyContribCAD + sgovAllocCAD + qqqmActualCAD;
 
-  // v4.5.0: Soft Exit / Emergency cap removed; compatibility plan remains inactive.
+  // v4.5.1: Soft Exit / Emergency cap removed; compatibility plan remains inactive.
   const hardExitPlan = computeTqqqHardExitPlan({
     schdCAD:  rulebookWeights.schdCAD,
     qldCAD:   rulebookWeights.qldCAD,
@@ -620,7 +620,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
   });
 
   const rulebookSummary = {
-    version: "v4.5.0",
+    version: "v4.5.1",
     coreCAD: Math.round(rulebookWeights.coreCAD),
     schdCAD: Math.round(rulebookWeights.schdCAD),
     qldCAD:  Math.round(rulebookWeights.qldCAD),
@@ -631,8 +631,8 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
     sgovTotalWeightPct: Math.round(rulebookWeights.sgovTotalWeightPct * 10) / 10,
     qqqmTotalWeightPct: Math.round(rulebookWeights.qqqmTotalWeightPct * 10) / 10,
     flags: {
-      hardExit:        rulebookWeights.hardExit,         // v4.5.0 removed; always false
-      softExit:        rulebookWeights.softExit,         // v4.5.0 removed; always false
+      hardExit:        rulebookWeights.hardExit,         // v4.5.1 removed; always false
+      softExit:        rulebookWeights.softExit,         // v4.5.1 removed; always false
       crisisT1:        rulebookWeights.crisisT1,         // core W ≤ 25 (month-end close)
       crisisT2:        rulebookWeights.crisisT2,         // core W ≤ 20 (month-end close)
       sgovBelowTarget: rulebookWeights.sgovBelowTarget,  // SGOV total W < 5 (base target)
@@ -640,7 +640,7 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
       caseAEligible:   rulebookWeights.caseAEligible,    // §5 Case A: W > 31
       caseBEligible:   rulebookWeights.caseBEligible,    // §5 Case B: W < 29 (no-action)
       cycleArmable:    rulebookWeights.cycleArmable,     // §6.1 cycle re-arm gate
-      overlayActive,                                     // v4.5.0 no TQQQ overlay
+      overlayActive,                                     // v4.5.1 no TQQQ overlay
     },
     targets: {
       schdOfCorePct: RULEBOOK_TARGETS.SCHD_OF_CORE_PCT,
@@ -695,9 +695,9 @@ export async function buildPortfolioContext(userId: string): Promise<string> {
       "QLD weight basis = core (QLD/(SCHD+QLD)); growth bucket = (QLD+TQQQ)/Total is informational only; Soft Exit / Emergency cap are abolished.",
       "§8 SGOV: target 5% / range 0~8%. No rulebook weekly contribution. Crisis trigger may exhaust SGOV to 0%. SCHD 배당으로 SGOV 보충 금지.",
       "§4 Legacy QQQM: hold-only. 신규 매수, weekly accumulation, 12/31 skim, 분기 매도 모두 금지. QQQM distribution: TFSA USD cash, no auto-routing.",
-      "§5 year-end: TQQQ profit > cost → sell profit only → Core 60/40. SCHD/QLD overshoot trim proceeds → SGOV. W<29 ⇒ no action.",
+      "§6 year-end: TQQQ profit > cost → sell profit only → SGOV(TFSA). SCHD/QLD overshoot trim proceeds → SGOV(TFSA). SGOV > 8% overflow → Core 60/40.",
       "§6.1 Crisis Trigger — MONTH-END close only: core W≤25 → sell SGOV 2.5% total → buy QLD (T1); core W≤20 → +2.5% (T2). SGOV may be exhausted to 0%. QQQM never funds crisis. Cycle re-arms when QLD core weight ≥30%.",
-      "v4.5.0: Soft Exit and Emergency cap are abolished. TQQQ is handled by VR-Lite drawdown tiers and year-end profit sweep only.",
+      "v4.5.1: Soft Exit and Emergency cap are abolished. TQQQ is TFSA-only, funded only from TFSA SGOV, and year-end profit sweep routes to SGOV(TFSA).",
       "Forbidden: NDX trigger, optimistic scenario, sell SCHD except explicit year-end overshoot trim, sell SCHD/QLD/TQQQ to buy QQQM, route SCHD dividends to SGOV/QQQM/QQQI/TQQQ, QQQM as funding source, QQQM/QQQI/JEPQ/IAUM new BUY, QQQM skim/profit-taking/target/cap, Method B, measure QLD on total basis, treat SGOV as return asset, override rulebook with sentiment/news/forecast, 수익률 보장 표현.",
     ],
   };

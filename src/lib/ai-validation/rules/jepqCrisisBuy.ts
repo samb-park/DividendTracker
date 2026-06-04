@@ -4,7 +4,7 @@ import { hasNegationNearby, snippetAround, type Detector, type Violation } from 
  * Detects suggestions to fund crisis/exit-style trades from QQQI, or to
  * convert QQQI directly into QLD/TQQQ.
  *
- * Rulebook v4.5.0: QQQI is legacy/inert. Detector kept active so historical
+ * Rulebook v4.5.1: QQQI is legacy/inert. Detector kept active so historical
  * old-rule-shaped suggestions still surface as regressions.
  */
 const QQQI_PATTERNS: readonly RegExp[] = [
@@ -35,7 +35,7 @@ export const detectJepqCrisisBuy: Detector = (text) => {
  * Detects suggestions to fund crisis/exit-style trades from QQQM, or to
  * convert QQQM directly into QLD/TQQQ.
  *
- * Rulebook v4.5.0 §4 / §6.1: QQQM is legacy hold-only. Crisis / SGOV
+ * Rulebook v4.5.1 §4 / §6.1: QQQM is legacy hold-only. Crisis / SGOV
  * refill must NEVER use QQQM as funding.
  */
 const QQQM_PATTERNS: readonly RegExp[] = [
@@ -54,8 +54,8 @@ export const detectQqqmCrisisBuy: Detector = (text) => {
     if (hasNegationNearby(text, matchStart, matchEnd)) continue;
     const v: Violation = {
       code: "QQQM_CRISIS_BUY",
-      section: "§4 / §6.1 (v4.5.0)",
-      reason: "QQQM을 위기 트리거/리밸런스/SGOV 보충 자금원 또는 QLD/TQQQ/SGOV 매수 자금으로 사용하려는 권유 감지 (룰북 v4.5.0: QQQM은 hold-only)",
+      section: "§4 / §6.1 (v4.5.1)",
+      reason: "QQQM을 위기 트리거/리밸런스/SGOV 보충 자금원 또는 QLD/TQQQ/SGOV 매수 자금으로 사용하려는 권유 감지 (룰북 v4.5.1: QQQM은 hold-only)",
       snippet: snippetAround(text, matchStart, matchEnd),
     };
     return v;

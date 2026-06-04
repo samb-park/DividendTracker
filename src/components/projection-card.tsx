@@ -171,7 +171,7 @@ export function ProjectionCard() {
                 <ul className="md:hidden grid grid-cols-2 gap-px bg-border border border-border">
                   {activeRows.map((p) => {
                     const isRetirement = a?.retirementYear === p.year;
-                    // v4.5.0 event labels (short form for mobile).
+                    // v4.5.1 event labels (short form for mobile).
                     const events: string[] = [];
                     if (p.hardExitApplied) events.push("Emerg");
                     if (p.softExitApplied) events.push("Soft");
