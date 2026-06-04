@@ -1,16 +1,9 @@
 "use client";
 
-import type { Basis, ThemePref, TickerAgg } from "@/lib/pocket-types";
-import { TickerPicker } from "./ticker-picker";
-import { AccountChips } from "./account-chips";
+import type { Basis, ThemePref } from "@/lib/pocket-types";
 
 interface Props {
-  tickers: TickerAgg[];
-  excluded: Set<string>;
-  onToggle: (ticker: string) => void;
-  accountTypes: string[];
-  excludedAccounts: Set<string>;
-  onToggleAccount: (accountType: string) => void;
+  onEdit: () => void;
   basis: Basis;
   setBasis: (b: Basis) => void;
   themePref: ThemePref;
@@ -18,49 +11,36 @@ interface Props {
 }
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
-  { value: "system", label: "시스템" },
-  { value: "light", label: "라이트" },
-  { value: "dark", label: "다크" },
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ];
 
 const BASIS_OPTS: { value: Basis; label: string }[] = [
-  { value: "net", label: "세후" },
-  { value: "gross", label: "세전" },
+  { value: "net", label: "Net" },
+  { value: "gross", label: "Gross" },
 ];
 
-export function PocketSettings({
-  tickers,
-  excluded,
-  onToggle,
-  accountTypes,
-  excludedAccounts,
-  onToggleAccount,
-  basis,
-  setBasis,
-  themePref,
-  setThemePref,
-}: Props) {
+export function PocketSettings({ onEdit, basis, setBasis, themePref, setThemePref }: Props) {
   return (
     <div className="pk-settings">
       <h1 className="pk-title">Settings</h1>
 
-      {accountTypes.length > 1 && (
-        <section>
-          <div className="pk-section-label">계좌</div>
-          <AccountChips accountTypes={accountTypes} excluded={excludedAccounts} onToggle={onToggleAccount} />
-        </section>
-      )}
-
       <section>
-        <div className="pk-section-label">종목 선택</div>
-        <TickerPicker tickers={tickers} excluded={excluded} basis={basis} onToggle={onToggle} />
+        <div className="pk-section-label">Holdings</div>
+        <div className="pk-row-between">
+          <span className="pk-field-label">Accounts &amp; tickers</span>
+          <button type="button" className="pk-edit" onClick={onEdit}>
+            Edit
+          </button>
+        </div>
       </section>
 
       <section>
-        <div className="pk-section-label">금액 기준</div>
+        <div className="pk-section-label">Amount basis</div>
         <div className="pk-row-between">
-          <span className="pk-field-label">{basis === "net" ? "세후 실수령" : "세전 명목"}</span>
-          <div className="pk-seg" role="group" aria-label="금액 기준">
+          <span className="pk-field-label">{basis === "net" ? "Net (after tax)" : "Gross"}</span>
+          <div className="pk-seg" role="group" aria-label="Amount basis">
             {BASIS_OPTS.map((o) => (
               <button
                 key={o.value}
@@ -77,8 +57,8 @@ export function PocketSettings({
       </section>
 
       <section>
-        <div className="pk-section-label">테마</div>
-        <div className="pk-seg" role="group" aria-label="테마">
+        <div className="pk-section-label">Theme</div>
+        <div className="pk-seg" role="group" aria-label="Theme">
           {THEME_OPTS.map((o) => (
             <button
               key={o.value}

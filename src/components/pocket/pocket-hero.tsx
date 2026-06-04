@@ -23,9 +23,12 @@ interface Props {
   priceGap: boolean; // a selected ticker is missing a live price
   freqGuess: boolean; // a selected ticker's payment frequency was guessed (<2 records)
   fxFallback: boolean; // FX rate is a stale/default fallback
-  onEdit: () => void;
   onRetry: () => void;
 }
+
+// Labels are drawn ~1.15× the number font-size so the gray letters read at the
+// same visual height as the digits (SF Pro caps sit slightly below figure height).
+const LABEL_RATIO = 1.15;
 
 export function PocketHero({
   annualUSD,
@@ -38,14 +41,13 @@ export function PocketHero({
   priceGap,
   freqGuess,
   fxFallback,
-  onEdit,
   onRetry,
 }: Props) {
   const colRef = useRef<HTMLDivElement>(null);
 
   // Auto-fit the hero numbers to the available width so 5-6 digit real
-  // portfolios (e.g. "248,392.00") never overflow. All four share one size,
-  // driven by the widest row. Imperative font-size — no re-render loop.
+  // portfolios never overflow. All four share one size, driven by the widest
+  // row. Imperative font-size — no re-render loop.
   useLayoutEffect(() => {
     const col = colRef.current;
     if (!col) return;
@@ -53,12 +55,10 @@ export function PocketHero({
       const nums = Array.from(col.querySelectorAll<HTMLElement>("[data-hero-num]"));
       const labels = Array.from(col.querySelectorAll<HTMLElement>("[data-hero-label]"));
       if (!nums.length) return;
-      // Reference-matched comfortable size; shrink ONLY if a long number would
-      // overflow the available width. Labels share the number size.
       const MAX = 58;
       const MIN = 26;
       nums.forEach((n) => (n.style.fontSize = `${MAX}px`));
-      labels.forEach((l) => (l.style.fontSize = `${MAX}px`));
+      labels.forEach((l) => (l.style.fontSize = `${Math.round(MAX * LABEL_RATIO)}px`));
       let scale = 1;
       nums.forEach((n) => {
         const avail = n.clientWidth;
@@ -67,7 +67,7 @@ export function PocketHero({
       });
       const final = Math.max(MIN, Math.min(MAX, Math.floor(MAX * scale)));
       nums.forEach((n) => (n.style.fontSize = `${final}px`));
-      labels.forEach((l) => (l.style.fontSize = `${final}px`));
+      labels.forEach((l) => (l.style.fontSize = `${Math.round(final * LABEL_RATIO)}px`));
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -76,6 +76,7 @@ export function PocketHero({
   }, [annualUSD, loading, isEmpty, allExcluded]);
 
   const showZero = !loading && (isEmpty || allExcluded);
+  const showData = !error && !loading && !isEmpty && !allExcluded;
 
   const numText = (div: number) => {
     if (loading) return "—";
@@ -87,9 +88,6 @@ export function PocketHero({
     <>
       <div className="pk-topbar">
         <h1 className="pk-title">Dividends</h1>
-        <button type="button" className="pk-edit" onClick={onEdit} disabled={loading}>
-          Edit
-        </button>
       </div>
 
       <div className="pk-summary">
@@ -120,25 +118,23 @@ export function PocketHero({
 
       {error && (
         <div>
-          <p className="pk-note warn">데이터를 불러오지 못했습니다.</p>
+          <p className="pk-note warn">Couldn’t load data.</p>
           <button type="button" className="pk-retry" onClick={onRetry}>
-            다시 시도
+            Retry
           </button>
         </div>
       )}
-      {!error && isEmpty && !loading && <p className="pk-note">보유 중인 종목이 없습니다.</p>}
+      {!error && isEmpty && !loading && <p className="pk-note">No holdings yet.</p>}
       {!error && !isEmpty && allExcluded && !loading && (
-        <p className="pk-note">표시할 종목이 없습니다 — Edit에서 선택하세요.</p>
+        <p className="pk-note">Nothing selected — choose holdings in Settings → Edit.</p>
       )}
-      {!error && !loading && !isEmpty && !allExcluded && priceGap && (
-        <p className="pk-note warn">일부 종목의 시세를 불러오지 못해 합계에서 제외했습니다.</p>
+      {showData && priceGap && (
+        <p className="pk-note warn">Some holdings have no live price and were excluded from the total.</p>
       )}
-      {!error && !loading && !isEmpty && !allExcluded && freqGuess && (
-        <p className="pk-note warn">일부 종목은 배당 이력이 부족해 빈도를 추정했습니다(연환산 부정확할 수 있음).</p>
+      {showData && freqGuess && (
+        <p className="pk-note warn">Some holdings have limited history — frequency is estimated (annual may be off).</p>
       )}
-      {!error && !loading && !isEmpty && !allExcluded && fxFallback && (
-        <p className="pk-note warn">환율을 불러오지 못해 기본 환율을 적용했습니다.</p>
-      )}
+      {showData && fxFallback && <p className="pk-note warn">FX rate unavailable — using a default rate.</p>}
 
       <div className="pk-spacer-bottom" />
     </>

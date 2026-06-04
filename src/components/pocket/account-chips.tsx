@@ -4,8 +4,8 @@ const LABELS: Record<string, string> = {
   TFSA: "TFSA",
   RRSP: "RRSP",
   FHSA: "FHSA",
-  NON_REG: "비등록",
-  CASH: "현금",
+  NON_REG: "Non-Reg",
+  CASH: "Cash",
 };
 
 interface Props {
@@ -19,7 +19,7 @@ export function AccountChips({ accountTypes, excluded, onToggle }: Props) {
   if (accountTypes.length <= 1) return null;
 
   return (
-    <div className="pk-chips" role="group" aria-label="계좌 선택">
+    <div className="pk-chips" role="group" aria-label="Select accounts">
       {accountTypes.map((a) => (
         <button
           key={a}

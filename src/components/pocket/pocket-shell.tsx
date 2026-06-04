@@ -114,18 +114,12 @@ export function PocketShell() {
           priceGap={derived.priceGap}
           freqGuess={derived.freqGuess}
           fxFallback={derived.fxFallback}
-          onEdit={() => setEditing(true)}
           onRetry={load}
         />
       ) : (
         <>
           <PocketSettings
-            tickers={tickerAggs}
-            excluded={excluded}
-            onToggle={toggle}
-            accountTypes={accountTypes}
-            excludedAccounts={excludedAccounts}
-            onToggleAccount={toggleAccount}
+            onEdit={() => setEditing(true)}
             basis={basis}
             setBasis={setBasis}
             themePref={themePref}
@@ -137,15 +131,15 @@ export function PocketShell() {
 
       <PocketTabBar active={tab} onChange={setTab} />
 
-      {editing && tab === "dividends" && (
+      {editing && (
         <>
           <div className="pk-sheet-scrim" onClick={() => setEditing(false)} />
-          <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="계좌·종목 선택">
+          <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="Select accounts and tickers">
             <div className="pk-sheet-grip" />
             <div className="pk-sheet-head">
-              <span className="pk-sheet-title">계좌 · 종목</span>
+              <span className="pk-sheet-title">Accounts · Tickers</span>
               <button type="button" className="pk-sheet-done" onClick={() => setEditing(false)}>
-                완료
+                Done
               </button>
             </div>
             <AccountChips accountTypes={accountTypes} excluded={excludedAccounts} onToggle={toggleAccount} />

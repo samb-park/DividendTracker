@@ -96,6 +96,9 @@ function resolveMode(pref: ThemePref): "light" | "dark" {
 function applyMode(mode: "light" | "dark") {
   const root = document.getElementById("pocket-root");
   if (root) root.setAttribute("data-pocket-mode", mode);
+  // Keep the theme-color meta in sync so iOS Safari's overscroll area matches.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", mode === "dark" ? "#000000" : "#ffffff");
 }
 
 export function usePocketTheme(): [ThemePref, (p: ThemePref) => void] {

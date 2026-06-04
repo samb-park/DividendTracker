@@ -14,7 +14,7 @@ interface Props {
 
 export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
   if (tickers.length === 0) {
-    return <p className="pk-note">보유 중인 종목이 없습니다.</p>;
+    return <p className="pk-note">No holdings in the selected accounts.</p>;
   }
 
   return (
@@ -23,11 +23,11 @@ export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
         const off = excluded.has(t.ticker);
         const annual = basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD;
         const sub = t.priceUnavailable
-          ? "시세 없음"
+          ? "No live price"
           : !t.hasDividendData
-            ? `${t.name} · 배당 데이터 없음`
+            ? `${t.name} · No dividend data`
             : t.lowConfidence
-              ? `${t.name} · 빈도 추정`
+              ? `${t.name} · Est. frequency`
               : t.name;
         return (
           <div
