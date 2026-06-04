@@ -124,20 +124,26 @@ export function PerformanceChart() {
   const { xirr, mdd, valueChange, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
-    // ALL range: clip to >= 2025-05-21 (frontend-only display cutoff).
-    // 다른 range (3m/6m/1y/3y/5y) 는 백엔드에서 이미 range filter 적용됨 → 그대로 사용.
-    const ALL_RANGE_START_DATE = "2025-05-21";
-    const effectiveSnapshots = range === "all"
-      ? snapshots.filter((s) => {
-          const raw = s.date as unknown;
-          const iso = raw instanceof Date
-            ? raw.toISOString().slice(0, 10)
-            : typeof raw === "string"
-              ? raw.slice(0, 10)
-              : "";
-          return iso >= ALL_RANGE_START_DATE;
-        })
-      : snapshots;
+    // Trustworthy-data floor — applies to EVERY range, not just ALL.
+    // The first 3 reconstructed snapshots (2025-04-30 ~ 2025-05-15) are sparse
+    // backfill artifacts — notably a +46% one-day jump on 2025-05-15 that is NOT
+    // a recorded contribution — which the % chart renders as a spurious ~+30%
+    // spike on the Portfolio line. ALL already clipped here, but 3y/5y reach
+    // back before it and used to expose that spike (and inflate XIRR/MDD/VALUE
+    // CHANGE, which are computed from effectiveSnapshots below). Clipping
+    // uniformly anchors the Portfolio line at 0% and keeps it comparable to the
+    // smooth synthetic Benchmark/BASE overlays across all ranges. Shorter ranges
+    // (3m/6m/1y) already start after this date, so the filter is a no-op there.
+    const DATA_TRUST_START_DATE = "2025-05-21";
+    const effectiveSnapshots = snapshots.filter((s) => {
+      const raw = s.date as unknown;
+      const iso = raw instanceof Date
+        ? raw.toISOString().slice(0, 10)
+        : typeof raw === "string"
+          ? raw.slice(0, 10)
+          : "";
+      return iso >= DATA_TRUST_START_DATE;
+    });
     if (effectiveSnapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
     const { xirr, mdd, valueChange } = computePerformanceMetrics(effectiveSnapshots, range, contributionEventsCAD);
