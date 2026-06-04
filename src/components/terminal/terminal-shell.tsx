@@ -9,6 +9,10 @@ import { WatchGridPanel } from "./panels/watch-grid-panel";
 import { CandleChartPanel } from "./panels/candle-chart-panel";
 import { FundamentalsPanel } from "./panels/fundamentals-panel";
 import { MarketOverviewPanel } from "./panels/market-overview-panel";
+import { AiAssistantPanel } from "./panels/ai-assistant-panel";
+import { PortfolioPanel } from "./panels/portfolio-panel";
+import { NewsPanel } from "./panels/news-panel";
+import { SectorPanel } from "./panels/sector-panel";
 
 function CenterContent({ tab, ticker }: { tab: TabKey; ticker: string }) {
   switch (tab) {
@@ -31,28 +35,13 @@ function CenterContent({ tab, ticker }: { tab: TabKey; ticker: string }) {
         />
       );
     case "뉴스":
-      return (
-        <PanelEmpty
-          kind="api_required"
-          message="뉴스 원문 + 한국어 번역 패널은 /api/ai/news 연동으로 다음 슬라이스에서 추가됩니다."
-        />
-      );
+      return <NewsPanel />;
     case "포트":
-      return (
-        <PanelEmpty
-          kind="no_data"
-          message="포트폴리오 패널은 기존 포트폴리오 엔진을 재사용하여 다음 슬라이스에서 연결됩니다."
-        />
-      );
+      return <PortfolioPanel />;
     case "모니터":
       return <PanelEmpty kind="no_data" message="멀티 모니터(다중 종목) 화면은 준비 중입니다." />;
     case "AI":
-      return (
-        <PanelEmpty
-          kind="api_required"
-          message="AI 어시스턴트(hermes 게이트웨이)는 다음 슬라이스에서 연결됩니다. 키가 없으면 로컬 규칙 기반 요약으로 동작합니다."
-        />
-      );
+      return <AiAssistantPanel ticker={ticker} />;
     default:
       return <PanelEmpty kind="no_data" />;
   }
@@ -76,6 +65,9 @@ export function TerminalShell() {
             noPadding
           >
             <WatchGridPanel selected={ticker} onSelect={setTicker} />
+          </Panel>
+          <Panel title="섹터 / SECTOR" className="min-h-[200px] flex-1 lg:min-h-0">
+            <SectorPanel />
           </Panel>
         </div>
 

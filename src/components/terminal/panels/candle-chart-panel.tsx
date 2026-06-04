@@ -16,12 +16,23 @@ const C = {
   sma50: "#F6A823", // accent amber
   sma200: "#47BFEB", // chart-3 blue
   rsi: "#A670DB", // chart-4 purple
+  macd: "#47BFEB", // MACD line — chart-3 blue (same tone as sma200)
+  signal: "#F6A823", // signal line — accent amber (same tone as sma50)
+  bb: "#6b6b6b", // bollinger bands — muted grey (subtle)
   axis: "#3a3a3a",
   text: "#8a8a8a",
 };
 
-const RANGES = ["1m", "3m", "6m", "1y", "2y", "5y"] as const;
+const RANGES = ["1m", "3m", "6m", "1y", "2y", "5y", "10y"] as const;
 type Range = (typeof RANGES)[number];
+
+const INTERVALS = [
+  { value: "auto", label: "AUTO" },
+  { value: "1d", label: "1D" },
+  { value: "1wk", label: "1W" },
+  { value: "1mo", label: "1M" },
+] as const;
+type Interval = (typeof INTERVALS)[number]["value"];
 
 interface Candle {
   date: string;
@@ -35,7 +46,17 @@ interface TechnicalResponse {
   ticker: string;
   currency: string;
   candles: Candle[];
-  indicators: { sma50: (number | null)[]; sma200: (number | null)[]; rsi14: (number | null)[] };
+  indicators: {
+    sma50: (number | null)[];
+    sma200: (number | null)[];
+    rsi14: (number | null)[];
+    macd: (number | null)[];
+    signal: (number | null)[];
+    histogram: (number | null)[];
+    bbUpper: (number | null)[];
+    bbMiddle: (number | null)[];
+    bbLower: (number | null)[];
+  };
   meta: {
     currentPrice: number;
     week52High: number;
@@ -47,6 +68,7 @@ interface TechnicalResponse {
 
 export function CandleChartPanel({ ticker }: { ticker: string }) {
   const [range, setRange] = useState<Range>("1y");
+  const [intervalSel, setIntervalSel] = useState<Interval>("auto");
   const [data, setData] = useState<TechnicalResponse | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "no_data" | "error">("loading");
 
@@ -54,7 +76,9 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
     let alive = true;
     setStatus("loading");
     setData(null);
-    fetch(`/api/technical?ticker=${encodeURIComponent(ticker)}&range=${range}`, { cache: "no-store" })
+    const params = new URLSearchParams({ ticker, range });
+    if (intervalSel !== "auto") params.set("interval", intervalSel);
+    fetch(`/api/technical?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
         if (res.status === 404) return { kind: "no_data" as const };
         if (!res.ok) return { kind: "error" as const };
@@ -73,17 +97,30 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
     return () => {
       alive = false;
     };
-  }, [ticker, range]);
+  }, [ticker, range, intervalSel]);
 
   const option = useMemo<EChartsOption | null>(() => {
     if (!data || data.candles.length === 0) return null;
     const dates = data.candles.map((c) => c.date);
     const ohlc = data.candles.map((c) => [c.open, c.close, c.low, c.high]);
-    const volumes = data.candles.map((c, i) => ({
+    const volumes = data.candles.map((c) => ({
       value: c.volume,
       itemStyle: { color: c.close >= c.open ? `${C.up}66` : `${C.down}66` },
     }));
+    // MACD histogram: green for positive, red for negative; null stays null
+    // (honest gaps — no zero-fill where the indicator is undefined).
+    const histogram = data.indicators.histogram.map((h) =>
+      h == null
+        ? null
+        : { value: h, itemStyle: { color: h >= 0 ? `${C.up}99` : `${C.down}99` } }
+    );
 
+    // 4-grid stack (top→bottom, non-overlapping, ~3% bottom margin for date axis):
+    //   price  top 8px  h 44%  (→ ~44%)
+    //   volume top 55%  h 11%  (→ 66%)
+    //   MACD   top 69%  h 16%  (→ 85%)
+    //   RSI    top 88%  h 9%   (→ 97%)
+    // gridIndex: 0=price, 1=volume, 2=MACD, 3=RSI.
     return {
       animation: false,
       backgroundColor: "transparent",
@@ -97,22 +134,25 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
       },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
-        { left: 48, right: 12, top: 8, height: "54%" },
-        { left: 48, right: 12, top: "62%", height: "14%" },
-        { left: 48, right: 12, top: "80%", height: "16%" },
+        { left: 48, right: 12, top: 8, height: "44%" },
+        { left: 48, right: 12, top: "55%", height: "11%" },
+        { left: 48, right: 12, top: "69%", height: "16%" },
+        { left: 48, right: 12, top: "88%", height: "9%" },
       ],
       xAxis: [
         { type: "category", data: dates, gridIndex: 0, boundaryGap: true, axisLine: { lineStyle: { color: C.axis } }, axisLabel: { show: false }, splitLine: { show: false } },
         { type: "category", data: dates, gridIndex: 1, axisLine: { lineStyle: { color: C.axis } }, axisLabel: { show: false }, splitLine: { show: false } },
-        { type: "category", data: dates, gridIndex: 2, axisLine: { lineStyle: { color: C.axis } }, axisLabel: { color: C.text, fontSize: 9 }, splitLine: { show: false } },
+        { type: "category", data: dates, gridIndex: 2, axisLine: { lineStyle: { color: C.axis } }, axisLabel: { show: false }, splitLine: { show: false } },
+        { type: "category", data: dates, gridIndex: 3, axisLine: { lineStyle: { color: C.axis } }, axisLabel: { color: C.text, fontSize: 9 }, splitLine: { show: false } },
       ],
       yAxis: [
         { scale: true, gridIndex: 0, splitLine: { lineStyle: { color: "#222" } }, axisLabel: { color: C.text, fontSize: 9 }, axisLine: { lineStyle: { color: C.axis } } },
         { scale: true, gridIndex: 1, splitNumber: 2, splitLine: { show: false }, axisLabel: { color: C.text, fontSize: 8 }, axisLine: { lineStyle: { color: C.axis } } },
-        { min: 0, max: 100, gridIndex: 2, splitNumber: 2, splitLine: { lineStyle: { color: "#222" } }, axisLabel: { color: C.text, fontSize: 8 }, axisLine: { lineStyle: { color: C.axis } } },
+        { scale: true, gridIndex: 2, splitNumber: 2, splitLine: { show: false }, axisLabel: { color: C.text, fontSize: 8 }, axisLine: { lineStyle: { color: C.axis } } },
+        { min: 0, max: 100, gridIndex: 3, splitNumber: 2, splitLine: { lineStyle: { color: "#222" } }, axisLabel: { color: C.text, fontSize: 8 }, axisLine: { lineStyle: { color: C.axis } } },
       ],
       dataZoom: [
-        { type: "inside", xAxisIndex: [0, 1, 2], start: 40, end: 100 },
+        { type: "inside", xAxisIndex: [0, 1, 2, 3], start: 40, end: 100 },
       ],
       series: [
         {
@@ -122,6 +162,33 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
           yAxisIndex: 0,
           data: ohlc,
           itemStyle: { color: C.up, color0: C.down, borderColor: C.up, borderColor0: C.down },
+        },
+        {
+          name: "BB Upper",
+          type: "line",
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          data: data.indicators.bbUpper,
+          showSymbol: false,
+          lineStyle: { width: 1, color: C.bb, type: "dashed", opacity: 0.7 },
+        },
+        {
+          name: "BB Middle",
+          type: "line",
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          data: data.indicators.bbMiddle,
+          showSymbol: false,
+          lineStyle: { width: 1, color: C.bb, opacity: 0.5 },
+        },
+        {
+          name: "BB Lower",
+          type: "line",
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          data: data.indicators.bbLower,
+          showSymbol: false,
+          lineStyle: { width: 1, color: C.bb, type: "dashed", opacity: 0.7 },
         },
         {
           name: "SMA50",
@@ -151,10 +218,35 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
           data: volumes,
         },
         {
-          name: "RSI14",
+          name: "MACD Hist",
+          type: "bar",
+          xAxisIndex: 2,
+          yAxisIndex: 2,
+          data: histogram,
+        },
+        {
+          name: "MACD",
           type: "line",
           xAxisIndex: 2,
           yAxisIndex: 2,
+          data: data.indicators.macd,
+          showSymbol: false,
+          lineStyle: { width: 1, color: C.macd },
+        },
+        {
+          name: "Signal",
+          type: "line",
+          xAxisIndex: 2,
+          yAxisIndex: 2,
+          data: data.indicators.signal,
+          showSymbol: false,
+          lineStyle: { width: 1, color: C.signal },
+        },
+        {
+          name: "RSI14",
+          type: "line",
+          xAxisIndex: 3,
+          yAxisIndex: 3,
           data: data.indicators.rsi14,
           showSymbol: false,
           lineStyle: { width: 1, color: C.rsi },
@@ -198,6 +290,21 @@ export function CandleChartPanel({ ticker }: { ticker: string }) {
                 )}
               >
                 {r}
+              </button>
+            ))}
+          </span>
+          <span className="h-3 w-px bg-border" />
+          <span className="flex items-center gap-0.5">
+            {INTERVALS.map((iv) => (
+              <button
+                key={iv.value}
+                onClick={() => setIntervalSel(iv.value)}
+                className={cn(
+                  "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase transition-colors",
+                  intervalSel === iv.value ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {iv.label}
               </button>
             ))}
           </span>
