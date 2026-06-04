@@ -1,12 +1,12 @@
 "use client";
 
-import type { TickerRunRate, Basis } from "@/lib/pocket-types";
+import type { TickerAgg, Basis } from "@/lib/pocket-types";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 interface Props {
-  tickers: TickerRunRate[];
+  tickers: TickerAgg[];
   excluded: Set<string>;
   basis: Basis;
   onToggle: (ticker: string) => void;

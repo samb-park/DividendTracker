@@ -1,12 +1,16 @@
 "use client";
 
-import type { Basis, ThemePref, TickerRunRate } from "@/lib/pocket-types";
+import type { Basis, ThemePref, TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
+import { AccountChips } from "./account-chips";
 
 interface Props {
-  tickers: TickerRunRate[];
+  tickers: TickerAgg[];
   excluded: Set<string>;
   onToggle: (ticker: string) => void;
+  accountTypes: string[];
+  excludedAccounts: Set<string>;
+  onToggleAccount: (accountType: string) => void;
   basis: Basis;
   setBasis: (b: Basis) => void;
   themePref: ThemePref;
@@ -28,6 +32,9 @@ export function PocketSettings({
   tickers,
   excluded,
   onToggle,
+  accountTypes,
+  excludedAccounts,
+  onToggleAccount,
   basis,
   setBasis,
   themePref,
@@ -36,6 +43,13 @@ export function PocketSettings({
   return (
     <div className="pk-settings">
       <h1 className="pk-title">Settings</h1>
+
+      {accountTypes.length > 1 && (
+        <section>
+          <div className="pk-section-label">계좌</div>
+          <AccountChips accountTypes={accountTypes} excluded={excludedAccounts} onToggle={onToggleAccount} />
+        </section>
+      )}
 
       <section>
         <div className="pk-section-label">종목 선택</div>

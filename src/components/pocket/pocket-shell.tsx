@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RunRateResponse } from "@/lib/pocket-types";
-import { useExcluded, useBasis, usePocketTheme } from "./use-pocket-prefs";
+import type { RunRateResponse, TickerAgg } from "@/lib/pocket-types";
+import { useExcluded, useExcludedAccounts, useBasis, usePocketTheme } from "./use-pocket-prefs";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { TickerPicker } from "./ticker-picker";
+import { AccountChips } from "./account-chips";
 
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
@@ -17,6 +18,7 @@ export function PocketShell() {
   const [editing, setEditing] = useState(false);
 
   const { excluded, toggle } = useExcluded();
+  const { excluded: excludedAccounts, toggle: toggleAccount } = useExcludedAccounts();
   const [basis, setBasis] = useBasis();
   const [themePref, setThemePref] = usePocketTheme();
 
@@ -38,18 +40,46 @@ export function PocketShell() {
     load();
   }, [load]);
 
-  const tickers = useMemo(() => data?.tickers ?? [], [data]);
+  const positions = useMemo(() => data?.positions ?? [], [data]);
+  const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
+
+  // Per-ticker rollup over the currently-selected accounts (for the picker + headline).
+  const tickerAggs = useMemo<TickerAgg[]>(() => {
+    const active = positions.filter((p) => !excludedAccounts.has(p.accountType));
+    const map = new Map<string, TickerAgg>();
+    for (const p of active) {
+      const e = map.get(p.ticker);
+      if (e) {
+        e.grossAnnualUSD += p.grossAnnualUSD;
+        e.netAnnualUSD += p.netAnnualUSD;
+        if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
+        e.hasDividendData = e.hasDividendData || p.hasDividendData;
+        e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
+      } else {
+        map.set(p.ticker, {
+          ticker: p.ticker,
+          name: p.name,
+          grossAnnualUSD: p.grossAnnualUSD,
+          netAnnualUSD: p.netAnnualUSD,
+          marketValueUSD: p.marketValueUSD,
+          hasDividendData: p.hasDividendData,
+          priceUnavailable: p.priceUnavailable,
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
+  }, [positions, excludedAccounts]);
 
   const derived = useMemo(() => {
-    const included = tickers.filter((t) => !excluded.has(t.ticker));
-    const pick = (t: (typeof included)[number]) => (basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD);
+    const included = tickerAggs.filter((t) => !excluded.has(t.ticker));
+    const pick = (t: TickerAgg) => (basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD);
 
     // Headline income counts every included holding — dividend is known from
     // shares × per-share even when the live price is missing.
     const annualUSD = included.reduce((s, t) => s + pick(t), 0);
 
-    // AVG% (value-weighted yield) is computed only over the priced subset so the
-    // numerator and denominator stay consistent; missing prices are surfaced as a note.
+    // AVG% (value-weighted yield) over the PRICED subset so numerator/denominator
+    // stay consistent; missing prices are surfaced as a note.
     const priced = included.filter((t) => t.marketValueUSD != null);
     const totalValueUSD = priced.reduce((s, t) => s + (t.marketValueUSD ?? 0), 0);
     const yieldAnnual = priced.reduce((s, t) => s + pick(t), 0);
@@ -59,12 +89,12 @@ export function PocketShell() {
       annualUSD,
       totalValueUSD,
       avgYieldPct,
-      isEmpty: tickers.length === 0,
-      allExcluded: tickers.length > 0 && included.length === 0,
+      isEmpty: positions.length === 0,
+      allExcluded: positions.length > 0 && included.length === 0,
       priceGap: included.some((t) => t.priceUnavailable),
       fxFallback: data?.fx.fallback ?? false,
     };
-  }, [tickers, excluded, basis, data]);
+  }, [tickerAggs, excluded, basis, positions, data]);
 
   return (
     <div className="pk-screen">
@@ -85,9 +115,12 @@ export function PocketShell() {
       ) : (
         <>
           <PocketSettings
-            tickers={tickers}
+            tickers={tickerAggs}
             excluded={excluded}
             onToggle={toggle}
+            accountTypes={accountTypes}
+            excludedAccounts={excludedAccounts}
+            onToggleAccount={toggleAccount}
             basis={basis}
             setBasis={setBasis}
             themePref={themePref}
@@ -102,15 +135,16 @@ export function PocketShell() {
       {editing && tab === "dividends" && (
         <>
           <div className="pk-sheet-scrim" onClick={() => setEditing(false)} />
-          <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="종목 선택">
+          <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="계좌·종목 선택">
             <div className="pk-sheet-grip" />
             <div className="pk-sheet-head">
-              <span className="pk-sheet-title">종목 선택</span>
+              <span className="pk-sheet-title">계좌 · 종목</span>
               <button type="button" className="pk-sheet-done" onClick={() => setEditing(false)}>
                 완료
               </button>
             </div>
-            <TickerPicker tickers={tickers} excluded={excluded} basis={basis} onToggle={toggle} />
+            <AccountChips accountTypes={accountTypes} excluded={excludedAccounts} onToggle={toggleAccount} />
+            <TickerPicker tickers={tickerAggs} excluded={excluded} basis={basis} onToggle={toggle} />
           </div>
         </>
       )}

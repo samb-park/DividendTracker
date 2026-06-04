@@ -4,22 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import type { Basis, ThemePref } from "@/lib/pocket-types";
 
 const EXCLUDED_KEY = "dt-pocket-excluded-v1";
+const EXCLUDED_ACCOUNTS_KEY = "dt-pocket-accounts-excluded-v1";
 const BASIS_KEY = "dt-pocket-basis-v1";
 const THEME_KEY = "dt-pocket-theme";
 
 /**
- * Persisted EXCLUSION set (not inclusion): default empty → every held ticker is
- * shown, and a newly-bought ticker appears automatically instead of being
- * silently dropped. The user deselects what they don't want counted.
+ * Persisted EXCLUSION set (not inclusion): default empty → everything is shown,
+ * and a newly-added item (ticker or account) appears automatically instead of
+ * being silently dropped. The user deselects what they don't want counted.
  * SSR-safe: server + first client paint use defaults, storage applied in effect.
  */
-export function useExcluded() {
+function useExcludedSet(storageKey: string) {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(EXCLUDED_KEY);
+      const raw = localStorage.getItem(storageKey);
       if (raw) {
         const arr = JSON.parse(raw) as unknown;
         if (Array.isArray(arr)) setExcluded(new Set(arr.filter((x): x is string => typeof x === "string")));
@@ -28,30 +29,36 @@ export function useExcluded() {
       /* ignore corrupt storage */
     }
     setHydrated(true);
-  }, []);
-
-  const persist = useCallback((next: Set<string>) => {
-    try {
-      localStorage.setItem(EXCLUDED_KEY, JSON.stringify([...next]));
-    } catch {
-      /* ignore quota */
-    }
-  }, []);
+  }, [storageKey]);
 
   const toggle = useCallback(
-    (ticker: string) => {
+    (value: string) => {
       setExcluded((prev) => {
         const next = new Set(prev);
-        if (next.has(ticker)) next.delete(ticker);
-        else next.add(ticker);
-        persist(next);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        try {
+          localStorage.setItem(storageKey, JSON.stringify([...next]));
+        } catch {
+          /* ignore quota */
+        }
         return next;
       });
     },
-    [persist]
+    [storageKey]
   );
 
   return { excluded, toggle, hydrated };
+}
+
+/** Excluded ticker symbols. */
+export function useExcluded() {
+  return useExcludedSet(EXCLUDED_KEY);
+}
+
+/** Excluded account types (e.g. exclude TFSA to view RRSP-only). */
+export function useExcludedAccounts() {
+  return useExcludedSet(EXCLUDED_ACCOUNTS_KEY);
 }
 
 export function useBasis(): [Basis, (b: Basis) => void] {

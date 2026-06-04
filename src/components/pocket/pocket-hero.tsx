@@ -51,10 +51,12 @@ export function PocketHero({
       const nums = Array.from(col.querySelectorAll<HTMLElement>("[data-hero-num]"));
       const labels = Array.from(col.querySelectorAll<HTMLElement>("[data-hero-label]"));
       if (!nums.length) return;
-      const MAX = 84;
-      const MIN = 28;
+      // Reference-matched comfortable size; shrink ONLY if a long number would
+      // overflow the available width. Labels share the number size.
+      const MAX = 58;
+      const MIN = 26;
       nums.forEach((n) => (n.style.fontSize = `${MAX}px`));
-      labels.forEach((l) => (l.style.fontSize = `${Math.round(MAX * 0.66)}px`));
+      labels.forEach((l) => (l.style.fontSize = `${MAX}px`));
       let scale = 1;
       nums.forEach((n) => {
         const avail = n.clientWidth;
@@ -63,7 +65,7 @@ export function PocketHero({
       });
       const final = Math.max(MIN, Math.min(MAX, Math.floor(MAX * scale)));
       nums.forEach((n) => (n.style.fontSize = `${final}px`));
-      labels.forEach((l) => (l.style.fontSize = `${Math.round(final * 0.66)}px`));
+      labels.forEach((l) => (l.style.fontSize = `${final}px`));
     };
     fit();
     const ro = new ResizeObserver(fit);

@@ -4,7 +4,7 @@ import { getPrice, getFxRate, yahooFinance } from "@/lib/price";
 import { detectFrequency } from "@/lib/dividend-utils";
 import { getNasdaqDividend } from "@/lib/nasdaq-dividend";
 import { netFactor } from "@/lib/dividend-withholding";
-import type { TickerRunRate, RunRateResponse } from "@/lib/pocket-types";
+import type { PositionRunRate, RunRateResponse } from "@/lib/pocket-types";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
@@ -87,12 +87,17 @@ export async function GET() {
   const priceCache = new Map<string, Awaited<ReturnType<typeof getPrice>>>();
   const divCache = new Map<string, DivInfo | null>();
 
-  const byTicker = new Map<string, TickerRunRate>();
+  // Aggregate by (accountType, ticker) so the client can filter by account
+  // (e.g. RRSP-only) AND by ticker independently. Withholding is applied
+  // per-position, so an RRSP US-listed position keeps net === gross.
+  const byKey = new Map<string, PositionRunRate>();
+  const accountTypes = new Set<string>();
 
   for (const h of active) {
     const ticker = h.ticker;
-    const shares = parseFloat(h.quantity!.toString()) || 0;
+    const shares = parseFloat(h.quantity?.toString() ?? "0") || 0;
     const accountType = h.portfolio.accountType ?? "NON_REG";
+    accountTypes.add(accountType);
 
     if (!priceCache.has(ticker)) priceCache.set(ticker, await getPrice(ticker));
     if (!divCache.has(ticker)) divCache.set(ticker, await getForwardAnnualPerShare(ticker, h.currency));
@@ -113,8 +118,10 @@ export async function GET() {
     const grossAnnualUSD = toUSD(grossAnnualNative);
     const netAnnualUSD = toUSD(grossAnnualNative * factor);
 
-    const existing = byTicker.get(ticker);
+    const key = `${accountType}::${ticker}`;
+    const existing = byKey.get(key);
     if (existing) {
+      // Multiple portfolios sharing the same account type + ticker.
       existing.shares += shares;
       existing.grossAnnualUSD += grossAnnualUSD;
       existing.netAnnualUSD += netAnnualUSD;
@@ -122,7 +129,8 @@ export async function GET() {
         existing.marketValueUSD = (existing.marketValueUSD ?? 0) + marketValueUSD;
       }
     } else {
-      byTicker.set(ticker, {
+      byKey.set(key, {
+        accountType,
         ticker,
         name: price?.name ?? h.name ?? ticker,
         shares,
@@ -141,7 +149,8 @@ export async function GET() {
   const payload: RunRateResponse = {
     asOf: new Date().toISOString(),
     fx: { usdcad: fx.rate, fallback: fx.fallback },
-    tickers: [...byTicker.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD),
+    accountTypes: [...accountTypes].sort(),
+    positions: [...byKey.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD),
   };
 
   return NextResponse.json(payload);
