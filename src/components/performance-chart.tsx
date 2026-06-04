@@ -124,26 +124,13 @@ export function PerformanceChart() {
   const { xirr, mdd, valueChange, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
-    // Trustworthy-data floor — applies to EVERY range, not just ALL.
-    // The first 3 reconstructed snapshots (2025-04-30 ~ 2025-05-15) are sparse
-    // backfill artifacts — notably a +46% one-day jump on 2025-05-15 that is NOT
-    // a recorded contribution — which the % chart renders as a spurious ~+30%
-    // spike on the Portfolio line. ALL already clipped here, but 3y/5y reach
-    // back before it and used to expose that spike (and inflate XIRR/MDD/VALUE
-    // CHANGE, which are computed from effectiveSnapshots below). Clipping
-    // uniformly anchors the Portfolio line at 0% and keeps it comparable to the
-    // smooth synthetic Benchmark/BASE overlays across all ranges. Shorter ranges
-    // (3m/6m/1y) already start after this date, so the filter is a no-op there.
-    const DATA_TRUST_START_DATE = "2025-05-21";
-    const effectiveSnapshots = snapshots.filter((s) => {
-      const raw = s.date as unknown;
-      const iso = raw instanceof Date
-        ? raw.toISOString().slice(0, 10)
-        : typeof raw === "string"
-          ? raw.slice(0, 10)
-          : "";
-      return iso >= DATA_TRUST_START_DATE;
-    });
+    // No early-data display clip: /api/snapshots now values each range-boundary
+    // day at market price (opening positions no longer fall back to avgCost), so
+    // the sparse early reconstruction no longer produces a spurious start-of-range
+    // spike. Every range shows its full natural window with all three lines
+    // anchored at 0% on the first visible day. (The prior 2025-05-21 floor was a
+    // band-aid for that now-fixed backend valuation bug.)
+    const effectiveSnapshots = snapshots;
     if (effectiveSnapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
     const { xirr, mdd, valueChange } = computePerformanceMetrics(effectiveSnapshots, range, contributionEventsCAD);
