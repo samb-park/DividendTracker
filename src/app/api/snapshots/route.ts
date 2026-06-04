@@ -75,6 +75,13 @@ function dateKey(value: Date | string): string {
   return value.slice(0, 10);
 }
 
+function isoDateMinusDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -170,9 +177,23 @@ async function pricePointsFromTransactions(
   valuationDates: string[],
 ): Promise<MarketPricePoint[]> {
   const firstDate = valuationDates[0];
+  // Fetch market history starting ~30 calendar days BEFORE the first valuation
+  // (range-boundary) date so every holding has a real market price on/before that
+  // boundary. Fetching from exactly firstDate left the boundary day without a quote
+  // (yahoo's first point lands on/after period1, often days later on the weekly
+  // interval used for >180d ranges), so the boundary fell back to the synthetic
+  // opening avgCost — under-valuing day 1 and producing a spurious jump to the true
+  // market value a few days into every range (3m/6m/1y/3y/5y).
+  const historyFrom = firstDate ? isoDateMinusDays(firstDate, 30) : firstDate;
   const tickers = Array.from(new Set(transactions.map((transaction) => transaction.ticker.toUpperCase())));
+  // Exclude SYNTHETIC opening transactions (id "opening:…") from the price points.
+  // Their `price` is the holding avgCost — a cost basis, not a point-in-time market
+  // price — dated at the anchor day, which would otherwise win latestPriceOnOrBefore
+  // on the boundary day and value the opening position at cost. Real BUY/SELL prices
+  // are still kept as gap-fill price points.
   const transactionPricePoints: MarketPricePoint[] = transactions
     .filter((transaction) => transaction.action !== "DIVIDEND")
+    .filter((transaction) => !String(transaction.id).startsWith("opening:"))
     .map((transaction) => ({
       date: transaction.date,
       ticker: transaction.ticker,
@@ -183,7 +204,7 @@ async function pricePointsFromTransactions(
   const historyResults = await Promise.allSettled(
     tickers.map(async (ticker) => {
       const currency = transactions.find((transaction) => transaction.ticker.toUpperCase() === ticker)?.currency ?? "USD";
-      const history = await getHistory(ticker, "all", firstDate);
+      const history = await getHistory(ticker, "all", historyFrom);
       return history.map((point) => ({
         date: point.date,
         ticker,
