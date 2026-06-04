@@ -49,7 +49,7 @@ function QuoteRow({ q }: { q: MarketQuote | undefined; }) {
 }
 
 export function MarketOverviewPanel() {
-  const { quotes, loading, error } = useQuotes(ALL, 60_000);
+  const { quotes, loading, error, stale } = useQuotes(ALL, 60_000);
   const bySymbol = new Map(quotes.map((q) => [q.symbol, q]));
 
   if (loading && quotes.length === 0) return <PanelEmpty kind="loading" />;
@@ -61,7 +61,7 @@ export function MarketOverviewPanel() {
         <div key={g.title} className="min-w-0">
           <div className="mb-1 flex items-center justify-between">
             <h3 className="text-[10px] font-bold uppercase tracking-wide text-accent">{g.title}</h3>
-            <DataBadge kind="delayed" label="지연" />
+            <DataBadge kind={stale ? "error" : "delayed"} label={stale ? "갱신실패" : "지연"} />
           </div>
           {g.symbols.map((s) => (
             <QuoteRow key={s} q={bySymbol.get(s)} />

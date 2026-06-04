@@ -2,7 +2,7 @@
 
 import { useQuotes } from "../use-quotes";
 import { fmtPrice, fmtPct, toneClass } from "../format";
-import { PanelEmpty } from "../panel-state";
+import { PanelEmpty, DataBadge } from "../panel-state";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_WATCH = [
@@ -17,14 +17,20 @@ export function WatchGridPanel({
   selected: string;
   onSelect: (ticker: string) => void;
 }) {
-  const { quotes, loading, error } = useQuotes(DEFAULT_WATCH, 60_000);
+  const { quotes, loading, error, stale } = useQuotes(DEFAULT_WATCH, 60_000);
 
   if (loading && quotes.length === 0) return <PanelEmpty kind="loading" />;
   if (error && quotes.length === 0)
     return <PanelEmpty kind="error" message="시세를 불러오지 못했습니다." />;
 
   return (
-    <table className="w-full border-collapse text-[11px]">
+    <>
+      {stale && (
+        <div className="flex items-center gap-1 px-1 py-0.5">
+          <DataBadge kind="error" label="갱신실패 · 마지막 수신값" />
+        </div>
+      )}
+      <table className="w-full border-collapse text-[11px]">
       <thead>
         <tr className="text-[9px] uppercase tracking-wide text-muted-foreground">
           <th className="px-1 py-1 text-left font-semibold">티커</th>
@@ -57,6 +63,7 @@ export function WatchGridPanel({
           );
         })}
       </tbody>
-    </table>
+      </table>
+    </>
   );
 }

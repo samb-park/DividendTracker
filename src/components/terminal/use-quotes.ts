@@ -8,6 +8,8 @@ interface QuotesState {
   asOf: string | null;
   loading: boolean;
   error: string | null;
+  /** true when a refresh failed but stale (previously-fetched) quotes are still shown */
+  stale: boolean;
 }
 
 /**
@@ -21,6 +23,7 @@ export function useQuotes(symbols: string[], refreshMs = 60_000): QuotesState {
     asOf: null,
     loading: true,
     error: null,
+    stale: false,
   });
   const aliveRef = useRef(true);
 
@@ -32,10 +35,11 @@ export function useQuotes(symbols: string[], refreshMs = 60_000): QuotesState {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { quotes: MarketQuote[]; asOf: string };
       if (!aliveRef.current) return;
-      setState({ quotes: data.quotes ?? [], asOf: data.asOf ?? null, loading: false, error: null });
+      setState({ quotes: data.quotes ?? [], asOf: data.asOf ?? null, loading: false, error: null, stale: false });
     } catch (e) {
       if (!aliveRef.current) return;
-      setState((s) => ({ ...s, loading: false, error: e instanceof Error ? e.message : "fetch failed" }));
+      // Keep last good quotes but flag them stale so the UI can warn (no silent staleness).
+      setState((s) => ({ ...s, loading: false, error: e instanceof Error ? e.message : "fetch failed", stale: s.quotes.length > 0 }));
     }
   }, [key]);
 

@@ -52,7 +52,7 @@ export function MonitorPanel({
     }
   }, [list, hydrated]);
 
-  const { quotes, loading, error } = useQuotes(list, 30_000);
+  const { quotes, loading, error, stale } = useQuotes(list, 30_000);
   const bySymbol = new Map(quotes.map((q) => [q.symbol, q]));
 
   const add = () => {
@@ -68,7 +68,7 @@ export function MonitorPanel({
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {list.length} 종목
         </span>
-        <DataBadge kind="delayed" label="지연" />
+        <DataBadge kind={stale ? "error" : "delayed"} label={stale ? "갱신실패" : "지연"} />
         <span className="ml-auto flex items-center overflow-hidden rounded-sm border border-border bg-input">
           <input
             value={draft}

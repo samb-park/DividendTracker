@@ -19,11 +19,16 @@ const LABELS: Record<string, string> = {
 };
 
 export function IndexStrip() {
-  const { quotes, loading, error } = useQuotes(STRIP_SYMBOLS, 60_000);
+  const { quotes, loading, error, stale } = useQuotes(STRIP_SYMBOLS, 60_000);
 
   return (
     <div className="flex items-center gap-0 overflow-x-auto whitespace-nowrap border-b border-border bg-background/80 px-2 text-[11px]">
       <span className="mr-2 flex-shrink-0 font-bold uppercase tracking-wide text-accent">INDEX</span>
+      {stale && (
+        <span className="mr-2 flex-shrink-0 font-semibold text-destructive" title="실시간 갱신 실패 — 마지막 수신값">
+          ⚠ 갱신실패
+        </span>
+      )}
       {loading && quotes.length === 0 && (
         <span className="py-1 text-muted-foreground">불러오는 중…</span>
       )}
