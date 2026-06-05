@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Basis } from "@/lib/pocket-types";
+import type { Basis, HistoryMode } from "@/lib/pocket-types";
+import { HistoryModeToggle } from "./history-mode-toggle";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -23,9 +24,11 @@ interface IncomeMonth {
 interface Props {
   basis: Basis;
   fxRate: number | null; // USDCAD; CAD → USD = amount / fxRate
+  mode: HistoryMode;
+  setMode: (m: HistoryMode) => void;
 }
 
-export function HistoryView({ basis, fxRate }: Props) {
+export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const [years, setYears] = useState<number[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [months, setMonths] = useState<IncomeMonth[]>([]);
@@ -107,6 +110,8 @@ export function HistoryView({ basis, fxRate }: Props) {
           <span className="pk-summary-value">{loading ? "—" : money(total)}</span>
         </div>
       </div>
+
+      <HistoryModeToggle mode={mode} setMode={setMode} />
 
       {/* Year stepper */}
       <div className="pk-year">

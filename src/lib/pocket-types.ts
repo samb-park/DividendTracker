@@ -46,4 +46,19 @@ export interface TickerAgg {
 
 export type Basis = "net" | "gross";
 export type EventFilter = "all" | "ex" | "pay";
+export type HistoryMode = "dividends" | "transactions";
+export type TxnFilter = "all" | "buy" | "sell" | "div";
+
+/** A row from GET /api/transactions/calendar (all actions, date desc). */
+export interface TransactionRow {
+  id: string;
+  action: "BUY" | "SELL" | "DIVIDEND";
+  date: string; // YYYY-MM-DD
+  ticker: string;
+  quantity: number;
+  price: number;
+  commission: number;
+  total: number; // quantity × price (native currency; for DIVIDEND, price=net so total=net)
+  currency: string;
+}
 export type ThemePref = "system" | "light" | "dark";

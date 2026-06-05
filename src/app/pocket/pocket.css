@@ -339,6 +339,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   color: var(--pk-muted);
 }
 .pk-event-tag[data-type="pay"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
+/* transaction action badges: sell = filled (notable), buy/div = base light tint */
+.pk-event-tag[data-type="sell"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
 .pk-event-days {
   justify-self: end;
   font-size: 13px;
@@ -517,6 +519,18 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-bottom: 1px solid var(--pk-hairline);
 }
 .pk-hist-row:last-child { border-bottom: none; }
+
+/* transaction log row: date · ticker · action badge · qty · amount
+   (reuses pk-event-* cell classes; wider badge track so "SELL" fits) */
+.pk-txn-row {
+  display: grid;
+  grid-template-columns: 56px 56px 52px 1fr auto;
+  align-items: center;
+  column-gap: 9px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--pk-hairline);
+}
+.pk-txn-row:last-child { border-bottom: none; }
 
 /* account filter chips ------------------------------------------------- */
 .pk-chips {

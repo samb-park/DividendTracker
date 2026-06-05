@@ -9,7 +9,7 @@ import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { TickerPicker } from "./ticker-picker";
 import { AccountChips } from "./account-chips";
 import { UpcomingList } from "./upcoming-list";
-import { HistoryView } from "./history-view";
+import { HistoryTab } from "./history-tab";
 
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
@@ -146,7 +146,7 @@ export function PocketShell() {
           />
         )}
 
-        {tab === "history" && <HistoryView basis={basis} fxRate={data?.fx?.usdcad ?? null} />}
+        {tab === "history" && <HistoryTab basis={basis} fxRate={data?.fx?.usdcad ?? null} />}
 
         {tab === "settings" && (
           <PocketSettings
