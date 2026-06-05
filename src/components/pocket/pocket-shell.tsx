@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RunRateResponse, TickerAgg } from "@/lib/pocket-types";
+import type { RunRateResponse, TickerAgg, EventDate } from "@/lib/pocket-types";
 import { useExcluded, useExcludedAccounts, useBasis, usePocketTheme } from "./use-pocket-prefs";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { TickerPicker } from "./ticker-picker";
 import { AccountChips } from "./account-chips";
+import { UpcomingList } from "./upcoming-list";
 
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
@@ -16,6 +17,7 @@ export function PocketShell() {
 
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [editing, setEditing] = useState(false);
+  const [eventDate, setEventDate] = useState<EventDate>("ex");
 
   const { excluded, toggle } = useExcluded();
   const { excluded: excludedAccounts, toggle: toggleAccount } = useExcludedAccounts();
@@ -49,6 +51,9 @@ export function PocketShell() {
     const map = new Map<string, TickerAgg>();
     for (const p of active) {
       const lowConf = p.hasDividendData && !p.frequencyConfident;
+      const freq = p.frequency || 0;
+      const ppNet = freq > 0 ? p.netAnnualUSD / freq : 0;
+      const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
       const e = map.get(p.ticker);
       if (e) {
         e.grossAnnualUSD += p.grossAnnualUSD;
@@ -57,6 +62,11 @@ export function PocketShell() {
         e.hasDividendData = e.hasDividendData || p.hasDividendData;
         e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
         e.lowConfidence = e.lowConfidence || lowConf;
+        e.perPaymentNetUSD += ppNet;
+        e.perPaymentGrossUSD += ppGross;
+        if (!e.nextExDate && p.nextExDate) e.nextExDate = p.nextExDate;
+        if (!e.nextPayDate && p.nextPayDate) e.nextPayDate = p.nextPayDate;
+        e.dateConfirmed = e.dateConfirmed || p.dateConfirmed;
       } else {
         map.set(p.ticker, {
           ticker: p.ticker,
@@ -67,6 +77,11 @@ export function PocketShell() {
           hasDividendData: p.hasDividendData,
           priceUnavailable: p.priceUnavailable,
           lowConfidence: lowConf,
+          nextExDate: p.nextExDate,
+          nextPayDate: p.nextPayDate,
+          dateConfirmed: p.dateConfirmed,
+          perPaymentNetUSD: ppNet,
+          perPaymentGrossUSD: ppGross,
         });
       }
     }
@@ -89,6 +104,7 @@ export function PocketShell() {
     const avgYieldPct = totalValueUSD > 0 ? (yieldAnnual / totalValueUSD) * 100 : 0;
 
     return {
+      included,
       annualUSD,
       totalValueUSD,
       avgYieldPct,
@@ -102,7 +118,7 @@ export function PocketShell() {
 
   return (
     <div className="pk-screen">
-      {tab === "dividends" ? (
+      {tab === "dividends" && (
         <PocketHero
           annualUSD={derived.annualUSD}
           totalValueUSD={derived.totalValueUSD}
@@ -116,7 +132,22 @@ export function PocketShell() {
           fxFallback={derived.fxFallback}
           onRetry={load}
         />
-      ) : (
+      )}
+
+      {tab === "upcoming" && (
+        <>
+          <UpcomingList
+            tickers={derived.included}
+            basis={basis}
+            eventDate={eventDate}
+            setEventDate={setEventDate}
+            loading={loading}
+          />
+          <div className="pk-bottom-clearance" />
+        </>
+      )}
+
+      {tab === "settings" && (
         <>
           <PocketSettings
             onEdit={() => setEditing(true)}

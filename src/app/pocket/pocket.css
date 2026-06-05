@@ -279,6 +279,26 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-color: var(--pk-pill-bg);
 }
 
+/* upcoming events list -------------------------------------------------- */
+.pk-event-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--pk-hairline);
+}
+.pk-event-row:last-child { border-bottom: none; }
+.pk-event-date {
+  flex: 0 0 auto;
+  width: 62px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+.pk-event-date .est { color: var(--pk-muted); font-weight: 600; }
+
 /* bottom sheet overlay (Edit) ------------------------------------------- */
 .pk-sheet-scrim {
   position: fixed;

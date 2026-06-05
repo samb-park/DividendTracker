@@ -1,6 +1,6 @@
 "use client";
 
-export type PocketTab = "dividends" | "settings";
+export type PocketTab = "dividends" | "upcoming" | "settings";
 
 interface Props {
   active: PocketTab;
@@ -9,6 +9,7 @@ interface Props {
 
 const TABS: { id: PocketTab; label: string }[] = [
   { id: "dividends", label: "Dividends" },
+  { id: "upcoming", label: "Upcoming" },
   { id: "settings", label: "Settings" },
 ];
 

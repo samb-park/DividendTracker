@@ -24,7 +24,31 @@ export const dynamic = "force-dynamic";
  * Client divides the included sum by 365 / 52 / 12 / 1 for D / W / M / Y.
  */
 
-type DivInfo = { annualPerShare: number; frequency: number; currency: string; confident: boolean };
+type DivInfo = {
+  annualPerShare: number;
+  frequency: number;
+  currency: string;
+  confident: boolean;
+  exDate: string | null; // raw ex-date (may be in the past)
+  payDate: string | null; // raw pay-date (may be in the past)
+  dateUpcoming: boolean; // raw ex-date is already in the future (confirmed)
+};
+
+/** Roll a (possibly past) date forward by the payment interval until it is today or later. */
+function nextFutureDate(dateStr: string | null, frequency: number): string | null {
+  if (!dateStr) return null;
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const intervalMonths = Math.max(1, Math.round(12 / (frequency || 4)));
+  let guard = 0;
+  while (d.getTime() < today.getTime() && guard < 64) {
+    d.setUTCMonth(d.getUTCMonth() + intervalMonths);
+    guard++;
+  }
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * Forward annual dividend per share (native currency): latest amount × frequency.
@@ -39,11 +63,15 @@ async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string
     if (nasdaq && nasdaq.amount != null && nasdaq.history.length > 0) {
       const frequency = detectFrequency(nasdaq.history);
       if (frequency > 0) {
+        const todayStr = new Date().toISOString().slice(0, 10);
         return {
           annualPerShare: nasdaq.amount * frequency,
           frequency,
           currency: fallbackCurrency,
           confident: nasdaq.history.length >= 2,
+          exDate: nasdaq.exDividendDate,
+          payDate: nasdaq.paymentDate,
+          dateUpcoming: nasdaq.exDividendDate != null && nasdaq.exDividendDate >= todayStr,
         };
       }
     }
@@ -70,7 +98,18 @@ async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string
       const frequency = detectFrequency(dividends);
       const lastDiv = dividends[dividends.length - 1];
       const currency = chart.meta?.currency ?? fallbackCurrency;
-      return { annualPerShare: lastDiv.amount * frequency, frequency, currency, confident: dividends.length >= 2 };
+      const lastDate = lastDiv.date.slice(0, 10);
+      const payEstimate = new Date(`${lastDate}T12:00:00Z`);
+      payEstimate.setUTCDate(payEstimate.getUTCDate() + 15);
+      return {
+        annualPerShare: lastDiv.amount * frequency,
+        frequency,
+        currency,
+        confident: dividends.length >= 2,
+        exDate: lastDate,
+        payDate: payEstimate.toISOString().slice(0, 10),
+        dateUpcoming: false, // Yahoo only gives historical events → next date is always estimated
+      };
     }
   } catch {
     /* no dividend data */
@@ -153,6 +192,9 @@ export async function GET() {
         hasDividendData: div != null,
         priceUnavailable: price == null,
         currency: nativeCurrency,
+        nextExDate: div ? nextFutureDate(div.exDate, div.frequency) : null,
+        nextPayDate: div ? nextFutureDate(div.payDate, div.frequency) : null,
+        dateConfirmed: div?.dateUpcoming ?? false,
       });
     }
   }

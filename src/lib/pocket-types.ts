@@ -15,6 +15,9 @@ export interface PositionRunRate {
   hasDividendData: boolean;
   priceUnavailable: boolean;
   currency: string; // native listing currency (USD/CAD)
+  nextExDate: string | null; // YYYY-MM-DD, next (future) ex-dividend date
+  nextPayDate: string | null; // YYYY-MM-DD, next (future) payment date
+  dateConfirmed: boolean; // true = confirmed upcoming date; false = rolled-forward estimate
 }
 
 export interface RunRateResponse {
@@ -34,7 +37,13 @@ export interface TickerAgg {
   hasDividendData: boolean;
   priceUnavailable: boolean;
   lowConfidence: boolean; // any contributing position annualized from <2 dividend records
+  nextExDate: string | null;
+  nextPayDate: string | null;
+  dateConfirmed: boolean;
+  perPaymentNetUSD: number; // expected NET amount of the next single payment (USD)
+  perPaymentGrossUSD: number; // expected GROSS amount of the next single payment (USD)
 }
 
 export type Basis = "net" | "gross";
+export type EventDate = "ex" | "pay";
 export type ThemePref = "system" | "light" | "dark";
