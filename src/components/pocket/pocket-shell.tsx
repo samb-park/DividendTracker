@@ -9,6 +9,7 @@ import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { TickerPicker } from "./ticker-picker";
 import { AccountChips } from "./account-chips";
 import { UpcomingList } from "./upcoming-list";
+import { HistoryView } from "./history-view";
 
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
@@ -143,6 +144,13 @@ export function PocketShell() {
             setFilter={setEventFilter}
             loading={loading}
           />
+          <div className="pk-bottom-clearance" />
+        </>
+      )}
+
+      {tab === "history" && (
+        <>
+          <HistoryView basis={basis} fxRate={data?.fx?.usdcad ?? null} />
           <div className="pk-bottom-clearance" />
         </>
       )}

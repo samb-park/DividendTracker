@@ -191,8 +191,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   transform: translateX(-50%);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 5px);
   display: flex;
-  gap: 3px;
+  gap: 2px;
   padding: 5px;
+  max-width: calc(100vw - 16px);
   border-radius: 999px;
   background: var(--pk-tabbar-bg);
   backdrop-filter: saturate(180%) blur(20px);
@@ -206,14 +207,15 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   background: transparent;
   color: var(--pk-muted);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.2px;
-  padding: 7px 16px;
+  padding: 7px 11px;
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
   min-height: 34px;
+  white-space: nowrap;
 }
 .pk-tab[data-active="true"] {
   color: var(--pk-ink);
@@ -431,6 +433,45 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   gap: 12px;
 }
 .pk-field-label { font-size: 17px; font-weight: 600; color: var(--pk-ink); }
+
+/* history: year stepper + per-ticker received rows --------------------- */
+.pk-year {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.pk-year-arrow {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--pk-ink);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 10px;
+  min-height: 40px;
+}
+.pk-year-arrow:disabled { color: var(--pk-faint); cursor: default; }
+.pk-year-label {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: center;
+}
+.pk-hist-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--pk-hairline);
+}
+.pk-hist-row:last-child { border-bottom: none; }
 
 /* account filter chips ------------------------------------------------- */
 .pk-chips {
