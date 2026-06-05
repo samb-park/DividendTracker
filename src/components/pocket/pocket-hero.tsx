@@ -29,17 +29,20 @@ interface Props {
 // Cap-height-to-digit-height ratio of the actual rendered font, so the gray
 // letters read at the SAME visual height as the digits. Measured at runtime
 // (fonts vary) instead of a guessed constant.
-function measureLabelRatio(el: HTMLElement): number {
+// Explicit stack (matches .pocket-root) so canvas measures the real SF Pro on
+// iOS rather than silently falling back to the default font on a parse miss.
+const HERO_FONT = '800 200px -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+function measureLabelRatio(): number {
   try {
-    const cs = getComputedStyle(el);
     const ctx = document.createElement("canvas").getContext("2d");
     if (!ctx) return 1;
-    ctx.font = `${cs.fontWeight} 200px ${cs.fontFamily}`;
-    const cap = ctx.measureText("M");
-    const dig = ctx.measureText("0");
-    const capH = cap.actualBoundingBoxAscent + cap.actualBoundingBoxDescent;
-    const digH = dig.actualBoundingBoxAscent + dig.actualBoundingBoxDescent;
-    if (capH > 0 && digH > 0) return Math.min(1.4, Math.max(0.95, digH / capH));
+    ctx.font = HERO_FONT;
+    const capM = ctx.measureText("M");
+    const digM = ctx.measureText("0");
+    const capH = capM.actualBoundingBoxAscent + capM.actualBoundingBoxDescent;
+    const digH = digM.actualBoundingBoxAscent + digM.actualBoundingBoxDescent;
+    if (capH > 0 && digH > 0) return Math.min(1.45, Math.max(0.95, digH / capH));
   } catch {
     /* fall through */
   }
@@ -73,7 +76,7 @@ export function PocketHero({
       if (!nums.length) return;
       const MAX = 58;
       const MIN = 26;
-      const ratio = measureLabelRatio(nums[0]);
+      const ratio = measureLabelRatio();
       nums.forEach((n) => (n.style.fontSize = `${MAX}px`));
       labels.forEach((l) => (l.style.fontSize = `${Math.round(MAX * ratio)}px`));
       let scale = 1;
