@@ -28,31 +28,25 @@ export function PocketSettings({ onEdit, basis, setBasis, themePref, setThemePre
 
       <section>
         <div className="pk-section-label">Holdings</div>
-        <div className="pk-row-between">
-          <span className="pk-field-label">Accounts &amp; tickers</span>
-          <button type="button" className="pk-edit" onClick={onEdit}>
-            Edit
-          </button>
-        </div>
+        <button type="button" className="pk-edit" onClick={onEdit}>
+          Accounts &amp; Tickers
+        </button>
       </section>
 
       <section>
         <div className="pk-section-label">Amount basis</div>
-        <div className="pk-row-between">
-          <span className="pk-field-label">{basis === "net" ? "Net (after tax)" : "Gross"}</span>
-          <div className="pk-seg" role="group" aria-label="Amount basis">
-            {BASIS_OPTS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                className="pk-seg-btn"
-                data-active={basis === o.value}
-                onClick={() => setBasis(o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+        <div className="pk-seg" role="group" aria-label="Amount basis">
+          {BASIS_OPTS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="pk-seg-btn"
+              data-active={basis === o.value}
+              onClick={() => setBasis(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </section>
 

@@ -43,34 +43,6 @@ export function PocketShell() {
     load();
   }, [load]);
 
-  // Pin the floating tab bar to the VISUAL viewport bottom. position:fixed alone
-  // tracks the layout viewport, which iOS Safari resizes when its toolbar shows/
-  // hides (load → first tap) — making the bar jump. visualViewport reflects the
-  // actually-visible area, so the bar stays put across toolbar transitions.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    const bar = document.getElementById("pk-tabbar");
-    if (!vv || !bar) return;
-    const update = () => {
-      const offset = Math.max(0, document.documentElement.clientHeight - vv.height - vv.offsetTop);
-      bar.style.transform = `translateX(-50%) translateY(${-offset}px)`;
-    };
-    update();
-    // Re-measure after the viewport settles (toolbar/safe-area can finalize a
-    // frame or two after load) so the initial position isn't stale.
-    requestAnimationFrame(update);
-    const t = setTimeout(update, 300);
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    window.addEventListener("orientationchange", update);
-    return () => {
-      clearTimeout(t);
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-      window.removeEventListener("orientationchange", update);
-    };
-  }, []);
-
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 
@@ -146,25 +118,25 @@ export function PocketShell() {
   }, [tickerAggs, excluded, basis, positions, data]);
 
   return (
-    <div className="pk-screen">
-      {tab === "dividends" && (
-        <PocketHero
-          annualUSD={derived.annualUSD}
-          totalValueUSD={derived.totalValueUSD}
-          avgYieldPct={derived.avgYieldPct}
-          loading={loading}
-          error={error}
-          isEmpty={derived.isEmpty}
-          allExcluded={derived.allExcluded}
-          priceGap={derived.priceGap}
-          freqGuess={derived.freqGuess}
-          fxFallback={derived.fxFallback}
-          onRetry={load}
-        />
-      )}
+    <>
+      <div className="pk-screen">
+        {tab === "dividends" && (
+          <PocketHero
+            annualUSD={derived.annualUSD}
+            totalValueUSD={derived.totalValueUSD}
+            avgYieldPct={derived.avgYieldPct}
+            loading={loading}
+            error={error}
+            isEmpty={derived.isEmpty}
+            allExcluded={derived.allExcluded}
+            priceGap={derived.priceGap}
+            freqGuess={derived.freqGuess}
+            fxFallback={derived.fxFallback}
+            onRetry={load}
+          />
+        )}
 
-      {tab === "upcoming" && (
-        <>
+        {tab === "upcoming" && (
           <UpcomingList
             tickers={derived.included}
             basis={basis}
@@ -172,19 +144,11 @@ export function PocketShell() {
             setFilter={setEventFilter}
             loading={loading}
           />
-          <div className="pk-bottom-clearance" />
-        </>
-      )}
+        )}
 
-      {tab === "history" && (
-        <>
-          <HistoryView basis={basis} fxRate={data?.fx?.usdcad ?? null} />
-          <div className="pk-bottom-clearance" />
-        </>
-      )}
+        {tab === "history" && <HistoryView basis={basis} fxRate={data?.fx?.usdcad ?? null} />}
 
-      {tab === "settings" && (
-        <>
+        {tab === "settings" && (
           <PocketSettings
             onEdit={() => setEditing(true)}
             basis={basis}
@@ -192,9 +156,8 @@ export function PocketShell() {
             themePref={themePref}
             setThemePref={setThemePref}
           />
-          <div className="pk-bottom-clearance" />
-        </>
-      )}
+        )}
+      </div>
 
       <PocketTabBar active={tab} onChange={setTab} />
 
@@ -214,6 +177,6 @@ export function PocketShell() {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
