@@ -81,7 +81,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px 0;
+  /* bottom pad clears the floating tab bar (which is fixed over this content) */
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
@@ -194,13 +195,16 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pk-retry:active { opacity: 0.6; }
 
 /* floating tab bar ------------------------------------------------------ */
-/* Docked in normal flow at the bottom of the 100dvh flex column — NOT
-   position:fixed. Fixed + env() caused a detached jump on toolbar toggle; in-flow
-   inside the dvh container keeps the bar flush at the bottom (no gap) and glued. */
+/* Floating translucent pill, fixed over the content (content fills the full dvh
+   behind it → no dead gap below; the blurred pill just floats over the page).
+   Constant bottom (NOT env) so it tracks the viewport bottom smoothly without the
+   old env-flip jump. .pk-screen reserves bottom padding so rows clear the pill. */
 .pk-tabbar {
-  flex-shrink: 0;
-  align-self: center;
-  margin: 8px auto 16px;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  z-index: 50;
   max-width: calc(100vw - 16px);
   display: flex;
   gap: 2px;
@@ -211,9 +215,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 0 var(--pk-hairline) inset;
 }
-/* In the installed PWA (no toolbar) the safe-area is stable, so honor it. */
+/* In the installed PWA (no toolbar) the bottom safe-area is stable, so honor it. */
 @media (display-mode: standalone) {
-  .pk-tabbar { margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
+  .pk-tabbar { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
 }
 .pk-tab {
   appearance: none;
