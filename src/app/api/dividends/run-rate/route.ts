@@ -51,6 +51,21 @@ function nextFutureDate(dateStr: string | null, frequency: number): string | nul
 }
 
 /**
+ * Pay date for the next cycle: keep the natural (payDate − exDate) offset off the
+ * rolled-forward ex-date so pay never lands before ex (rolling each independently
+ * desyncs them across month boundaries).
+ */
+function nextPayFromEx(rawEx: string | null, rawPay: string | null, nextEx: string | null, frequency: number): string | null {
+  if (rawEx && rawPay && nextEx) {
+    const offsetDays = Math.round((Date.parse(`${rawPay}T12:00:00Z`) - Date.parse(`${rawEx}T12:00:00Z`)) / 86400000);
+    const base = new Date(`${nextEx}T12:00:00Z`);
+    base.setUTCDate(base.getUTCDate() + offsetDays);
+    return base.toISOString().slice(0, 10);
+  }
+  return nextFutureDate(rawPay, frequency);
+}
+
+/**
  * Forward annual dividend per share (native currency): latest amount × frequency.
  * `confident` is false when fewer than 2 dividend records were available — then
  * detectFrequency() falls back to a quarterly guess, so the annual figure could
@@ -167,6 +182,9 @@ export async function GET() {
     const grossAnnualUSD = toUSD(grossAnnualNative);
     const netAnnualUSD = toUSD(grossAnnualNative * factor);
 
+    const nextEx = div ? nextFutureDate(div.exDate, div.frequency) : null;
+    const nextPay = div ? nextPayFromEx(div.exDate, div.payDate, nextEx, div.frequency) : null;
+
     const key = `${accountType}::${ticker}`;
     const existing = byKey.get(key);
     if (existing) {
@@ -192,8 +210,8 @@ export async function GET() {
         hasDividendData: div != null,
         priceUnavailable: price == null,
         currency: nativeCurrency,
-        nextExDate: div ? nextFutureDate(div.exDate, div.frequency) : null,
-        nextPayDate: div ? nextFutureDate(div.payDate, div.frequency) : null,
+        nextExDate: nextEx,
+        nextPayDate: nextPay,
         dateConfirmed: div?.dateUpcoming ?? false,
       });
     }
