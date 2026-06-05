@@ -56,11 +56,18 @@ export function PocketShell() {
       bar.style.transform = `translateX(-50%) translateY(${-offset}px)`;
     };
     update();
+    // Re-measure after the viewport settles (toolbar/safe-area can finalize a
+    // frame or two after load) so the initial position isn't stale.
+    requestAnimationFrame(update);
+    const t = setTimeout(update, 300);
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+    window.addEventListener("orientationchange", update);
     return () => {
+      clearTimeout(t);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      window.removeEventListener("orientationchange", update);
     };
   }, []);
 
