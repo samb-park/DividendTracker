@@ -43,6 +43,27 @@ export function PocketShell() {
     load();
   }, [load]);
 
+  // Pin the floating tab bar to the VISUAL viewport bottom. position:fixed alone
+  // tracks the layout viewport, which iOS Safari resizes when its toolbar shows/
+  // hides (load → first tap) — making the bar jump. visualViewport reflects the
+  // actually-visible area, so the bar stays put across toolbar transitions.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const bar = document.getElementById("pk-tabbar");
+    if (!vv || !bar) return;
+    const update = () => {
+      const offset = Math.max(0, document.documentElement.clientHeight - vv.height - vv.offsetTop);
+      bar.style.transform = `translateX(-50%) translateY(${-offset}px)`;
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 

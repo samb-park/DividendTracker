@@ -16,7 +16,7 @@ const TABS: { id: PocketTab; label: string }[] = [
 
 export function PocketTabBar({ active, onChange }: Props) {
   return (
-    <nav className="pk-tabbar" aria-label="Pocket sections">
+    <nav className="pk-tabbar" id="pk-tabbar" aria-label="Pocket sections">
       {TABS.map((t) => (
         <button
           key={t.id}
