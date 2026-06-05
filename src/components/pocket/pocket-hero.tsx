@@ -26,9 +26,25 @@ interface Props {
   onRetry: () => void;
 }
 
-// Labels are drawn ~1.15× the number font-size so the gray letters read at the
-// same visual height as the digits (SF Pro caps sit slightly below figure height).
-const LABEL_RATIO = 1.15;
+// Cap-height-to-digit-height ratio of the actual rendered font, so the gray
+// letters read at the SAME visual height as the digits. Measured at runtime
+// (fonts vary) instead of a guessed constant.
+function measureLabelRatio(el: HTMLElement): number {
+  try {
+    const cs = getComputedStyle(el);
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return 1;
+    ctx.font = `${cs.fontWeight} 200px ${cs.fontFamily}`;
+    const cap = ctx.measureText("M");
+    const dig = ctx.measureText("0");
+    const capH = cap.actualBoundingBoxAscent + cap.actualBoundingBoxDescent;
+    const digH = dig.actualBoundingBoxAscent + dig.actualBoundingBoxDescent;
+    if (capH > 0 && digH > 0) return Math.min(1.4, Math.max(0.95, digH / capH));
+  } catch {
+    /* fall through */
+  }
+  return 1;
+}
 
 export function PocketHero({
   annualUSD,
@@ -57,8 +73,9 @@ export function PocketHero({
       if (!nums.length) return;
       const MAX = 58;
       const MIN = 26;
+      const ratio = measureLabelRatio(nums[0]);
       nums.forEach((n) => (n.style.fontSize = `${MAX}px`));
-      labels.forEach((l) => (l.style.fontSize = `${Math.round(MAX * LABEL_RATIO)}px`));
+      labels.forEach((l) => (l.style.fontSize = `${Math.round(MAX * ratio)}px`));
       let scale = 1;
       nums.forEach((n) => {
         const avail = n.clientWidth;
@@ -67,7 +84,7 @@ export function PocketHero({
       });
       const final = Math.max(MIN, Math.min(MAX, Math.floor(MAX * scale)));
       nums.forEach((n) => (n.style.fontSize = `${final}px`));
-      labels.forEach((l) => (l.style.fontSize = `${Math.round(final * LABEL_RATIO)}px`));
+      labels.forEach((l) => (l.style.fontSize = `${Math.round(final * ratio)}px`));
     };
     fit();
     const ro = new ResizeObserver(fit);

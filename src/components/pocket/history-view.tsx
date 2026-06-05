@@ -133,7 +133,7 @@ export function HistoryView({ basis, fxRate }: Props) {
 
       {/* Month filter */}
       {monthsWithData.length > 0 && (
-        <div className="pk-chips">
+        <div className="pk-chips pk-scroll">
           <button type="button" className="pk-chip" data-active={month === "all"} onClick={() => setMonth("all")}>
             Year
           </button>

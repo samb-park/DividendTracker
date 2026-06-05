@@ -480,6 +480,19 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   gap: 8px;
   margin-bottom: 14px;
 }
+/* single-line horizontally-scrollable chip row (month selector) */
+.pk-chips.pk-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* let the row scroll edge-to-edge past the screen padding */
+  margin: 0 -26px;
+  padding: 0 26px 2px;
+}
+.pk-chips.pk-scroll::-webkit-scrollbar { display: none; }
+.pk-chips.pk-scroll .pk-chip { flex: 0 0 auto; }
+
 .pk-chip {
   appearance: none;
   border: 1.5px solid var(--pk-hairline);
