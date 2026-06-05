@@ -7,6 +7,7 @@ export interface NasdaqDividendData {
   exDividendDate: string | null; // YYYY-MM-DD (upcoming or most recent)
   paymentDate: string | null;    // YYYY-MM-DD
   amount: number | null;         // per-share dividend amount
+  estimated: boolean;            // true = the chosen ex/pay row is an estimate (not officially declared)
   history: Array<{ date: string; amount: number }>; // ascending, for frequency detection
 }
 
@@ -89,6 +90,7 @@ export async function getNasdaqDividend(ticker: string): Promise<NasdaqDividendD
       exDividendDate: best.exDate,
       paymentDate: best.payDate,
       amount: best.amount,
+      estimated: best.isEstimated,
       history: ascending
         .filter((r) => !r.isEstimated) // only confirmed history for frequency detection
         .map((r) => ({ date: r.exDate, amount: r.amount })),

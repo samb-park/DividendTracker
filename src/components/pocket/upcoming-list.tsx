@@ -93,12 +93,10 @@ export function UpcomingList({ tickers, basis, filter, setFilter, loading }: Pro
                   {e.confirmed ? "" : <span className="est">~</span>}
                   {fmtDate(e.date)}
                 </span>
-                <div className="pk-event-mid">
-                  <span className="pk-event-ticker">{e.ticker}</span>
-                  <span className="pk-event-tag" data-type={e.type}>
-                    {e.type === "ex" ? "EX" : "PAY"}
-                  </span>
-                </div>
+                <span className="pk-event-ticker">{e.ticker}</span>
+                <span className="pk-event-tag" data-type={e.type}>
+                  {e.type === "ex" ? "EX" : "PAY"}
+                </span>
                 <span className="pk-event-days">{daysUntil(e.date)}</span>
                 <span className="pk-event-amt">${money(e.amount)}</span>
               </div>

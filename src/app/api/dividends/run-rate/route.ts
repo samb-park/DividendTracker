@@ -86,7 +86,9 @@ async function getForwardAnnualPerShare(ticker: string, fallbackCurrency: string
           confident: nasdaq.history.length >= 2,
           exDate: nasdaq.exDividendDate,
           payDate: nasdaq.paymentDate,
-          dateUpcoming: nasdaq.exDividendDate != null && nasdaq.exDividendDate >= todayStr,
+          // Confirmed only when the source has a FUTURE, officially-declared (not
+          // estimated) ex-date. Estimated/future or projected dates stay "~".
+          dateUpcoming: nasdaq.exDividendDate != null && nasdaq.exDividendDate >= todayStr && !nasdaq.estimated,
         };
       }
     }
