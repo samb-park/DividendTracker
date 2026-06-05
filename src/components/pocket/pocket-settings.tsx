@@ -28,7 +28,7 @@ export function PocketSettings({ onEdit, basis, setBasis, themePref, setThemePre
 
       <section>
         <div className="pk-section-label">Holdings</div>
-        <button type="button" className="pk-edit" onClick={onEdit}>
+        <button type="button" className="pk-action" onClick={onEdit}>
           Accounts &amp; Tickers
         </button>
       </section>
