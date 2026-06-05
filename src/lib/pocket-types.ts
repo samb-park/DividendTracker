@@ -45,5 +45,5 @@ export interface TickerAgg {
 }
 
 export type Basis = "net" | "gross";
-export type EventDate = "ex" | "pay";
+export type EventFilter = "all" | "ex" | "pay";
 export type ThemePref = "system" | "light" | "dark";

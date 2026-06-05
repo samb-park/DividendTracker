@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RunRateResponse, TickerAgg, EventDate } from "@/lib/pocket-types";
-import { useExcluded, useExcludedAccounts, useBasis, usePocketTheme } from "./use-pocket-prefs";
+import type { RunRateResponse, TickerAgg } from "@/lib/pocket-types";
+import { useExcluded, useExcludedAccounts, useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
@@ -17,7 +17,7 @@ export function PocketShell() {
 
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [editing, setEditing] = useState(false);
-  const [eventDate, setEventDate] = useState<EventDate>("ex");
+  const [eventFilter, setEventFilter] = useEventFilter();
 
   const { excluded, toggle } = useExcluded();
   const { excluded: excludedAccounts, toggle: toggleAccount } = useExcludedAccounts();
@@ -139,8 +139,8 @@ export function PocketShell() {
           <UpcomingList
             tickers={derived.included}
             basis={basis}
-            eventDate={eventDate}
-            setEventDate={setEventDate}
+            filter={eventFilter}
+            setFilter={setEventFilter}
             loading={loading}
           />
           <div className="pk-bottom-clearance" />

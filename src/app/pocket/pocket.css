@@ -280,24 +280,56 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 
 /* upcoming events list -------------------------------------------------- */
+.pk-upcoming-head { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+
 .pk-event-row {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 2px;
+  gap: 10px;
+  padding: 13px 2px;
   border-bottom: 1px solid var(--pk-hairline);
 }
 .pk-event-row:last-child { border-bottom: none; }
 .pk-event-date {
   flex: 0 0 auto;
-  width: 62px;
+  width: 58px;
   font-size: 15px;
   font-weight: 700;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
 }
 .pk-event-date .est { color: var(--pk-muted); font-weight: 600; }
+.pk-event-mid { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.pk-event-ticker { font-size: 17px; font-weight: 700; color: var(--pk-ink); letter-spacing: -0.2px; }
+.pk-event-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--pk-tabbar-active);
+  color: var(--pk-muted);
+}
+.pk-event-tag[data-type="pay"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
+.pk-event-days {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pk-event-amt {
+  flex: 0 0 auto;
+  min-width: 72px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+}
 
 /* bottom sheet overlay (Edit) ------------------------------------------- */
 .pk-sheet-scrim {
