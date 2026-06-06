@@ -123,6 +123,45 @@ export function usePocketGroups() {
     [groups, refresh]
   );
 
+  const reorderGroups = useCallback(
+    async (orderedIds: string[]): Promise<{ error: string | null }> => {
+      const prevGroups = groups;
+      // Optimistic: reindex the in-memory list immediately so the UI (and the
+      // swipe pager, which derives its order from `groups`) reorders with no wait.
+      const byId = new Map(groups.map((g) => [g.id, g]));
+      const next = orderedIds
+        .map((id, i) => {
+          const g = byId.get(id);
+          return g ? { ...g, sortOrder: i } : null;
+        })
+        .filter((g): g is PocketGroup => g !== null);
+      // Only commit a COMPLETE reorder (every current group mapped exactly once),
+      // matching the server's all-or-nothing validation.
+      if (next.length !== groups.length) return { error: "Stale group set" };
+      setGroups(next);
+      try {
+        const res = await fetch("/api/pocket-groups/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: orderedIds }),
+        });
+        if (!res.ok) {
+          const error = await errorOf(res);
+          setGroups(prevGroups);
+          refresh();
+          return { error };
+        }
+        setGroups((await res.json()) as PocketGroup[]); // reconcile to canonical rows
+        return { error: null };
+      } catch {
+        setGroups(prevGroups);
+        refresh();
+        return { error: "Network error" };
+      }
+    },
+    [groups, refresh]
+  );
+
   const deleteGroup = useCallback(
     async (id: string): Promise<{ error: string | null }> => {
       const prevGroups = groups;
@@ -145,5 +184,5 @@ export function usePocketGroups() {
     [groups, refresh]
   );
 
-  return { groups, loaded, activeId, setActiveId, refresh, createGroup, updateGroup, deleteGroup };
+  return { groups, loaded, activeId, setActiveId, refresh, createGroup, updateGroup, deleteGroup, reorderGroups };
 }

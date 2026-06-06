@@ -721,6 +721,32 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pk-pfrow-check { color: var(--pk-ink); font-size: 15px; flex: 0 0 auto; }
 .pk-pfrow-chevron { color: var(--pk-faint); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
 
+/* drag-to-reorder (Settings portfolio list) ----------------------------- */
+/* Keep the page scrollable on the rows before a drag starts. dnd-kit's
+   TouchSensor suppresses scroll DURING an active drag via its own non-passive
+   touchmove listener — so we must NOT set touch-action:none here (that would
+   kill the pre-activation page scroll). The displaced rows slide via the
+   `transition` dnd-kit puts on each useSortable item (FLIP). */
+.pk-sortable-row { touch-action: auto; }
+
+/* The picked-up copy lives in the DragOverlay — an iOS-home-screen "lift":
+   solid card + shadow + a quick scale pop on grab. dnd-kit translates the
+   overlay WRAPPER to follow the finger 1:1; this scale is on the inner node, so
+   the two compose without lag. */
+.pk-lifted {
+  border-radius: 12px;
+  background: var(--pk-bg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  transform: scale(1.03);
+  animation: pk-pickup 160ms cubic-bezier(0.32, 0.72, 0, 1);
+  cursor: grabbing;
+}
+.pocket-root[data-pocket-mode="dark"] .pk-lifted { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6); }
+@keyframes pk-pickup {
+  from { transform: scale(1); }
+  to { transform: scale(1.03); }
+}
+
 /* group manager (Settings → Manage portfolios) ------------------------- */
 .pk-textbtn:disabled { opacity: 0.4; cursor: default; }
 .pk-input {

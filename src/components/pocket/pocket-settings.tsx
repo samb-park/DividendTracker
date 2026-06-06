@@ -1,12 +1,13 @@
 "use client";
 
 import type { Basis, PocketGroup, ThemePref } from "@/lib/pocket-types";
-import { PortfolioRow } from "./portfolio-row";
+import { DraggablePortfolioList } from "./draggable-portfolio-list";
 
 interface Props {
   groups: PocketGroup[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
+  onReorder: (orderedIds: string[]) => void;
   onEdit: () => void;
   basis: Basis;
   setBasis: (b: Basis) => void;
@@ -29,6 +30,7 @@ export function PocketSettings({
   groups,
   activeId,
   onSelect,
+  onReorder,
   onEdit,
   basis,
   setBasis,
@@ -41,27 +43,16 @@ export function PocketSettings({
 
       <section>
         <div className="pk-section-label">Portfolio</div>
-        {/* Selection lives here (not on Dividends) — Dividends stays clean. */}
-        <div className="pk-pf-list" role="listbox" aria-label="Select portfolio">
-          <PortfolioRow
-            color={null}
-            name="All"
-            selected={activeId === null}
-            asOption
-            onClick={() => onSelect(null)}
-          />
-          {groups.map((g) => (
-            <PortfolioRow
-              key={g.id}
-              color={g.color}
-              name={g.name}
-              count={g.tickers.length}
-              selected={activeId === g.id}
-              asOption
-              onClick={() => onSelect(g.id)}
-            />
-          ))}
-        </div>
+        {/* Selection + ordering live here (not on Dividends). Tap selects; a
+            long-press lifts a portfolio to drag-reorder it (also reorders the
+            swipe pager, which derives its order from this list). */}
+        <DraggablePortfolioList
+          groups={groups}
+          activeId={activeId}
+          onSelect={onSelect}
+          onReorder={onReorder}
+        />
+        {groups.length > 1 && <p className="pk-note">Hold a portfolio to drag and reorder.</p>}
 
         <button type="button" className="pk-action pk-navrow" onClick={onEdit}>
           Manage portfolios

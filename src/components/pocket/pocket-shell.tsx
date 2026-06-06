@@ -274,6 +274,7 @@ export function PocketShell() {
             groups={groups}
             activeId={activeId}
             onSelect={setActiveId}
+            onReorder={groupsApi.reorderGroups}
             onEdit={() => setManaging(true)}
             basis={basis}
             setBasis={setBasis}
