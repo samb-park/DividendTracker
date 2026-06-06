@@ -208,6 +208,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
           items={periodSeq}
           activeIndex={periodIdx}
           pageClassName="pk-paged-page"
+          dragSwipe
           onProgress={(f) => periodRef.current?.style.setProperty("--period-progress", String(f))}
           onSettle={(i) => {
             const p = periodSeq[i];

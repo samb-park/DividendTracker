@@ -128,6 +128,20 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   scrollbar-width: none;
 }
 .pk-track::-webkit-scrollbar { display: none; }
+/* JS drag-swipe variant (History — tall vertical-scroll pages where native
+   horizontal scroll loses to the inner vertical scroll on iOS). Native horizontal
+   scroll is OFF; pages are pan-y so vertical scroll stays native while SwipePager
+   drives scrollLeft from a horizontal-dominant drag. */
+.pk-track-drag {
+  overflow-x: hidden;
+  scroll-snap-type: none;
+}
+.pk-track-drag > * {
+  /* !important: beats the later .pk-paged-page{touch-action:auto} (same specificity).
+     pan-y = vertical scroll stays native, horizontal is left entirely to the JS drag. */
+  touch-action: pan-y !important;
+  scroll-snap-align: none;
+}
 
 /* Each page = one full-width column that reproduces the proven .pk-screen shape:
    definite height (height:100% of the inset:0 track), overflow-y:auto, and the

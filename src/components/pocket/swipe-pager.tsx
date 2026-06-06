@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   type ReactNode,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
 
 export interface SwipePagerHandle {
@@ -24,29 +25,43 @@ interface Props {
   /** Live fractional position (scrollLeft / clientWidth) on every scroll frame —
    *  e.g. to slide a segment pill 1:1 with the swipe. Also fired on align/jump. */
   onProgress?: (fraction: number) => void;
+  /**
+   * Drive the horizontal swipe with JS instead of native scroll. Use for pages
+   * with TALL vertical-scroll content (History): native horizontal scroll-snap
+   * loses to the inner vertical scroll on iOS, so the swipe "doesn't work". Here
+   * the page is touch-action:pan-y (vertical stays native) and a horizontal-
+   * dominant drag drives scrollLeft 1:1 (the pill/strip still track), snapping on
+   * release. Leave off for short pages (Dividends hero, Upcoming) where native works.
+   */
+  dragSwipe?: boolean;
   renderPage: (item: string, i: number) => ReactNode;
   pageClassName: string; // "pk-paged-page" (Upcoming + History sub-region pagers)
   trackClassName?: string; // default "pk-track" (reused verbatim)
 }
 
-/**
- * Reusable native scroll-snap pager for the TOP-ALIGNED list contexts (Upcoming
- * filters, History periods). NOT used by Dividends — the hero-centering pager
- * stays inline in pocket-shell so this component can never collapse its spacers.
- *
- * Per-instance state (trackRef/settleTimer/didInit): when the parent renders two
- * SwipePagers in distinct tab branches, crossing the boundary remounts the
- * component, so the once-per-mount initial align re-fires for each context with
- * its own activeIndex. Clamp math always uses THIS instance's items.length.
- */
+/** rAF ease-out animation of scrollLeft (used to snap the JS drag pager on release). */
+function animateScrollLeft(el: HTMLElement, to: number, dur = 240) {
+  const from = el.scrollLeft;
+  const dist = to - from;
+  const t0 = performance.now();
+  const ease = (p: number) => 1 - Math.pow(1 - p, 3);
+  const step = (now: number) => {
+    const p = Math.min(1, (now - t0) / dur);
+    el.scrollLeft = from + dist * ease(p);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePager(
-  { items, activeIndex, ready = true, onSettle, onProgress, renderPage, pageClassName, trackClassName = "pk-track" },
+  { items, activeIndex, ready = true, onSettle, onProgress, dragSwipe = false, renderPage, pageClassName, trackClassName = "pk-track" },
   ref
 ) {
   const trackRef = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<number | null>(null);
   const didInit = useRef(false);
   const prevLen = useRef(items.length);
+  const drag = useRef<{ x: number; y: number; sl: number; t: number; axis: "h" | "v" | null } | null>(null);
 
   const clearTimer = () => {
     if (settleTimer.current) {
@@ -55,7 +70,8 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
     }
   };
 
-  // Page → state: settle-debounced; round by the real content width.
+  // Page → state: settle-debounced; round by the real content width. Fires on BOTH
+  // native scrolling and the JS drag's programmatic scrollLeft writes.
   const onScroll = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
@@ -105,8 +121,64 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
 
   useEffect(() => clearTimer, []);
 
+  // JS drag handlers (only wired when dragSwipe). Horizontal-dominant drag drives
+  // scrollLeft 1:1; a vertical gesture is left to the page's native pan-y scroll.
+  const onTouchStart = useCallback((e: ReactTouchEvent) => {
+    const el = trackRef.current;
+    if (!el) return;
+    clearTimer();
+    const t = e.touches[0];
+    drag.current = { x: t.clientX, y: t.clientY, sl: el.scrollLeft, t: performance.now(), axis: null };
+  }, []);
+
+  const onTouchMove = useCallback(
+    (e: ReactTouchEvent) => {
+      const el = trackRef.current;
+      const d = drag.current;
+      if (!el || !d) return;
+      const t = e.touches[0];
+      const dx = d.x - t.clientX;
+      const dy = t.clientY - d.y;
+      if (d.axis === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        d.axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      }
+      if (d.axis === "h") {
+        const max = Math.max(0, (items.length - 1) * el.clientWidth);
+        el.scrollLeft = Math.max(0, Math.min(max, d.sl + dx)); // 1:1 → onScroll → strip tracks
+      }
+    },
+    [items.length]
+  );
+
+  const onTouchEnd = useCallback(
+    (e: ReactTouchEvent) => {
+      const el = trackRef.current;
+      const d = drag.current;
+      drag.current = null;
+      if (!el || !d || d.axis !== "h") return;
+      const w = el.clientWidth || 1;
+      const startPage = Math.round(d.sl / w);
+      const t = e.changedTouches[0];
+      const dx = d.x - t.clientX;
+      const elapsed = performance.now() - d.t;
+      let target = Math.round(el.scrollLeft / w);
+      if (elapsed < 250 && Math.abs(dx) > 30) target = startPage + Math.sign(dx); // quick flick
+      target = Math.max(0, Math.min(items.length - 1, target));
+      animateScrollLeft(el, target * w);
+    },
+    [items.length]
+  );
+
+  const cls = trackClassName + (dragSwipe ? " pk-track-drag" : "");
   return (
-    <div className={trackClassName} ref={trackRef} onScroll={onScroll}>
+    <div
+      className={cls}
+      ref={trackRef}
+      onScroll={onScroll}
+      onTouchStart={dragSwipe ? onTouchStart : undefined}
+      onTouchMove={dragSwipe ? onTouchMove : undefined}
+      onTouchEnd={dragSwipe ? onTouchEnd : undefined}
+    >
       {items.map((it, i) => (
         <div className={pageClassName} key={it}>
           {renderPage(it, i)}
