@@ -81,7 +81,7 @@ function TxnPeriodRows({
           <span className="pk-event-tag" data-type={BADGE[t.action].type}>
             {BADGE[t.action].label}
           </span>
-          <span className="pk-event-days">{t.action === "DIVIDEND" ? "" : `× ${qtyFmt(t.quantity)}`}</span>
+          <span className="pk-event-days">{t.action === "DIVIDEND" ? "" : `${qtyFmt(t.quantity)} sh`}</span>
           <span className="pk-event-amt">${money(toUSD(t.total, t.currency))}</span>
         </div>
       ))}

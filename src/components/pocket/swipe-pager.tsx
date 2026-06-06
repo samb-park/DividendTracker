@@ -31,7 +31,8 @@ interface Props {
    * loses to the inner vertical scroll on iOS, so the swipe "doesn't work". Here
    * the page is touch-action:pan-y (vertical stays native) and a horizontal-
    * dominant drag drives scrollLeft 1:1 (the pill/strip still track), snapping on
-   * release. Leave off for short pages (Dividends hero, Upcoming) where native works.
+   * release. Used by History, Transactions, and Upcoming (any list that can grow
+   * tall). Left off only for the Dividends hero (short, fixed-height — native works).
    */
   dragSwipe?: boolean;
   renderPage: (item: string, i: number) => ReactNode;
@@ -127,6 +128,7 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
     const el = trackRef.current;
     if (!el) return;
     clearTimer();
+    el.style.transition = ""; // cancel any in-flight rubber-band spring; grab is immediate
     const t = e.touches[0];
     drag.current = { x: t.clientX, y: t.clientY, sl: el.scrollLeft, t: performance.now(), axis: null };
   }, []);
@@ -144,7 +146,13 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
       }
       if (d.axis === "h") {
         const max = Math.max(0, (items.length - 1) * el.clientWidth);
-        el.scrollLeft = Math.max(0, Math.min(max, d.sl + dx)); // 1:1 → onScroll → strip tracks
+        const raw = d.sl + dx;
+        const clamped = Math.max(0, Math.min(max, raw));
+        el.scrollLeft = clamped; // 1:1 → onScroll → strip tracks (stays in-range)
+        // Past an edge scrollLeft can't follow the finger, so the track itself
+        // gives with resistance (0.3×) — iOS-style rubber-band; springs back on release.
+        const overshoot = raw - clamped;
+        el.style.transform = overshoot ? `translateX(${-overshoot * 0.3}px)` : "";
       }
     },
     [items.length]
@@ -156,6 +164,15 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
       const d = drag.current;
       drag.current = null;
       if (!el || !d || d.axis !== "h") return;
+      // Spring any edge rubber-band back to rest (transform is separate from the
+      // scrollLeft snap below, so they animate together).
+      if (el.style.transform) {
+        el.style.transition = "transform 0.34s cubic-bezier(0.32, 0.72, 0, 1)";
+        el.style.transform = "";
+        window.setTimeout(() => {
+          if (trackRef.current) trackRef.current.style.transition = "";
+        }, 360);
+      }
       const w = el.clientWidth || 1;
       const startPage = Math.round(d.sl / w);
       const t = e.changedTouches[0];

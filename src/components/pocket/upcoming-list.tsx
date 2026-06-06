@@ -72,6 +72,7 @@ export function UpcomingEvents({
   if (events.length === 0) return <p className="pk-note">No upcoming dividends for the selected holdings.</p>;
   return (
     <>
+      {events.some((e) => !e.confirmed) && <p className="pk-note">~ estimated date</p>}
       <div className="pk-picker">
         {events.map((e) => (
           <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
@@ -88,9 +89,6 @@ export function UpcomingEvents({
           </div>
         ))}
       </div>
-      {events.some((e) => !e.confirmed) && (
-        <p className="pk-note">~ = estimated date (no confirmed declaration yet)</p>
-      )}
     </>
   );
 }

@@ -161,6 +161,7 @@ function UpcomingPager({
           activeIndex={idx}
           ready={hydrated}
           pageClassName="pk-paged-page"
+          dragSwipe
           onProgress={(f) => segRef.current?.style.setProperty("--seg-progress", String(f))}
           onSettle={(i) => {
             const f = UPCOMING_FILTERS[i];
@@ -203,6 +204,7 @@ function DividendsPager({
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLSpanElement>(null);
   const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
   const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
@@ -214,7 +216,7 @@ function DividendsPager({
       <div className="pk-dividends-top">
         <div className="pk-dividends-head">
           <h1 className="pk-title">Dividends</h1>
-          <span className="pk-hero-pf">{activeName}</span>
+          <span className="pk-hero-pf" ref={nameRef}>{activeName}</span>
         </div>
         {items.length > 1 && (
           <div className="pk-dots" ref={dotsRef} aria-label="Portfolios">
@@ -240,14 +242,18 @@ function DividendsPager({
           ready={ready}
           pageClassName="pk-paged-page"
           onProgress={(f) => {
-            // Live: light up the dot for the page you're swiping toward (round at the
-            // midpoint), in sync with the content — not waiting for the 120ms settle.
-            const el = dotsRef.current;
-            if (!el) return;
+            // Live, in sync with the swiping content (round at the midpoint, not the
+            // 120ms settle): light up the toward-dot AND swap the header name so the
+            // fixed title's portfolio label changes with the page, not after it.
             const active = Math.max(0, Math.min(items.length - 1, Math.round(f)));
-            for (let i = 0; i < el.children.length; i++) {
-              (el.children[i] as HTMLElement).dataset.active = i === active ? "true" : "false";
+            const el = dotsRef.current;
+            if (el) {
+              for (let i = 0; i < el.children.length; i++) {
+                (el.children[i] as HTMLElement).dataset.active = i === active ? "true" : "false";
+              }
             }
+            const nm = nameRef.current;
+            if (nm) nm.textContent = derivedByPortfolio[active]?.portfolioName ?? "All";
           }}
           onSettle={(i) => {
             const id = portfolioOrder[i];

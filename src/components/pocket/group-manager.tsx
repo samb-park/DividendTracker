@@ -53,8 +53,17 @@ export function GroupManager({
   const [draftTickers, setDraftTickers] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
 
   const editing = editingId !== null;
+
+  // Play the slide-down/fade-out before actually unmounting (parent drops us on
+  // onClose). 220ms matches the pk-slide-down / pk-fade-out keyframe duration.
+  const requestClose = () => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 220);
+  };
 
   const startNew = () => {
     setEditingId(NEW);
@@ -138,15 +147,25 @@ export function GroupManager({
 
   return (
     <>
-      <div className="pk-sheet-scrim" onClick={editing ? backToList : onClose} />
-      <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="Manage portfolios">
+      <div
+        className="pk-sheet-scrim"
+        data-closing={closing || undefined}
+        onClick={editing ? backToList : requestClose}
+      />
+      <div
+        className="pk-sheet"
+        data-closing={closing || undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Manage portfolios"
+      >
         <div className="pk-sheet-grip" />
 
         {!editing ? (
           <>
             <div className="pk-sheet-head">
               <span className="pk-sheet-title">Portfolios</span>
-              <button type="button" className="pk-textbtn" onClick={onClose}>
+              <button type="button" className="pk-textbtn" onClick={requestClose}>
                 Done
               </button>
             </div>

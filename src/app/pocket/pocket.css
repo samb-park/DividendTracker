@@ -259,7 +259,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-family: inherit;
   font-size: 15px;
   font-weight: 700;
-  padding: 10px 18px;
+  padding: 12px 16px; /* unified button metrics (matches .pk-action / .pk-danger) */
   border-radius: 12px;
   cursor: pointer;
   transition: opacity 0.12s ease;
@@ -488,8 +488,18 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   transition: opacity 0.12s ease;
 }
 .pk-textbtn:active { opacity: 0.6; }
+/* Dismiss: slide the sheet back down + fade the scrim, then the parent unmounts
+   (220ms = the requestClose timeout in GroupManager). forwards holds the end frame. */
+.pk-sheet[data-closing] {
+  animation: pk-slide-down 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.pk-sheet-scrim[data-closing] {
+  animation: pk-fade-out 0.2s ease-out forwards;
+}
 @keyframes pk-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pk-slide-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
 @keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pk-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* settings tab ---------------------------------------------------------- */
 .pk-settings { display: flex; flex-direction: column; gap: 24px; }
@@ -938,7 +948,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-family: inherit;
   font-size: 15px;
   font-weight: 700;
-  padding: 13px;
+  padding: 12px 16px; /* unified button metrics — differs from .pk-retry only by color */
   border-radius: 12px;
   cursor: pointer;
   margin-top: 4px;
