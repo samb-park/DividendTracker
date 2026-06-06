@@ -27,9 +27,9 @@ export function PocketSettings({ onEdit, basis, setBasis, themePref, setThemePre
       <h1 className="pk-title">Settings</h1>
 
       <section>
-        <div className="pk-section-label">Holdings</div>
+        <div className="pk-section-label">Portfolios</div>
         <button type="button" className="pk-action" onClick={onEdit}>
-          Accounts &amp; Tickers
+          포트폴리오 · 계좌 관리
         </button>
       </section>
 

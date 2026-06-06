@@ -7,28 +7,30 @@ const money = (n: number) =>
 
 interface Props {
   tickers: TickerAgg[];
-  excluded: Set<string>;
+  selected: Set<string>; // tickers included in the group being edited
   basis: Basis;
   onToggle: (ticker: string) => void;
 }
 
-export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
+export function TickerPicker({ tickers, selected, basis, onToggle }: Props) {
   if (tickers.length === 0) {
-    return <p className="pk-note">No holdings in the selected accounts.</p>;
+    return <p className="pk-note">No holdings to choose from.</p>;
   }
 
   return (
     <div className="pk-picker">
       {tickers.map((t) => {
-        const off = excluded.has(t.ticker);
+        const on = selected.has(t.ticker);
         const annual = basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD;
-        const sub = t.priceUnavailable
+        // Ticker-only rows (company name dropped). Keep ONLY a short caveat so the
+        // app still surfaces data gaps honestly without re-introducing the name.
+        const warn = t.priceUnavailable
           ? "No live price"
           : !t.hasDividendData
-            ? `${t.name} · No dividend data`
+            ? "No dividend data"
             : t.lowConfidence
-              ? `${t.name} · Est. frequency`
-              : t.name;
+              ? "Est. frequency"
+              : null;
         return (
           <div
             className="pk-picker-row"
@@ -36,6 +38,7 @@ export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
             onClick={() => onToggle(t.ticker)}
             role="button"
             tabIndex={0}
+            aria-pressed={on}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -44,14 +47,14 @@ export function TickerPicker({ tickers, excluded, basis, onToggle }: Props) {
             }}
           >
             <div className="pk-picker-main">
-              <span className={`pk-picker-ticker${off ? " off" : ""}`}>{t.ticker}</span>
-              <span className="pk-picker-sub">{sub}</span>
+              <span className={`pk-picker-ticker${on ? "" : " off"}`}>{t.ticker}</span>
+              {warn && <span className="pk-picker-sub">{warn}</span>}
             </div>
-            <span className={`pk-picker-amt${off ? " off" : ""}`}>
+            <span className={`pk-picker-amt${on ? "" : " off"}`}>
               {t.priceUnavailable && !t.hasDividendData ? "—" : `$${money(annual)}/yr`}
             </span>
-            <span className="pk-check" data-on={!off} aria-hidden>
-              {off ? "" : "✓"}
+            <span className="pk-check" data-on={on} aria-hidden>
+              {on ? "✓" : ""}
             </span>
           </div>
         );

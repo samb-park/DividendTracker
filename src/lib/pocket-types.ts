@@ -62,3 +62,28 @@ export interface TransactionRow {
   currency: string;
 }
 export type ThemePref = "system" | "light" | "dark";
+
+/** A user-defined ticker group ("포트폴리오") persisted server-side. */
+export interface PocketGroup {
+  id: string;
+  name: string;
+  color: string | null; // hex accent, e.g. "#0a8043"
+  icon: string | null; // optional emoji label
+  tickers: string[]; // held ticker symbols included in this group
+  sortOrder: number;
+}
+
+/** Preset accent colors for pocket groups (first = default for a new group). */
+export const POCKET_GROUP_COLORS = [
+  "#0a8043", // brand green
+  "#2563eb", // blue
+  "#7c3aed", // purple
+  "#db2777", // pink
+  "#dc2626", // red
+  "#f59e0b", // amber
+  "#0891b2", // cyan
+  "#64748b", // slate
+] as const;
+
+/** Optional emoji icons for pocket groups. */
+export const POCKET_GROUP_ICONS = ["📈", "💰", "🏦", "🚀", "🛡️", "🎯", "⭐", "🌱"] as const;

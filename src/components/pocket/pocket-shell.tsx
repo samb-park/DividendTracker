@@ -1,15 +1,58 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RunRateResponse, TickerAgg } from "@/lib/pocket-types";
-import { useExcluded, useExcludedAccounts, useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
+import type { RunRateResponse, TickerAgg, PositionRunRate } from "@/lib/pocket-types";
+import { useExcludedAccounts, useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
+import { usePocketGroups } from "./use-pocket-groups";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
-import { TickerPicker } from "./ticker-picker";
-import { AccountChips } from "./account-chips";
+import { PortfolioSelect } from "./portfolio-select";
+import { GroupManager } from "./group-manager";
 import { UpcomingList } from "./upcoming-list";
 import { HistoryTab } from "./history-tab";
+
+/** Roll (account × ticker) positions up to per-ticker USD aggregates. */
+function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
+  const map = new Map<string, TickerAgg>();
+  for (const p of list) {
+    const lowConf = p.hasDividendData && !p.frequencyConfident;
+    const freq = p.frequency || 0;
+    const ppNet = freq > 0 ? p.netAnnualUSD / freq : 0;
+    const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
+    const e = map.get(p.ticker);
+    if (e) {
+      e.grossAnnualUSD += p.grossAnnualUSD;
+      e.netAnnualUSD += p.netAnnualUSD;
+      if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
+      e.hasDividendData = e.hasDividendData || p.hasDividendData;
+      e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
+      e.lowConfidence = e.lowConfidence || lowConf;
+      e.perPaymentNetUSD += ppNet;
+      e.perPaymentGrossUSD += ppGross;
+      if (!e.nextExDate && p.nextExDate) e.nextExDate = p.nextExDate;
+      if (!e.nextPayDate && p.nextPayDate) e.nextPayDate = p.nextPayDate;
+      e.dateConfirmed = e.dateConfirmed || p.dateConfirmed;
+    } else {
+      map.set(p.ticker, {
+        ticker: p.ticker,
+        name: p.name,
+        grossAnnualUSD: p.grossAnnualUSD,
+        netAnnualUSD: p.netAnnualUSD,
+        marketValueUSD: p.marketValueUSD,
+        hasDividendData: p.hasDividendData,
+        priceUnavailable: p.priceUnavailable,
+        lowConfidence: lowConf,
+        nextExDate: p.nextExDate,
+        nextPayDate: p.nextPayDate,
+        dateConfirmed: p.dateConfirmed,
+        perPaymentNetUSD: ppNet,
+        perPaymentGrossUSD: ppGross,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
+}
 
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
@@ -17,13 +60,14 @@ export function PocketShell() {
   const [error, setError] = useState(false);
 
   const [tab, setTab] = useState<PocketTab>("dividends");
-  const [editing, setEditing] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [eventFilter, setEventFilter] = useEventFilter();
 
-  const { excluded, toggle } = useExcluded();
   const { excluded: excludedAccounts, toggle: toggleAccount } = useExcludedAccounts();
   const [basis, setBasis] = useBasis();
   const [themePref, setThemePref] = usePocketTheme();
+  const groupsApi = usePocketGroups();
+  const { groups, loaded: groupsLoaded, activeId, setActiveId } = groupsApi;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,59 +90,33 @@ export function PocketShell() {
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 
-  // Per-ticker rollup over the currently-selected accounts (for the picker + headline).
-  const tickerAggs = useMemo<TickerAgg[]>(() => {
-    const active = positions.filter((p) => !excludedAccounts.has(p.accountType));
-    const map = new Map<string, TickerAgg>();
-    for (const p of active) {
-      const lowConf = p.hasDividendData && !p.frequencyConfident;
-      const freq = p.frequency || 0;
-      const ppNet = freq > 0 ? p.netAnnualUSD / freq : 0;
-      const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
-      const e = map.get(p.ticker);
-      if (e) {
-        e.grossAnnualUSD += p.grossAnnualUSD;
-        e.netAnnualUSD += p.netAnnualUSD;
-        if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
-        e.hasDividendData = e.hasDividendData || p.hasDividendData;
-        e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
-        e.lowConfidence = e.lowConfidence || lowConf;
-        e.perPaymentNetUSD += ppNet;
-        e.perPaymentGrossUSD += ppGross;
-        if (!e.nextExDate && p.nextExDate) e.nextExDate = p.nextExDate;
-        if (!e.nextPayDate && p.nextPayDate) e.nextPayDate = p.nextPayDate;
-        e.dateConfirmed = e.dateConfirmed || p.dateConfirmed;
-      } else {
-        map.set(p.ticker, {
-          ticker: p.ticker,
-          name: p.name,
-          grossAnnualUSD: p.grossAnnualUSD,
-          netAnnualUSD: p.netAnnualUSD,
-          marketValueUSD: p.marketValueUSD,
-          hasDividendData: p.hasDividendData,
-          priceUnavailable: p.priceUnavailable,
-          lowConfidence: lowConf,
-          nextExDate: p.nextExDate,
-          nextPayDate: p.nextPayDate,
-          dateConfirmed: p.dateConfirmed,
-          perPaymentNetUSD: ppNet,
-          perPaymentGrossUSD: ppGross,
-        });
-      }
+  // Per-ticker rollup over the currently-selected accounts (for headline + Upcoming).
+  const tickerAggs = useMemo<TickerAgg[]>(
+    () => rollupTickers(positions.filter((p) => !excludedAccounts.has(p.accountType))),
+    [positions, excludedAccounts]
+  );
+  // Every held ticker (ignores the account filter) — for group membership editing.
+  const allTickerAggs = useMemo<TickerAgg[]>(() => rollupTickers(positions), [positions]);
+
+  const activeGroup = useMemo(
+    () => groups.find((g) => g.id === activeId) ?? null,
+    [groups, activeId]
+  );
+
+  // A stored selection whose group was deleted (or never existed) falls back to "전체".
+  useEffect(() => {
+    if (groupsLoaded && activeId && !groups.some((g) => g.id === activeId)) {
+      setActiveId(null);
     }
-    return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
-  }, [positions, excludedAccounts]);
+  }, [groupsLoaded, activeId, groups, setActiveId]);
 
   const derived = useMemo(() => {
-    const included = tickerAggs.filter((t) => !excluded.has(t.ticker));
+    // Active group filters tickers to its membership; "전체" keeps the account view.
+    const inView = (t: TickerAgg) => !activeGroup || activeGroup.tickers.includes(t.ticker);
+    const included = tickerAggs.filter(inView);
     const pick = (t: TickerAgg) => (basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD);
 
-    // Headline income counts every included holding — dividend is known from
-    // shares × per-share even when the live price is missing.
     const annualUSD = included.reduce((s, t) => s + pick(t), 0);
-
-    // AVG% (value-weighted yield) over the PRICED subset so numerator/denominator
-    // stay consistent; missing prices are surfaced as a note.
     const priced = included.filter((t) => t.marketValueUSD != null);
     const totalValueUSD = priced.reduce((s, t) => s + (t.marketValueUSD ?? 0), 0);
     const yieldAnnual = priced.reduce((s, t) => s + pick(t), 0);
@@ -115,11 +133,17 @@ export function PocketShell() {
       freqGuess: included.some((t) => t.lowConfidence),
       fxFallback: data?.fx.fallback ?? false,
     };
-  }, [tickerAggs, excluded, basis, positions, data]);
+  }, [tickerAggs, activeGroup, basis, positions, data]);
+
+  const showPortfolioBar = tab === "dividends" || tab === "upcoming";
 
   return (
     <>
       <div className="pk-screen">
+        {showPortfolioBar && (
+          <PortfolioSelect groups={groups} activeId={activeId} onSelect={setActiveId} />
+        )}
+
         {tab === "dividends" && (
           <PocketHero
             annualUSD={derived.annualUSD}
@@ -150,7 +174,7 @@ export function PocketShell() {
 
         {tab === "settings" && (
           <PocketSettings
-            onEdit={() => setEditing(true)}
+            onEdit={() => setManaging(true)}
             basis={basis}
             setBasis={setBasis}
             themePref={themePref}
@@ -161,21 +185,19 @@ export function PocketShell() {
 
       <PocketTabBar active={tab} onChange={setTab} />
 
-      {editing && (
-        <>
-          <div className="pk-sheet-scrim" onClick={() => setEditing(false)} />
-          <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="Select accounts and tickers">
-            <div className="pk-sheet-grip" />
-            <div className="pk-sheet-head">
-              <span className="pk-sheet-title">Accounts · Tickers</span>
-              <button type="button" className="pk-sheet-done" onClick={() => setEditing(false)}>
-                Done
-              </button>
-            </div>
-            <AccountChips accountTypes={accountTypes} excluded={excludedAccounts} onToggle={toggleAccount} />
-            <TickerPicker tickers={tickerAggs} excluded={excluded} basis={basis} onToggle={toggle} />
-          </div>
-        </>
+      {managing && (
+        <GroupManager
+          groups={groups}
+          allTickers={allTickerAggs}
+          basis={basis}
+          accountTypes={accountTypes}
+          excludedAccounts={excludedAccounts}
+          onToggleAccount={toggleAccount}
+          onClose={() => setManaging(false)}
+          onCreate={groupsApi.createGroup}
+          onUpdate={groupsApi.updateGroup}
+          onDelete={groupsApi.deleteGroup}
+        />
       )}
     </>
   );

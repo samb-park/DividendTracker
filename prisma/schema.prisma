@@ -235,6 +235,24 @@ model PortfolioSnapshot {
   @@unique([userId, date])
 }
 
+/// User-defined ticker groups for the /pocket dividend surface ("포트폴리오").
+/// Distinct from `Portfolio` (= a brokerage account): this is a saved, named
+/// subset of the user's HELD tickers used to filter the Dividends/Upcoming view.
+/// userId is a soft reference (no FK) so it survives independent of auth wiring,
+/// matching the single-user-mode id pattern used elsewhere.
+model PocketGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?  // hex accent, e.g. "#0a8043" (null → neutral)
+  icon      String?  // optional emoji label (null → color dot)
+  tickers   String[]
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
 // =============================================================================
 // Observability layer (Phase 1 — Slice 1.1) — additive only.
 //   - No FK to existing tables (audit trails must survive user deletion).
