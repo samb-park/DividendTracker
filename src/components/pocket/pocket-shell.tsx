@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RunRateResponse, TickerAgg, PositionRunRate } from "@/lib/pocket-types";
 import { useExcludedAccounts, useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { usePocketGroups } from "./use-pocket-groups";
+import { usePocketSync } from "./use-pocket-sync";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
@@ -69,23 +70,27 @@ export function PocketShell() {
   const groupsApi = usePocketGroups();
   const { groups, loaded: groupsLoaded, activeId, setActiveId } = groupsApi;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` refresh skips the skeleton flash — used after a background sync.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(false);
     try {
       const res = await fetch("/api/dividends/run-rate", { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       setData((await res.json()) as RunRateResponse);
     } catch {
-      setError(true);
+      if (!opts?.silent) setError(true);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Opportunistic Questrade sync on open; silently refresh once fresh data lands.
+  const { syncing } = usePocketSync(useCallback(() => load({ silent: true }), [load]));
 
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
@@ -140,6 +145,15 @@ export function PocketShell() {
   return (
     <>
       <div className="pk-screen">
+        {syncing && (
+          <div className="pk-syncbar" role="status" aria-live="polite">
+            <span className="pk-sync-spin" aria-hidden>
+              ⟳
+            </span>
+            Questrade 동기화 중…
+          </div>
+        )}
+
         {showPortfolioBar && (
           <PortfolioSelect groups={groups} activeId={activeId} onSelect={setActiveId} />
         )}
@@ -156,7 +170,7 @@ export function PocketShell() {
             priceGap={derived.priceGap}
             freqGuess={derived.freqGuess}
             fxFallback={derived.fxFallback}
-            onRetry={load}
+            onRetry={() => load()}
           />
         )}
 

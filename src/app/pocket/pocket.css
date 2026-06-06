@@ -717,3 +717,27 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   margin-top: 4px;
 }
 .pk-danger:active { opacity: 0.6; }
+
+/* Questrade on-open sync indicator -------------------------------------- */
+.pk-syncbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--pk-muted);
+  padding: 0 0 10px;
+}
+.pk-sync-spin {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+  animation: pk-spin 0.9s linear infinite;
+}
+@keyframes pk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
