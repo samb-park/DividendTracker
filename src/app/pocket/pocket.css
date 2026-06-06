@@ -94,11 +94,70 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
-/* Horizontal swipe lives on the two swipeable tabs only: pan-y keeps native
-   vertical scroll while our JS handles the horizontal flick. History (month
-   chips) and Settings keep default touch-action for their own h-scroll. */
+/* Native horizontal scroll-snap pager (Dividends/Upcoming only) ----------- */
+/* On the pager tabs .pk-screen stops scrolling and becomes the positioning
+   context for an absolutely-positioned track; its own padding moves to .pk-page.
+   History/Settings don't match this selector → they keep the base .pk-screen
+   (vertical scroll + padding) and their month-chip h-scroll is untouched. */
 .pk-screen[data-tab="dividends"],
-.pk-screen[data-tab="upcoming"] { touch-action: pan-y; }
+.pk-screen[data-tab="upcoming"] {
+  position: relative;
+  overflow: hidden;        /* the pages scroll, not this box */
+  padding: 0;              /* padding relocates to .pk-page */
+}
+
+/* The track. Its DEFINITE height comes from inset:0 ALONE (do NOT add height:100%
+   here — that would be a % against the flex item and reintroduce the fragile path).
+   Native overflow-x scroll gives 1:1 finger-tracking + iOS momentum + rubber-band;
+   scroll-snap gives the page-turn snap. */
+.pk-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;   /* suppress iOS edge back-swipe hijack */
+  -webkit-overflow-scrolling: touch;
+  touch-action: auto;               /* let iOS directional-lock choose the axis */
+  scrollbar-width: none;
+}
+.pk-track::-webkit-scrollbar { display: none; }
+
+/* Each page = one full-width column that reproduces the proven .pk-screen shape:
+   definite height (height:100% of the inset:0 track), overflow-y:auto, and the
+   hero spacers as DIRECT children (PocketHero is a fragment — no wrapper). Padding
+   (incl. tab-bar clearance) lives here, verbatim from the old .pk-screen.
+   touch-action:auto — NOT pan-y: pan-y on the page would stop the ancestor track
+   from ever starting a horizontal scroll, silently killing the pager. */
+.pk-page {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  touch-action: auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+
+/* Sync toast floats over the pager (the track is abspos, so an in-flow toast
+   would be covered); pointer-events:none so it never eats a swipe. */
+.pk-syncbar-float {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  margin: 0;
+  pointer-events: none;
+}
 
 /* header ---------------------------------------------------------------- */
 .pk-topbar {
@@ -125,25 +184,6 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   white-space: nowrap;
   text-align: right;
 }
-/* portfolio-change transition — the slide rides the .pk-hero element (Dividends)
-   and the .pk-slide wrapper (Upcoming), each re-keyed on the active portfolio so
-   it replays. Deliberately NOT a flex-fill wrapper between .pk-screen and the
-   hero: that nesting collapsed the spacer-based vertical centering on iOS Safari.
-   The hero spacers therefore stay DIRECT children of .pk-screen (one flex level,
-   the structure that worked before swipe was added). */
-.pk-hero[data-anim="next"],
-.pk-slide[data-anim="next"] { animation: pk-pf-next 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
-.pk-hero[data-anim="prev"],
-.pk-slide[data-anim="prev"] { animation: pk-pf-prev 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
-@keyframes pk-pf-next {
-  from { opacity: 0; transform: translateX(28px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes pk-pf-prev {
-  from { opacity: 0; transform: translateX(-28px); }
-  to { opacity: 1; transform: none; }
-}
-
 .pk-summary {
   display: flex;
   align-items: baseline;
