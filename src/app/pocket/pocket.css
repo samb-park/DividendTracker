@@ -551,6 +551,35 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
+/* animated variant (Upcoming All/Ex/Pay): a single white pill slides 1:1 with the
+   swipe via --seg-progress (0..n-1, set live by SwipePager.onProgress). Buttons go
+   gapless so the pill (one button wide) lands exactly on each via translateX. */
+.pk-seg-anim {
+  position: relative;
+  gap: 0;
+}
+.pk-seg-anim .pk-seg-btn {
+  position: relative;
+  z-index: 1; /* text above the pill */
+}
+.pk-seg-anim .pk-seg-btn[data-active="true"] {
+  background: transparent; /* the moving pill is the background now */
+  box-shadow: none;
+}
+.pk-seg-pill {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  bottom: 2px;
+  width: calc((100% - 4px) / 3); /* 3 segments, minus the 2px L/R padding */
+  border-radius: 7px;
+  background: var(--pk-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transform: translateX(calc(var(--seg-progress, 0) * 100%));
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* settings action row — matches the segmented controls' light, rounded tone */
 .pk-action {
   display: flex;

@@ -131,14 +131,17 @@ function UpcomingPager({
   hydrated: boolean;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
+  const segRef = useRef<HTMLDivElement>(null);
   const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
   return (
     <div className="pk-upcoming">
-      {/* FIXED header: title + All/Ex/Pay segment. The active segment follows the
-          swipe (eventFilter set on settle); tapping a segment drives the pager. */}
+      {/* FIXED header: title + All/Ex/Pay segment. The white pill slides 1:1 with
+          the swipe (onProgress sets --seg-progress on every frame); tapping a
+          segment drives the pager. The pill is the active indicator. */}
       <div className="pk-upcoming-head">
         <h1 className="pk-title">Upcoming</h1>
-        <div className="pk-seg" role="group" aria-label="Event filter">
+        <div className="pk-seg pk-seg-anim" ref={segRef} role="group" aria-label="Event filter">
+          <span className="pk-seg-pill" aria-hidden />
           {UPCOMING_FILTER_OPTS.map((o) => (
             <button
               key={o.value}
@@ -159,6 +162,7 @@ function UpcomingPager({
           activeIndex={idx}
           ready={hydrated}
           pageClassName="pk-paged-page"
+          onProgress={(f) => segRef.current?.style.setProperty("--seg-progress", String(f))}
           onSettle={(i) => {
             const f = UPCOMING_FILTERS[i];
             if (f !== eventFilter) setEventFilter(f);

@@ -21,6 +21,9 @@ interface Props {
   /** Defer the once-per-mount initial align until this is true (e.g. localStorage hydrated). */
   ready?: boolean;
   onSettle: (i: number) => void; // caller guards next !== current
+  /** Live fractional position (scrollLeft / clientWidth) on every scroll frame —
+   *  e.g. to slide a segment pill 1:1 with the swipe. Also fired on align/jump. */
+  onProgress?: (fraction: number) => void;
   renderPage: (item: string, i: number) => ReactNode;
   pageClassName: string; // "pk-paged-page" (Upcoming + History sub-region pagers)
   trackClassName?: string; // default "pk-track" (reused verbatim)
@@ -37,7 +40,7 @@ interface Props {
  * its own activeIndex. Clamp math always uses THIS instance's items.length.
  */
 export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePager(
-  { items, activeIndex, ready = true, onSettle, renderPage, pageClassName, trackClassName = "pk-track" },
+  { items, activeIndex, ready = true, onSettle, onProgress, renderPage, pageClassName, trackClassName = "pk-track" },
   ref
 ) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -56,22 +59,25 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
   const onScroll = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
+    onProgress?.(el.scrollLeft / (el.clientWidth || 1)); // live, every frame
     clearTimer();
     settleTimer.current = window.setTimeout(() => {
       const w = el.clientWidth || 1;
       const i = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / w)));
       onSettle(i);
     }, 120);
-  }, [items.length, onSettle]);
+  }, [items.length, onSettle, onProgress]);
 
   // Initial align — ONCE per mount, only once `ready`. activeIndex is in deps so
   // the effect re-runs when readiness flips, but the didInit guard keeps it single-shot.
   useLayoutEffect(() => {
     const el = trackRef.current;
     if (!el || !ready || didInit.current) return;
-    el.scrollLeft = Math.max(0, activeIndex) * el.clientWidth;
+    const i = Math.max(0, activeIndex);
+    el.scrollLeft = i * el.clientWidth;
+    onProgress?.(i); // set the pill's initial position before paint (no flash)
     didInit.current = true;
-  }, [ready, activeIndex]);
+  }, [ready, activeIndex, onProgress]);
 
   // Re-init on item-count change: clamp the current page into the new range so a
   // shrinking period set never leaves the pager scrolled past the end.
@@ -89,9 +95,11 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
       const el = trackRef.current;
       if (!el) return;
       clearTimer(); // imperative jump wins over any pending swipe-settle
-      el.scrollLeft = Math.max(0, Math.min(items.length - 1, i)) * el.clientWidth;
+      const clamped = Math.max(0, Math.min(items.length - 1, i));
+      el.scrollLeft = clamped * el.clientWidth;
+      onProgress?.(clamped);
     },
-    [items.length]
+    [items.length, onProgress]
   );
   useImperativeHandle(ref, () => ({ scrollToIndex }), [scrollToIndex]);
 
