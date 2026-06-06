@@ -138,8 +138,13 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   letter-spacing: -0.6px;
   line-height: 1.05;
 }
-/* portfolio name row at the top of each Dividends page (slides with content) */
-.pk-hero-pfrow { display: flex; justify-content: flex-end; }
+/* Dividends fixed header: "Dividends" title + active portfolio name (right). */
+.pk-dividends-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
 .pk-hero-pf {
   font-size: 15px;
   font-weight: 600;

@@ -203,9 +203,15 @@ function DividendsPager({
 }) {
   const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
   const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
+  const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
   return (
     <div className="pk-dividends">
-      <h1 className="pk-title">Dividends</h1>
+      {/* FIXED header: "Dividends" + the active portfolio name (right). The name
+          updates when the portfolio settles; only the content below slides. */}
+      <div className="pk-dividends-head">
+        <h1 className="pk-title">Dividends</h1>
+        <span className="pk-hero-pf">{activeName}</span>
+      </div>
       <div className="pk-paged-region">
         <SwipePager
           items={items}
@@ -231,7 +237,6 @@ function DividendsPager({
                 priceGap={d.priceGap}
                 freqGuess={d.freqGuess}
                 fxFallback={d.fxFallback}
-                portfolioName={d.portfolioName}
                 onRetry={onRetry}
               />
             );
