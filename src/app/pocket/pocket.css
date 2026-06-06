@@ -579,7 +579,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
 }
 
-/* portfolio selector (top of Dividends / Upcoming) --------------------- */
+/* portfolio selection list (Settings) + group glyphs ------------------- */
 .pk-dot {
   width: 10px;
   height: 10px;
@@ -591,44 +591,15 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   background: transparent;
   border: 1.5px solid var(--pk-faint);
 }
-.pk-pfsel { position: relative; margin-bottom: 14px; }
-.pk-pfsel-btn {
-  appearance: none;
+.pk-pfsel-mark {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid var(--pk-hairline);
-  background: transparent;
-  color: var(--pk-ink);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  max-width: 100%;
+  justify-content: center;
+  width: 18px;
+  flex: 0 0 auto;
 }
 .pk-pfsel-emoji { font-size: 15px; line-height: 1; flex: 0 0 auto; }
-.pk-pfsel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-pfsel-caret { color: var(--pk-muted); font-size: 12px; flex: 0 0 auto; }
-.pk-pfsel-scrim { position: fixed; inset: 0; z-index: 40; }
-.pk-pfsel-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 41;
-  min-width: 200px;
-  max-width: min(86vw, 320px);
-  max-height: 60dvh;
-  overflow-y: auto;
-  background: var(--pk-bg);
-  border: 1px solid var(--pk-hairline);
-  border-radius: 14px;
-  padding: 6px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
-  animation: pk-fade 0.12s ease-out;
-}
+.pk-pf-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
 .pk-pfsel-item {
   appearance: none;
   display: flex;
@@ -642,12 +613,12 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-size: 15px;
   font-weight: 600;
   text-align: left;
-  padding: 9px 10px;
+  padding: 10px;
   border-radius: 10px;
   cursor: pointer;
 }
 .pk-pfsel-item[data-active="true"] { background: var(--pk-tabbar-active); font-weight: 700; }
-.pk-pfsel-item .pk-pfsel-name { flex: 1 1 auto; }
+.pk-pfsel-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-pfsel-count {
   font-size: 12px;
   font-weight: 600;
@@ -659,6 +630,14 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 
 /* group manager (Settings → 포트폴리오 관리) ----------------------------- */
 .pk-sheet-done:disabled { opacity: 0.4; cursor: default; }
+.pk-gm-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .pk-gm-chevron { color: var(--pk-faint); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
 .pk-input {
   width: 100%;

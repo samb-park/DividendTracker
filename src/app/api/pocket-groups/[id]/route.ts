@@ -3,16 +3,18 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import {
   MAX_GROUP_NAME,
+  MAX_TICKERS_PER_GROUP,
   sanitizeColor,
   sanitizeIcon,
   sanitizeTickers,
   serializeGroup,
 } from "@/lib/pocket-groups";
 
-/** PATCH /api/pocket-groups/:id — update name / tickers / sortOrder. */
+/** PATCH /api/pocket-groups/:id — update name / color / icon / tickers / sortOrder. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = session.user.id;
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -25,13 +27,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     sortOrder?: number;
   } = {};
   if (typeof body?.name === "string") {
-    const n = body.name.trim();
-    if (!n) return NextResponse.json({ error: "Name required" }, { status: 400 });
-    data.name = n.slice(0, MAX_GROUP_NAME);
+    const n = body.name.trim().slice(0, MAX_GROUP_NAME);
+    if (!n) return NextResponse.json({ error: "이름을 입력하세요." }, { status: 400 });
+    // Reject a rename that collides with another group of the same user.
+    const dup = await prisma.pocketGroup.findFirst({ where: { userId, name: n, NOT: { id } } });
+    if (dup) return NextResponse.json({ error: "같은 이름의 포트폴리오가 이미 있어요." }, { status: 409 });
+    data.name = n;
   }
   if (body?.color !== undefined) data.color = sanitizeColor(body.color);
   if (body?.icon !== undefined) data.icon = sanitizeIcon(body.icon);
-  if (body?.tickers !== undefined) data.tickers = sanitizeTickers(body.tickers);
+  if (body?.tickers !== undefined) {
+    if (Array.isArray(body.tickers) && body.tickers.length > MAX_TICKERS_PER_GROUP) {
+      return NextResponse.json({ error: `종목은 최대 ${MAX_TICKERS_PER_GROUP}개까지예요.` }, { status: 400 });
+    }
+    data.tickers = sanitizeTickers(body.tickers);
+  }
   if (typeof body?.sortOrder === "number" && Number.isFinite(body.sortOrder)) {
     data.sortOrder = Math.trunc(body.sortOrder);
   }
@@ -40,10 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    const updated = await prisma.pocketGroup.update({
-      where: { id, userId: session.user.id },
-      data,
-    });
+    const updated = await prisma.pocketGroup.update({ where: { id, userId }, data });
     return NextResponse.json(serializeGroup(updated));
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

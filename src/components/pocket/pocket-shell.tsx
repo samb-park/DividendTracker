@@ -8,7 +8,6 @@ import { usePocketSync } from "./use-pocket-sync";
 import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
-import { PortfolioSelect } from "./portfolio-select";
 import { GroupManager } from "./group-manager";
 import { UpcomingList } from "./upcoming-list";
 import { HistoryTab } from "./history-tab";
@@ -140,8 +139,6 @@ export function PocketShell() {
     };
   }, [tickerAggs, activeGroup, basis, positions, data]);
 
-  const showPortfolioBar = tab === "dividends" || tab === "upcoming";
-
   return (
     <>
       <div className="pk-screen">
@@ -152,10 +149,6 @@ export function PocketShell() {
             </span>
             Questrade 동기화 중…
           </div>
-        )}
-
-        {showPortfolioBar && (
-          <PortfolioSelect groups={groups} activeId={activeId} onSelect={setActiveId} />
         )}
 
         {tab === "dividends" && (
@@ -188,6 +181,9 @@ export function PocketShell() {
 
         {tab === "settings" && (
           <PocketSettings
+            groups={groups}
+            activeId={activeId}
+            onSelect={setActiveId}
             onEdit={() => setManaging(true)}
             basis={basis}
             setBasis={setBasis}
@@ -202,6 +198,7 @@ export function PocketShell() {
       {managing && (
         <GroupManager
           groups={groups}
+          loading={!groupsLoaded}
           allTickers={allTickerAggs}
           basis={basis}
           accountTypes={accountTypes}

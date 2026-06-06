@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   MAX_GROUP_NAME,
   MAX_GROUPS,
+  MAX_TICKERS_PER_GROUP,
   sanitizeColor,
   sanitizeIcon,
   sanitizeTickers,
@@ -24,28 +25,37 @@ export async function GET() {
   return NextResponse.json(groups.map(serializeGroup));
 }
 
-/** POST /api/pocket-groups — create a new group ({ name, tickers? }). */
+/** POST /api/pocket-groups — create a new group ({ name, color?, icon?, tickers? }). */
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = session.user.id;
 
   const body = await req.json().catch(() => ({}));
-  const name = typeof body?.name === "string" ? body.name.trim() : "";
-  if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
+  const name = (typeof body?.name === "string" ? body.name.trim() : "").slice(0, MAX_GROUP_NAME);
+  if (!name) return NextResponse.json({ error: "이름을 입력하세요." }, { status: 400 });
+  if (Array.isArray(body?.tickers) && body.tickers.length > MAX_TICKERS_PER_GROUP) {
+    return NextResponse.json({ error: `종목은 최대 ${MAX_TICKERS_PER_GROUP}개까지예요.` }, { status: 400 });
+  }
 
-  const count = await prisma.pocketGroup.count({ where: { userId: session.user.id } });
-  if (count >= MAX_GROUPS) return NextResponse.json({ error: "Too many groups" }, { status: 400 });
+  const count = await prisma.pocketGroup.count({ where: { userId } });
+  if (count >= MAX_GROUPS) {
+    return NextResponse.json({ error: `포트폴리오는 최대 ${MAX_GROUPS}개까지예요.` }, { status: 400 });
+  }
+
+  const dup = await prisma.pocketGroup.findFirst({ where: { userId, name } });
+  if (dup) return NextResponse.json({ error: "같은 이름의 포트폴리오가 이미 있어요." }, { status: 409 });
 
   const last = await prisma.pocketGroup.findFirst({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { sortOrder: "desc" },
     select: { sortOrder: true },
   });
 
   const created = await prisma.pocketGroup.create({
     data: {
-      userId: session.user.id,
-      name: name.slice(0, MAX_GROUP_NAME),
+      userId,
+      name,
       color: sanitizeColor(body?.color),
       icon: sanitizeIcon(body?.icon),
       tickers: sanitizeTickers(body?.tickers),

@@ -13,6 +13,7 @@ import { TickerPicker } from "./ticker-picker";
 
 interface Props {
   groups: PocketGroup[];
+  loading: boolean; // groups still loading from the server
   allTickers: TickerAgg[]; // every held ticker, for membership editing
   basis: Basis;
   accountTypes: string[];
@@ -24,18 +25,19 @@ interface Props {
     color: string | null;
     icon: string | null;
     tickers: string[];
-  }) => Promise<PocketGroup | null>;
+  }) => Promise<{ group: PocketGroup | null; error: string | null }>;
   onUpdate: (
     id: string,
     patch: { name?: string; color?: string | null; icon?: string | null; tickers?: string[] }
-  ) => void;
-  onDelete: (id: string) => void;
+  ) => Promise<{ error: string | null }>;
+  onDelete: (id: string) => Promise<{ error: string | null }>;
 }
 
 const NEW = "__new__";
 
 export function GroupManager({
   groups,
+  loading,
   allTickers,
   basis,
   accountTypes,
@@ -52,6 +54,7 @@ export function GroupManager({
   const [draftIcon, setDraftIcon] = useState<string | null>(null);
   const [draftTickers, setDraftTickers] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const editing = editingId !== null;
 
@@ -61,6 +64,7 @@ export function GroupManager({
     setDraftColor(POCKET_GROUP_COLORS[0]);
     setDraftIcon(null);
     setDraftTickers(new Set());
+    setErr(null);
   };
   const startEdit = (g: PocketGroup) => {
     setEditingId(g.id);
@@ -68,8 +72,12 @@ export function GroupManager({
     setDraftColor(g.color ?? POCKET_GROUP_COLORS[0]);
     setDraftIcon(g.icon ?? null);
     setDraftTickers(new Set(g.tickers));
+    setErr(null);
   };
-  const backToList = () => setEditingId(null);
+  const backToList = () => {
+    setEditingId(null);
+    setErr(null);
+  };
 
   const toggleTicker = (ticker: string) => {
     setDraftTickers((prev) => {
@@ -84,19 +92,40 @@ export function GroupManager({
     const name = draftName.trim();
     if (!name || saving) return;
     setSaving(true);
+    setErr(null);
     try {
       const payload = { name, color: draftColor, icon: draftIcon, tickers: [...draftTickers] };
-      if (editingId === NEW) await onCreate(payload);
-      else if (editingId) onUpdate(editingId, payload);
+      let res: { error: string | null };
+      if (editingId === NEW) res = await onCreate(payload);
+      else if (editingId) res = await onUpdate(editingId, payload);
+      else return;
+      if (res.error) {
+        setErr(res.error);
+        return; // keep the editor open so the user can fix it
+      }
       backToList();
     } finally {
       setSaving(false);
     }
   };
 
-  const remove = () => {
-    if (editingId && editingId !== NEW) onDelete(editingId);
-    backToList();
+  const remove = async () => {
+    if (!editingId || editingId === NEW || saving) {
+      backToList();
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await onDelete(editingId);
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      backToList();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -126,7 +155,9 @@ export function GroupManager({
             )}
 
             <div className="pk-section-label">Portfolios</div>
-            {groups.length === 0 ? (
+            {loading && groups.length === 0 ? (
+              <p className="pk-note">불러오는 중…</p>
+            ) : groups.length === 0 ? (
               <p className="pk-note">아직 포트폴리오가 없습니다. 아래에서 새로 만들어 보세요.</p>
             ) : (
               <div className="pk-picker">
@@ -154,7 +185,7 @@ export function GroupManager({
                     <div className="pk-picker-main">
                       <span className="pk-picker-ticker">{g.name}</span>
                     </div>
-                    <span className="pk-picker-sub">{g.tickers.length} 종목</span>
+                    <span className="pk-gm-count">{g.tickers.length} 종목</span>
                     <span className="pk-gm-chevron" aria-hidden>
                       ›
                     </span>
@@ -192,6 +223,8 @@ export function GroupManager({
               maxLength={40}
               autoFocus
             />
+
+            {err && <p className="pk-note warn">{err}</p>}
 
             <section>
               <div className="pk-section-label">Color</div>
@@ -246,7 +279,7 @@ export function GroupManager({
             />
 
             {editingId !== NEW && (
-              <button type="button" className="pk-danger" onClick={remove}>
+              <button type="button" className="pk-danger" onClick={remove} disabled={saving}>
                 이 포트폴리오 삭제
               </button>
             )}
