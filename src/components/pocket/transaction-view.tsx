@@ -208,12 +208,12 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
-      <div className="pk-history-pager">
+      <div className="pk-paged-region">
         <SwipePager
           ref={pagerRef}
           items={periodSeq}
           activeIndex={periodIdx}
-          pageClassName="pk-history-page"
+          pageClassName="pk-paged-page"
           onSettle={(i) => {
             const p = periodSeq[i];
             if (p !== month) setMonth(p);

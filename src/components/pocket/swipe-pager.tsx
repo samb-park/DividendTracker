@@ -22,7 +22,7 @@ interface Props {
   ready?: boolean;
   onSettle: (i: number) => void; // caller guards next !== current
   renderPage: (item: string, i: number) => ReactNode;
-  pageClassName: string; // "pk-page" (Upcoming) | "pk-history-page" (History)
+  pageClassName: string; // "pk-paged-page" (Upcoming + History sub-region pagers)
   trackClassName?: string; // default "pk-track" (reused verbatim)
 }
 

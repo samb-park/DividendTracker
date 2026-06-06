@@ -24,7 +24,7 @@ const daysUntil = (iso: string): string => {
   return `${days} days`;
 };
 
-const FILTER_OPTS: { value: EventFilter; label: string }[] = [
+export const UPCOMING_FILTER_OPTS: { value: EventFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "ex", label: "Ex" },
   { value: "pay", label: "Pay" },
@@ -38,15 +38,22 @@ interface EventRow {
   confirmed: boolean;
 }
 
-interface Props {
+/**
+ * The upcoming-events list for ONE filter (a pager page) — no header/segment.
+ * The All/Ex/Pay segment is a FIXED header above the pager (UpcomingPager), so
+ * swiping changes the active filter while the segment stays put.
+ */
+export function UpcomingEvents({
+  tickers,
+  basis,
+  filter,
+  loading,
+}: {
   tickers: TickerAgg[];
   basis: Basis;
   filter: EventFilter;
-  setFilter: (f: EventFilter) => void;
   loading: boolean;
-}
-
-export function UpcomingList({ tickers, basis, filter, setFilter, loading }: Props) {
+}) {
   const events: EventRow[] = [];
   for (const t of tickers) {
     if (!t.hasDividendData) continue;
@@ -61,52 +68,29 @@ export function UpcomingList({ tickers, basis, filter, setFilter, loading }: Pro
   // Date order; on the same day show Ex before Pay.
   events.sort((a, b) => a.date.localeCompare(b.date) || (a.type === "ex" ? -1 : 1));
 
+  if (loading) return <p className="pk-note">Loading…</p>;
+  if (events.length === 0) return <p className="pk-note">No upcoming dividends for the selected holdings.</p>;
   return (
-    <div className="pk-settings">
-      <div className="pk-upcoming-head">
-        <h1 className="pk-title">Upcoming</h1>
-        <div className="pk-seg" role="group" aria-label="Event filter">
-          {FILTER_OPTS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className="pk-seg-btn"
-              data-active={filter === o.value}
-              onClick={() => setFilter(o.value)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <section>
-        {loading ? (
-          <p className="pk-note">Loading…</p>
-        ) : events.length === 0 ? (
-          <p className="pk-note">No upcoming dividends for the selected holdings.</p>
-        ) : (
-          <div className="pk-picker">
-            {events.map((e) => (
-              <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
-                <span className="pk-event-date">
-                  {e.confirmed ? "" : <span className="est">~</span>}
-                  {fmtDate(e.date)}
-                </span>
-                <span className="pk-event-ticker">{e.ticker}</span>
-                <span className="pk-event-tag" data-type={e.type}>
-                  {e.type === "ex" ? "EX" : "PAY"}
-                </span>
-                <span className="pk-event-days">{daysUntil(e.date)}</span>
-                <span className="pk-event-amt">${money(e.amount)}</span>
-              </div>
-            ))}
+    <>
+      <div className="pk-picker">
+        {events.map((e) => (
+          <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
+            <span className="pk-event-date">
+              {e.confirmed ? "" : <span className="est">~</span>}
+              {fmtDate(e.date)}
+            </span>
+            <span className="pk-event-ticker">{e.ticker}</span>
+            <span className="pk-event-tag" data-type={e.type}>
+              {e.type === "ex" ? "EX" : "PAY"}
+            </span>
+            <span className="pk-event-days">{daysUntil(e.date)}</span>
+            <span className="pk-event-amt">${money(e.amount)}</span>
           </div>
-        )}
-        {!loading && events.some((e) => !e.confirmed) && (
-          <p className="pk-note">~ = estimated date (no confirmed declaration yet)</p>
-        )}
-      </section>
-    </div>
+        ))}
+      </div>
+      {events.some((e) => !e.confirmed) && (
+        <p className="pk-note">~ = estimated date (no confirmed declaration yet)</p>
+      )}
+    </>
   );
 }

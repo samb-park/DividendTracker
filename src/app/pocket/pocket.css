@@ -99,18 +99,20 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    context for an absolutely-positioned track; its own padding moves to .pk-page.
    History/Settings don't match this selector → they keep the base .pk-screen
    (vertical scroll + padding) and their month-chip h-scroll is untouched. */
-.pk-screen[data-tab="dividends"],
-.pk-screen[data-tab="upcoming"] {
+/* Dividends = a FULL-SCREEN pager (the abspos track is at .pk-screen inset:0).
+   Upcoming/History are FIXED-HEADER + sub-region pagers (see below), so they are
+   NOT here — their abspos track lives inside .pk-paged-region, not the screen. */
+.pk-screen[data-tab="dividends"] {
   position: relative;
   overflow: hidden;        /* the pages scroll, not this box */
   padding: 0;              /* padding relocates to .pk-page */
 }
 
-/* History is a FIXED-HEADER + horizontally-paging-rows layout (not the base
+/* Upcoming/History are FIXED-HEADER + horizontally-paging layouts (not the base
    scrolling .pk-screen). overflow:hidden so the outer screen never co-scrolls
-   vertically with the pages (TransactionView's header is taller). Settings keeps
-   the base .pk-screen — it does NOT match this selector. */
-.pk-screen[data-tab="history"] {
+   vertically with the pages. Settings keeps the base .pk-screen (no match here). */
+.pk-screen[data-tab="history"],
+.pk-screen[data-tab="upcoming"] {
   overflow: hidden;
   padding: 0;
   min-height: 0;
@@ -578,22 +580,24 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   line-height: 1;
 }
 
-/* history: fixed header + horizontally-paging rows --------------------- */
-/* AIRTIGHT iOS-WebKit HEIGHT CHAIN for the rows sub-region pager — the proven
-   Dividends chain one flex level deeper, with the growing flex item
-   (.pk-history-pager, overflow:hidden) DELIBERATELY NOT the scroll boundary:
-     .pocket-root        height:100dvh; flex column            (root, definite)
-     .pk-screen[history] flex:1 1 0; min-height:0; overflow:hidden
-     .pk-history         flex:1 1 0; min-height:0; flex column (bounded by screen)
-       header rows       flex:0 0 auto                         (intrinsic height)
-       .pk-history-pager flex:1 1 0; min-height:0; position:relative; overflow:hidden
-                         → DEFINITE used height = screen − header
-         .pk-track       position:absolute; inset:0 → height = pager (DEFINITE)
-         .pk-history-page height:100% of inset:0 track (explicit size, set BEFORE the
-                         scroll boundary, NOT flex-grow across it) + overflow-y:auto.
+/* fixed header + horizontally-paging sub-region (History + Upcoming) ---- */
+/* AIRTIGHT iOS-WebKit HEIGHT CHAIN — the proven Dividends chain one flex level
+   deeper, with the growing flex item (.pk-paged-region, overflow:hidden)
+   DELIBERATELY NOT the scroll boundary:
+     .pocket-root            height:100dvh; flex column        (root, definite)
+     .pk-screen[history/up]  flex:1 1 0; min-height:0; overflow:hidden
+     .pk-history/.pk-upcoming flex:1 1 0; min-height:0; flex column
+       header rows           flex:0 0 auto                     (intrinsic height)
+       .pk-paged-region      flex:1 1 0; min-height:0; position:relative; overflow:hidden
+                             → DEFINITE used height = screen − header
+         .pk-track           position:absolute; inset:0 → height = region (DEFINITE)
+         .pk-paged-page      height:100% of inset:0 track (explicit size, set BEFORE the
+                             scroll boundary, NOT flex-grow across it) + overflow-y:auto.
    The flex-grow-through-scroll spacer-collapse cannot recur: the box that grows
    is overflow:hidden and is not itself the scroll boundary. */
-.pk-history {
+/* Shared host for the fixed-header + sub-region pager layout (History + Upcoming). */
+.pk-history,
+.pk-upcoming {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -603,14 +607,15 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
-.pk-history-pager {
+/* The swipeable sub-region below the fixed header (generic — History/Upcoming). */
+.pk-paged-region {
   position: relative;
   overflow: hidden;        /* pages scroll, not this box */
   min-height: 0;
   flex: 1 1 0;
   margin: 0 -24px;         /* pages span edge-to-edge; page padding restores the gutter */
 }
-.pk-history-page {
+.pk-paged-page {
   flex: 0 0 100%;
   width: 100%;
   min-width: 0;

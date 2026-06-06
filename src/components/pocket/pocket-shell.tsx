@@ -17,7 +17,7 @@ import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
-import { UpcomingList } from "./upcoming-list";
+import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
 import { HistoryTab } from "./history-tab";
 import { PwaRegister } from "@/components/pwa-register";
 
@@ -105,14 +105,15 @@ function computeDerived(
   };
 }
 
-const UPCOMING_FILTERS: EventFilter[] = ["all", "ex", "pay"];
+const UPCOMING_FILTERS: EventFilter[] = UPCOMING_FILTER_OPTS.map((o) => o.value);
 
 /**
  * Upcoming swipe cycles the event FILTER (all/ex/pay) of the ACTIVE portfolio —
- * NOT the portfolio. Each page renders that portfolio's events filtered; the
- * per-page .pk-seg segment is the live indicator (active by construction) and
- * tapping it drives the pager via scrollToIndex. Its own SwipePager instance →
- * its own align/settle, independent of the Dividends portfolio pager.
+ * NOT the portfolio. The All/Ex/Pay segment is a FIXED header (it does not slide);
+ * swiping the list below changes which segment is active (settle → setEventFilter),
+ * and tapping a segment drives the pager via scrollToIndex. Same fixed-header +
+ * sub-region pager pattern as History. Its own SwipePager instance → own
+ * align/settle, independent of the Dividends portfolio pager.
  */
 function UpcomingPager({
   included,
@@ -132,26 +133,42 @@ function UpcomingPager({
   const pagerRef = useRef<SwipePagerHandle>(null);
   const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
   return (
-    <SwipePager
-      ref={pagerRef}
-      items={UPCOMING_FILTERS}
-      activeIndex={idx}
-      ready={hydrated}
-      pageClassName="pk-page"
-      onSettle={(i) => {
-        const f = UPCOMING_FILTERS[i];
-        if (f !== eventFilter) setEventFilter(f);
-      }}
-      renderPage={(f) => (
-        <UpcomingList
-          tickers={included}
-          basis={basis}
-          filter={f as EventFilter}
-          setFilter={(nf) => pagerRef.current?.scrollToIndex(UPCOMING_FILTERS.indexOf(nf))}
-          loading={loading}
+    <div className="pk-upcoming">
+      {/* FIXED header: title + All/Ex/Pay segment. The active segment follows the
+          swipe (eventFilter set on settle); tapping a segment drives the pager. */}
+      <div className="pk-upcoming-head">
+        <h1 className="pk-title">Upcoming</h1>
+        <div className="pk-seg" role="group" aria-label="Event filter">
+          {UPCOMING_FILTER_OPTS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="pk-seg-btn"
+              data-active={eventFilter === o.value}
+              onClick={() => pagerRef.current?.scrollToIndex(UPCOMING_FILTERS.indexOf(o.value))}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="pk-paged-region">
+        <SwipePager
+          ref={pagerRef}
+          items={UPCOMING_FILTERS}
+          activeIndex={idx}
+          ready={hydrated}
+          pageClassName="pk-paged-page"
+          onSettle={(i) => {
+            const f = UPCOMING_FILTERS[i];
+            if (f !== eventFilter) setEventFilter(f);
+          }}
+          renderPage={(f) => (
+            <UpcomingEvents tickers={included} basis={basis} filter={f as EventFilter} loading={loading} />
+          )}
         />
-      )}
-    />
+      </div>
+    </div>
   );
 }
 
@@ -164,9 +181,6 @@ export function PocketShell() {
   const [managing, setManaging] = useState(false);
   const [eventFilter, setEventFilter, eventFilterHydrated] = useEventFilter();
 
-  // Dividends + Upcoming both render full-screen pages (CSS .pk-screen[data-tab] +
-  // syncbar-float); only Dividends rides the portfolio pager below.
-  const isPagerTab = tab === "dividends" || tab === "upcoming";
   const trackRef = useRef<HTMLDivElement>(null);
 
   const [basis, setBasis] = useBasis();
@@ -278,7 +292,7 @@ export function PocketShell() {
       <div className="pk-screen" data-tab={tab}>
         {syncing && (
           <div
-            className={`pk-syncbar${isPagerTab ? " pk-syncbar-float" : ""}`}
+            className={`pk-syncbar${tab === "dividends" ? " pk-syncbar-float" : ""}`}
             role="status"
             aria-live="polite"
           >
