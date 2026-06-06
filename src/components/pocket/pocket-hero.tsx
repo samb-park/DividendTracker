@@ -149,7 +149,7 @@ export function PocketHero({
       )}
       {!error && isEmpty && !loading && <p className="pk-note">No holdings yet.</p>}
       {!error && !isEmpty && allExcluded && !loading && (
-        <p className="pk-note">표시할 종목이 없습니다 — 상단 포트폴리오/계좌 선택을 확인하세요.</p>
+        <p className="pk-note">Nothing to show — check the portfolio in Settings.</p>
       )}
       {showData && priceGap && (
         <p className="pk-note warn">Some holdings have no live price and were excluded from the total.</p>

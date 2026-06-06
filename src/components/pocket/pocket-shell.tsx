@@ -124,7 +124,7 @@ export function PocketShell() {
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 
-  // Every held ticker across all accounts — the "전체" view and the group editor.
+  // Every held ticker across all accounts — the "All" view and the group editor.
   const allTickerAggs = useMemo<TickerAgg[]>(() => rollupTickers(positions), [positions]);
 
   const activeGroup = useMemo(
@@ -132,7 +132,7 @@ export function PocketShell() {
     [groups, activeId]
   );
 
-  // Swipe order: 전체 → each group → wrap. Swipe left = next, right = previous.
+  // Swipe order: All → each group → wrap. Swipe left = next, right = previous.
   const portfolioOrder = useMemo<(string | null)[]>(() => [null, ...groups.map((g) => g.id)], [groups]);
   const cyclePortfolio = useCallback(
     (dir: 1 | -1) => {
@@ -149,7 +149,7 @@ export function PocketShell() {
     () => cyclePortfolio(-1)
   );
 
-  // A stored selection whose group was deleted (or never existed) falls back to "전체".
+  // A stored selection whose group was deleted (or never existed) falls back to "All".
   useEffect(() => {
     if (groupsLoaded && activeId && !groups.some((g) => g.id === activeId)) {
       setActiveId(null);
@@ -157,7 +157,7 @@ export function PocketShell() {
   }, [groupsLoaded, activeId, groups, setActiveId]);
 
   const derived = useMemo(() => {
-    // A portfolio scopes BOTH accounts and tickers (account ∩ ticker); "전체" = all.
+    // A portfolio scopes BOTH accounts and tickers (account ∩ ticker); "All" = everything.
     const included = activeGroup
       ? rollupTickers(
           positions.filter(
@@ -196,7 +196,7 @@ export function PocketShell() {
             <span className="pk-sync-spin" aria-hidden>
               ⟳
             </span>
-            Questrade 동기화 중…
+            Syncing Questrade…
           </div>
         )}
 
@@ -213,7 +213,7 @@ export function PocketShell() {
               priceGap={derived.priceGap}
               freqGuess={derived.freqGuess}
               fxFallback={derived.fxFallback}
-              portfolioName={activeGroup?.name ?? "전체"}
+              portfolioName={activeGroup?.name ?? "All"}
               onRetry={() => load()}
             />
           </div>

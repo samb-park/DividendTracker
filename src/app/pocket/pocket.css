@@ -39,6 +39,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   --pk-tabbar-bg: rgba(247, 247, 248, 0.86);
   --pk-tabbar-active: rgba(0, 0, 0, 0.06);
   --pk-warn: #b4530a;
+  --pk-fill: var(--pk-tabbar-active); /* neutral subtle fill (semantic alias) */
+  --pk-danger: #dc2626;
 
   font-family: -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -71,6 +73,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   --pk-tabbar-bg: rgba(28, 28, 30, 0.86);
   --pk-tabbar-active: rgba(255, 255, 255, 0.12);
   --pk-warn: #e08a3c;
+  --pk-fill: var(--pk-tabbar-active);
+  --pk-danger: #f87171;
 }
 
 /* layout shell ---------------------------------------------------------- */
@@ -200,9 +204,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   color: var(--pk-ink);
   font-family: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 10px 18px;
-  border-radius: 999px;
+  border-radius: 12px;
   cursor: pointer;
   transition: opacity 0.12s ease;
 }
@@ -414,7 +418,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 8px 0 12px;
 }
 .pk-sheet-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.05; }
-.pk-sheet-done {
+.pk-textbtn {
   appearance: none;
   border: none;
   background: transparent;
@@ -426,7 +430,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 6px 2px;
   transition: opacity 0.12s ease;
 }
-.pk-sheet-done:active { opacity: 0.6; }
+.pk-textbtn:active { opacity: 0.6; }
 @keyframes pk-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -478,11 +482,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   width: 100%;
   appearance: none;
   border: none;
-  background: var(--pk-tabbar-active);
+  background: var(--pk-fill);
   color: var(--pk-ink);
   font-family: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 12px 16px;
   border-radius: 12px;
   cursor: pointer;
@@ -490,11 +494,12 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   transition: background 0.12s ease;
 }
 .pk-action:active { background: var(--pk-hairline); }
-.pk-action::after {
+/* nav-row variant: a tinted button that drills into a sheet (chevron affordance) */
+.pk-navrow::after {
   content: "›";
   color: var(--pk-muted);
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -640,10 +645,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
-.pk-pfsel-check { color: var(--pk-ink); font-size: 14px; flex: 0 0 auto; }
+.pk-pfsel-check { color: var(--pk-ink); font-size: 15px; flex: 0 0 auto; }
 
 /* group manager (Settings → 포트폴리오 관리) ----------------------------- */
-.pk-sheet-done:disabled { opacity: 0.4; cursor: default; }
+.pk-textbtn:disabled { opacity: 0.4; cursor: default; }
 .pk-gm-count {
   font-size: 13px;
   font-weight: 600;
@@ -684,7 +689,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   width: 100%;
   border: 1px solid var(--pk-hairline);
   background: transparent;
-  color: #dc2626;
+  color: var(--pk-danger);
   font-family: inherit;
   font-size: 15px;
   font-weight: 700;

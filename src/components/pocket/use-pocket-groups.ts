@@ -24,11 +24,11 @@ async function errorOf(res: Response): Promise<string> {
   } catch {
     /* non-JSON body */
   }
-  return `요청 실패 (${res.status})`;
+  return `Request failed (${res.status})`;
 }
 
 /**
- * Server-backed pocket groups ("포트폴리오"). The groups themselves live in the
+ * Server-backed pocket groups. The groups themselves live in the
  * DB (synced across devices); only the *active selection* is kept in
  * localStorage so the chosen view sticks per device without a round-trip.
  *
@@ -87,7 +87,7 @@ export function usePocketGroups() {
         setGroups((prev) => [...prev, g]);
         return { group: g, error: null };
       } catch {
-        return { group: null, error: "네트워크 오류" };
+        return { group: null, error: "Network error" };
       }
     },
     []
@@ -117,7 +117,7 @@ export function usePocketGroups() {
       } catch {
         setGroups(prevGroups);
         refresh();
-        return { error: "네트워크 오류" };
+        return { error: "Network error" };
       }
     },
     [groups, refresh]
@@ -139,7 +139,7 @@ export function usePocketGroups() {
       } catch {
         setGroups(prevGroups);
         refresh();
-        return { error: "네트워크 오류" };
+        return { error: "Network error" };
       }
     },
     [groups, refresh]

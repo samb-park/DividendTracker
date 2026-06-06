@@ -24,7 +24,7 @@ const BASIS_OPTS: { value: Basis; label: string }[] = [
   { value: "gross", label: "Gross" },
 ];
 
-/** Color dot for a group ("전체" → hollow dot). */
+/** Color dot for a group ("All" → hollow dot). */
 function Glyph({ group }: { group: PocketGroup | null }) {
   if (group)
     return <span className="pk-dot" style={{ background: group.color || "var(--pk-muted)" }} aria-hidden />;
@@ -48,7 +48,7 @@ export function PocketSettings({
       <section>
         <div className="pk-section-label">Portfolio</div>
         {/* Selection lives here (not on Dividends) — Dividends stays clean. */}
-        <div className="pk-pf-list" role="listbox" aria-label="포트폴리오 선택">
+        <div className="pk-pf-list" role="listbox" aria-label="Select portfolio">
           <button
             type="button"
             role="option"
@@ -60,7 +60,7 @@ export function PocketSettings({
             <span className="pk-pfsel-mark">
               <Glyph group={null} />
             </span>
-            <span className="pk-pfsel-name">전체</span>
+            <span className="pk-pfsel-name">All</span>
             {activeId === null && (
               <span className="pk-pfsel-check" aria-hidden>
                 ✓
@@ -92,8 +92,8 @@ export function PocketSettings({
           ))}
         </div>
 
-        <button type="button" className="pk-action" onClick={onEdit}>
-          포트폴리오 · 계좌 관리
+        <button type="button" className="pk-action pk-navrow" onClick={onEdit}>
+          Manage portfolios
         </button>
       </section>
 

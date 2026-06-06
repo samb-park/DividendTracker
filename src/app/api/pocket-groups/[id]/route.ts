@@ -30,10 +30,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } = {};
   if (typeof body?.name === "string") {
     const n = body.name.trim().slice(0, MAX_GROUP_NAME);
-    if (!n) return NextResponse.json({ error: "이름을 입력하세요." }, { status: 400 });
+    if (!n) return NextResponse.json({ error: "Name required" }, { status: 400 });
     // Reject a rename that collides with another group of the same user.
     const dup = await prisma.pocketGroup.findFirst({ where: { userId, name: n, NOT: { id } } });
-    if (dup) return NextResponse.json({ error: "같은 이름의 포트폴리오가 이미 있어요." }, { status: 409 });
+    if (dup) return NextResponse.json({ error: "A portfolio with that name already exists." }, { status: 409 });
     data.name = n;
   }
   if (body?.color !== undefined) data.color = sanitizeColor(body.color);
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body?.accounts !== undefined) data.accounts = sanitizeAccounts(body.accounts);
   if (body?.tickers !== undefined) {
     if (Array.isArray(body.tickers) && body.tickers.length > MAX_TICKERS_PER_GROUP) {
-      return NextResponse.json({ error: `종목은 최대 ${MAX_TICKERS_PER_GROUP}개까지예요.` }, { status: 400 });
+      return NextResponse.json({ error: `Max ${MAX_TICKERS_PER_GROUP} tickers per portfolio.` }, { status: 400 });
     }
     data.tickers = sanitizeTickers(body.tickers);
   }

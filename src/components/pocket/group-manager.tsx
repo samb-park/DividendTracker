@@ -133,28 +133,28 @@ export function GroupManager({
   };
 
   const acctSummary = (g: PocketGroup) =>
-    g.accounts.length === 0 ? "전체 계좌" : g.accounts.map((a) => ACCT_LABELS[a] ?? a).join(" · ");
+    g.accounts.length === 0 ? "All accounts" : g.accounts.map((a) => ACCT_LABELS[a] ?? a).join(" · ");
 
   return (
     <>
       <div className="pk-sheet-scrim" onClick={editing ? backToList : onClose} />
-      <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="포트폴리오 관리">
+      <div className="pk-sheet" role="dialog" aria-modal="true" aria-label="Manage portfolios">
         <div className="pk-sheet-grip" />
 
         {!editing ? (
           <>
             <div className="pk-sheet-head">
-              <span className="pk-sheet-title">포트폴리오</span>
-              <button type="button" className="pk-sheet-done" onClick={onClose}>
+              <span className="pk-sheet-title">Portfolios</span>
+              <button type="button" className="pk-textbtn" onClick={onClose}>
                 Done
               </button>
             </div>
 
             <div className="pk-section-label">Portfolios</div>
             {loading && groups.length === 0 ? (
-              <p className="pk-note">불러오는 중…</p>
+              <p className="pk-note">Loading…</p>
             ) : groups.length === 0 ? (
-              <p className="pk-note">아직 포트폴리오가 없습니다. 아래에서 새로 만들어 보세요.</p>
+              <p className="pk-note">No portfolios yet. Create one below.</p>
             ) : (
               <div className="pk-picker">
                 {groups.map((g) => (
@@ -177,7 +177,7 @@ export function GroupManager({
                     <div className="pk-picker-main">
                       <span className="pk-picker-ticker">{g.name}</span>
                       <span className="pk-picker-sub">
-                        {acctSummary(g)} · {g.tickers.length} 종목
+                        {acctSummary(g)} · {g.tickers.length} tickers
                       </span>
                     </div>
                     <span className="pk-gm-chevron" aria-hidden>
@@ -189,18 +189,18 @@ export function GroupManager({
             )}
 
             <button type="button" className="pk-action" onClick={startNew}>
-              ＋ 새 포트폴리오
+              + New portfolio
             </button>
           </>
         ) : (
           <>
             <div className="pk-sheet-head">
-              <button type="button" className="pk-sheet-done" onClick={backToList}>
+              <button type="button" className="pk-textbtn" onClick={backToList}>
                 ‹ Back
               </button>
               <button
                 type="button"
-                className="pk-sheet-done"
+                className="pk-textbtn"
                 onClick={save}
                 disabled={!draftName.trim() || saving}
               >
@@ -212,7 +212,7 @@ export function GroupManager({
               className="pk-input"
               type="text"
               value={draftName}
-              placeholder="이름 (예: A)"
+              placeholder="Name (e.g. A)"
               onChange={(e) => setDraftName(e.target.value)}
               maxLength={40}
               autoFocus
@@ -223,7 +223,7 @@ export function GroupManager({
             {accountTypes.length > 0 && (
               <section>
                 <div className="pk-section-label">Accounts</div>
-                <div className="pk-chips" role="group" aria-label="계좌">
+                <div className="pk-chips" role="group" aria-label="Accounts">
                   {accountTypes.map((a) => (
                     <button
                       key={a}
@@ -237,13 +237,13 @@ export function GroupManager({
                     </button>
                   ))}
                 </div>
-                {draftAccounts.size === 0 && <p className="pk-note">선택 안 하면 전체 계좌예요.</p>}
+                {draftAccounts.size === 0 && <p className="pk-note">None selected = all accounts.</p>}
               </section>
             )}
 
             <section>
               <div className="pk-section-label">Color</div>
-              <div className="pk-swatches" role="group" aria-label="색상">
+              <div className="pk-swatches" role="group" aria-label="Color">
                 {POCKET_GROUP_COLORS.map((c) => (
                   <button
                     key={c}
@@ -259,7 +259,7 @@ export function GroupManager({
               </div>
             </section>
 
-            <div className="pk-section-label">종목 {draftTickers.size}개 선택</div>
+            <div className="pk-section-label">{draftTickers.size} tickers selected</div>
             <TickerPicker
               tickers={allTickers}
               selected={draftTickers}
@@ -269,7 +269,7 @@ export function GroupManager({
 
             {editingId !== NEW && (
               <button type="button" className="pk-danger" onClick={remove} disabled={saving}>
-                이 포트폴리오 삭제
+                Delete portfolio
               </button>
             )}
           </>
