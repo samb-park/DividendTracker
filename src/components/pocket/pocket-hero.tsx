@@ -23,6 +23,7 @@ interface Props {
   priceGap: boolean; // a selected ticker is missing a live price
   freqGuess: boolean; // a selected ticker's payment frequency was guessed (<2 records)
   fxFallback: boolean; // FX rate is a stale/default fallback
+  portfolioName: string; // active portfolio label shown at the header's right edge
   onRetry: () => void;
 }
 
@@ -60,6 +61,7 @@ export function PocketHero({
   priceGap,
   freqGuess,
   fxFallback,
+  portfolioName,
   onRetry,
 }: Props) {
   const colRef = useRef<HTMLDivElement>(null);
@@ -108,6 +110,7 @@ export function PocketHero({
     <>
       <div className="pk-topbar">
         <h1 className="pk-title">Dividends</h1>
+        <span className="pk-hero-pf">{portfolioName}</span>
       </div>
 
       <div className="pk-summary">

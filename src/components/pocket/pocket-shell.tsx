@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import type { RunRateResponse, TickerAgg, PositionRunRate } from "@/lib/pocket-types";
 import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { usePocketGroups } from "./use-pocket-groups";
@@ -54,6 +61,30 @@ function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
   return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
 }
 
+/** Detect a horizontal swipe, ignoring vertical scroll gestures. */
+function useHorizontalSwipe(onLeft: () => void, onRight: () => void) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  return {
+    onTouchStart: (e: ReactTouchEvent) => {
+      const t = e.touches[0];
+      start.current = { x: t.clientX, y: t.clientY };
+    },
+    onTouchEnd: (e: ReactTouchEvent) => {
+      const s = start.current;
+      start.current = null;
+      if (!s) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      // horizontal-dominant flick only (so vertical scrolling is never hijacked)
+      if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        if (dx < 0) onLeft();
+        else onRight();
+      }
+    },
+  };
+}
+
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,6 +130,23 @@ export function PocketShell() {
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeId) ?? null,
     [groups, activeId]
+  );
+
+  // Swipe order: 전체 → each group → wrap. Swipe left = next, right = previous.
+  const portfolioOrder = useMemo<(string | null)[]>(() => [null, ...groups.map((g) => g.id)], [groups]);
+  const cyclePortfolio = useCallback(
+    (dir: 1 | -1) => {
+      if (portfolioOrder.length <= 1) return;
+      const i = portfolioOrder.indexOf(activeId);
+      const cur = i < 0 ? 0 : i;
+      const next = (cur + dir + portfolioOrder.length) % portfolioOrder.length;
+      setActiveId(portfolioOrder[next]);
+    },
+    [portfolioOrder, activeId, setActiveId]
+  );
+  const swipe = useHorizontalSwipe(
+    () => cyclePortfolio(1),
+    () => cyclePortfolio(-1)
   );
 
   // A stored selection whose group was deleted (or never existed) falls back to "전체".
@@ -153,29 +201,34 @@ export function PocketShell() {
         )}
 
         {tab === "dividends" && (
-          <PocketHero
-            annualUSD={derived.annualUSD}
-            totalValueUSD={derived.totalValueUSD}
-            avgYieldPct={derived.avgYieldPct}
-            loading={loading}
-            error={error}
-            isEmpty={derived.isEmpty}
-            allExcluded={derived.allExcluded}
-            priceGap={derived.priceGap}
-            freqGuess={derived.freqGuess}
-            fxFallback={derived.fxFallback}
-            onRetry={() => load()}
-          />
+          <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
+            <PocketHero
+              annualUSD={derived.annualUSD}
+              totalValueUSD={derived.totalValueUSD}
+              avgYieldPct={derived.avgYieldPct}
+              loading={loading}
+              error={error}
+              isEmpty={derived.isEmpty}
+              allExcluded={derived.allExcluded}
+              priceGap={derived.priceGap}
+              freqGuess={derived.freqGuess}
+              fxFallback={derived.fxFallback}
+              portfolioName={activeGroup?.name ?? "전체"}
+              onRetry={() => load()}
+            />
+          </div>
         )}
 
         {tab === "upcoming" && (
-          <UpcomingList
-            tickers={derived.included}
-            basis={basis}
-            filter={eventFilter}
-            setFilter={setEventFilter}
-            loading={loading}
-          />
+          <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
+            <UpcomingList
+              tickers={derived.included}
+              basis={basis}
+              filter={eventFilter}
+              setFilter={setEventFilter}
+              loading={loading}
+            />
+          </div>
         )}
 
         {tab === "history" && <HistoryTab basis={basis} fxRate={data?.fx?.usdcad ?? null} />}

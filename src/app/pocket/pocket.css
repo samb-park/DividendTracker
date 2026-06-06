@@ -100,6 +100,20 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   letter-spacing: -0.6px;
   line-height: 1.05;
 }
+/* active portfolio label at the header's right edge (Dividends) */
+.pk-hero-pf {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  letter-spacing: -0.2px;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+/* horizontal swipe surface (Dividends/Upcoming) — vertical scroll stays native */
+.pk-swipe { touch-action: pan-y; }
 
 .pk-summary {
   display: flex;
@@ -614,7 +628,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 600;
   text-align: left;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
 }
 .pk-pfsel-item[data-active="true"] { background: var(--pk-tabbar-active); font-weight: 700; }
@@ -665,22 +679,6 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 0;
 }
 .pk-swatch[data-active="true"] { border-color: var(--pk-ink); box-shadow: 0 0 0 2px var(--pk-bg) inset; }
-.pk-iconpick { display: flex; flex-wrap: wrap; gap: 8px; }
-.pk-iconbtn {
-  appearance: none;
-  min-width: 38px;
-  height: 38px;
-  padding: 0 8px;
-  border-radius: 10px;
-  border: 1px solid var(--pk-hairline);
-  background: transparent;
-  color: var(--pk-muted);
-  font-family: inherit;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.pk-iconbtn[data-active="true"] { border-color: var(--pk-pill-bg); background: var(--pk-tabbar-active); }
 .pk-danger {
   appearance: none;
   width: 100%;

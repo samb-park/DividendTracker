@@ -85,6 +85,3 @@ export const POCKET_GROUP_COLORS = [
   "#0891b2", // cyan
   "#64748b", // slate
 ] as const;
-
-/** Optional emoji icons for pocket groups. */
-export const POCKET_GROUP_ICONS = ["📈", "💰", "🏦", "🚀", "🛡️", "🎯", "⭐", "🌱"] as const;

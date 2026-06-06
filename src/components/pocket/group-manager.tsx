@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  POCKET_GROUP_COLORS,
-  POCKET_GROUP_ICONS,
-  type Basis,
-  type PocketGroup,
-  type TickerAgg,
-} from "@/lib/pocket-types";
+import { POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
 
 const ACCT_LABELS: Record<string, string> = {
@@ -28,19 +22,12 @@ interface Props {
   onCreate: (input: {
     name: string;
     color: string | null;
-    icon: string | null;
     accounts: string[];
     tickers: string[];
   }) => Promise<{ group: PocketGroup | null; error: string | null }>;
   onUpdate: (
     id: string,
-    patch: {
-      name?: string;
-      color?: string | null;
-      icon?: string | null;
-      accounts?: string[];
-      tickers?: string[];
-    }
+    patch: { name?: string; color?: string | null; accounts?: string[]; tickers?: string[] }
   ) => Promise<{ error: string | null }>;
   onDelete: (id: string) => Promise<{ error: string | null }>;
 }
@@ -61,7 +48,6 @@ export function GroupManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftColor, setDraftColor] = useState<string | null>(POCKET_GROUP_COLORS[0]);
-  const [draftIcon, setDraftIcon] = useState<string | null>(null);
   const [draftAccounts, setDraftAccounts] = useState<Set<string>>(new Set());
   const [draftTickers, setDraftTickers] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
@@ -73,7 +59,6 @@ export function GroupManager({
     setEditingId(NEW);
     setDraftName("");
     setDraftColor(POCKET_GROUP_COLORS[0]);
-    setDraftIcon(null);
     setDraftAccounts(new Set());
     setDraftTickers(new Set());
     setErr(null);
@@ -82,7 +67,6 @@ export function GroupManager({
     setEditingId(g.id);
     setDraftName(g.name);
     setDraftColor(g.color ?? POCKET_GROUP_COLORS[0]);
-    setDraftIcon(g.icon ?? null);
     setDraftAccounts(new Set(g.accounts));
     setDraftTickers(new Set(g.tickers));
     setErr(null);
@@ -112,7 +96,6 @@ export function GroupManager({
       const payload = {
         name,
         color: draftColor,
-        icon: draftIcon,
         accounts: [...draftAccounts],
         tickers: [...draftTickers],
       };
@@ -150,9 +133,7 @@ export function GroupManager({
   };
 
   const acctSummary = (g: PocketGroup) =>
-    g.accounts.length === 0
-      ? "전체 계좌"
-      : g.accounts.map((a) => ACCT_LABELS[a] ?? a).join(" · ");
+    g.accounts.length === 0 ? "전체 계좌" : g.accounts.map((a) => ACCT_LABELS[a] ?? a).join(" · ");
 
   return (
     <>
@@ -191,11 +172,7 @@ export function GroupManager({
                     }}
                   >
                     <span className="pk-pfsel-mark" aria-hidden>
-                      {g.icon ? (
-                        <span className="pk-pfsel-emoji">{g.icon}</span>
-                      ) : (
-                        <span className="pk-dot" style={{ background: g.color || "var(--pk-muted)" }} />
-                      )}
+                      <span className="pk-dot" style={{ background: g.color || "var(--pk-muted)" }} />
                     </span>
                     <div className="pk-picker-main">
                       <span className="pk-picker-ticker">{g.name}</span>
@@ -260,9 +237,7 @@ export function GroupManager({
                     </button>
                   ))}
                 </div>
-                {draftAccounts.size === 0 && (
-                  <p className="pk-note">선택 안 하면 전체 계좌예요.</p>
-                )}
+                {draftAccounts.size === 0 && <p className="pk-note">선택 안 하면 전체 계좌예요.</p>}
               </section>
             )}
 
@@ -280,32 +255,6 @@ export function GroupManager({
                     aria-pressed={draftColor === c}
                     onClick={() => setDraftColor(c)}
                   />
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <div className="pk-section-label">Icon</div>
-              <div className="pk-iconpick" role="group" aria-label="아이콘">
-                <button
-                  type="button"
-                  className="pk-iconbtn"
-                  data-active={draftIcon === null}
-                  onClick={() => setDraftIcon(null)}
-                >
-                  없음
-                </button>
-                {POCKET_GROUP_ICONS.map((ic) => (
-                  <button
-                    key={ic}
-                    type="button"
-                    className="pk-iconbtn"
-                    data-active={draftIcon === ic}
-                    aria-pressed={draftIcon === ic}
-                    onClick={() => setDraftIcon(ic)}
-                  >
-                    {ic}
-                  </button>
                 ))}
               </div>
             </section>

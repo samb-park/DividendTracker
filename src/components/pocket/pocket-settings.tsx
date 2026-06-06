@@ -24,9 +24,8 @@ const BASIS_OPTS: { value: Basis; label: string }[] = [
   { value: "gross", label: "Gross" },
 ];
 
-/** Color dot / emoji glyph for a group ("전체" → hollow dot). */
+/** Color dot for a group ("전체" → hollow dot). */
 function Glyph({ group }: { group: PocketGroup | null }) {
-  if (group?.icon) return <span className="pk-pfsel-emoji">{group.icon}</span>;
   if (group)
     return <span className="pk-dot" style={{ background: group.color || "var(--pk-muted)" }} aria-hidden />;
   return <span className="pk-dot pk-dot-all" aria-hidden />;
