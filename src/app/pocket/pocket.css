@@ -94,23 +94,12 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
-/* Native horizontal scroll-snap pager (Dividends/Upcoming only) ----------- */
-/* On the pager tabs .pk-screen stops scrolling and becomes the positioning
-   context for an absolutely-positioned track; its own padding moves to .pk-page.
-   History/Settings don't match this selector → they keep the base .pk-screen
-   (vertical scroll + padding) and their month-chip h-scroll is untouched. */
-/* Dividends = a FULL-SCREEN pager (the abspos track is at .pk-screen inset:0).
-   Upcoming/History are FIXED-HEADER + sub-region pagers (see below), so they are
-   NOT here — their abspos track lives inside .pk-paged-region, not the screen. */
-.pk-screen[data-tab="dividends"] {
-  position: relative;
-  overflow: hidden;        /* the pages scroll, not this box */
-  padding: 0;              /* padding relocates to .pk-page */
-}
-
-/* Upcoming/History are FIXED-HEADER + horizontally-paging layouts (not the base
-   scrolling .pk-screen). overflow:hidden so the outer screen never co-scrolls
-   vertically with the pages. Settings keeps the base .pk-screen (no match here). */
+/* Dividends/Upcoming/History are all FIXED-HEADER + sub-region pagers: a fixed
+   title (+ controls) above a swipeable .pk-paged-region whose abspos track lives
+   INSIDE the region (not the screen). overflow:hidden so the outer screen never
+   co-scrolls vertically with the pages. Settings keeps the base .pk-screen
+   (vertical scroll + padding) — it does NOT match this selector. */
+.pk-screen[data-tab="dividends"],
 .pk-screen[data-tab="history"],
 .pk-screen[data-tab="upcoming"] {
   overflow: hidden;
@@ -142,49 +131,15 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    (incl. tab-bar clearance) lives here, verbatim from the old .pk-screen.
    touch-action:auto — NOT pan-y: pan-y on the page would stop the ancestor track
    from ever starting a horizontal scroll, silently killing the pager. */
-.pk-page {
-  flex: 0 0 100%;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  touch-action: auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
-  padding-left: max(24px, env(safe-area-inset-left));
-  padding-right: max(24px, env(safe-area-inset-right));
-}
-
-/* Sync toast floats over the pager (the track is abspos, so an in-flow toast
-   would be covered); pointer-events:none so it never eats a swipe. */
-.pk-syncbar-float {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 4px);
-  left: 0;
-  right: 0;
-  z-index: 5;
-  margin: 0;
-  pointer-events: none;
-}
-
 /* header ---------------------------------------------------------------- */
-.pk-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 .pk-title {
   font-size: 34px;
   font-weight: 800;
   letter-spacing: -0.6px;
   line-height: 1.05;
 }
-/* active portfolio label at the header's right edge (Dividends) */
+/* portfolio name row at the top of each Dividends page (slides with content) */
+.pk-hero-pfrow { display: flex; justify-content: flex-end; }
 .pk-hero-pf {
   font-size: 15px;
   font-weight: 600;
@@ -256,9 +211,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-size: 58px; /* set imperatively by the fit effect */
 }
 
-/* spacers bias the hero block slightly above center (smaller top spacer) */
-.pk-spacer-top { flex: 0.7 1 0; min-height: 16px; }
-.pk-spacer-bottom { flex: 1.3 1 0; min-height: 16px; }
+/* spacers center the hero block in the page (equal top/bottom). */
+.pk-spacer-top { flex: 1 1 0; min-height: 16px; }
+.pk-spacer-bottom { flex: 1 1 0; min-height: 16px; }
 
 /* status / honest empty + stale states ---------------------------------- */
 .pk-note {
@@ -624,9 +579,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
                              scroll boundary, NOT flex-grow across it) + overflow-y:auto.
    The flex-grow-through-scroll spacer-collapse cannot recur: the box that grows
    is overflow:hidden and is not itself the scroll boundary. */
-/* Shared host for the fixed-header + sub-region pager layout (History + Upcoming). */
+/* Shared host for the fixed-header + sub-region pager layout. */
 .pk-history,
-.pk-upcoming {
+.pk-upcoming,
+.pk-dividends {
   display: flex;
   flex-direction: column;
   min-height: 0;

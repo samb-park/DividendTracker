@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -176,6 +175,73 @@ function UpcomingPager({
   );
 }
 
+/**
+ * Dividends = a FIXED "Dividends" title + a sub-region pager over portfolios.
+ * Swiping pages the whole per-portfolio block together (name + AVG/USD + D/W/M/Y),
+ * while the title stays put — same fixed-header pattern as History/Upcoming. The
+ * hero stays vertically centered: each .pk-paged-page is height:100% of the
+ * region's inset:0 track, so the hero spacers (direct children) still grow.
+ */
+function DividendsPager({
+  derivedByPortfolio,
+  portfolioOrder,
+  activeId,
+  setActiveId,
+  ready,
+  loading,
+  error,
+  onRetry,
+}: {
+  derivedByPortfolio: Derived[];
+  portfolioOrder: (string | null)[];
+  activeId: string | null;
+  setActiveId: (id: string | null) => void;
+  ready: boolean;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+}) {
+  const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
+  const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
+  return (
+    <div className="pk-dividends">
+      <h1 className="pk-title">Dividends</h1>
+      <div className="pk-paged-region">
+        <SwipePager
+          items={items}
+          activeIndex={activeIndex}
+          ready={ready}
+          pageClassName="pk-paged-page"
+          onSettle={(i) => {
+            const id = portfolioOrder[i];
+            if (id !== activeId) setActiveId(id);
+          }}
+          renderPage={(_item, i) => {
+            const d = derivedByPortfolio[i];
+            if (!d) return null;
+            return (
+              <PocketHero
+                annualUSD={d.annualUSD}
+                totalValueUSD={d.totalValueUSD}
+                avgYieldPct={d.avgYieldPct}
+                loading={loading}
+                error={error}
+                isEmpty={d.isEmpty}
+                allExcluded={d.allExcluded}
+                priceGap={d.priceGap}
+                freqGuess={d.freqGuess}
+                fxFallback={d.fxFallback}
+                portfolioName={d.portfolioName}
+                onRetry={onRetry}
+              />
+            );
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,8 +250,6 @@ export function PocketShell() {
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [managing, setManaging] = useState(false);
   const [eventFilter, setEventFilter, eventFilterHydrated] = useEventFilter();
-
-  const trackRef = useRef<HTMLDivElement>(null);
 
   const [basis, setBasis] = useBasis();
   const [themePref, setThemePref] = usePocketTheme();
@@ -249,54 +313,20 @@ export function PocketShell() {
     [portfolioOrder, groups, positions, allTickerAggs, basis, data]
   );
 
-  // Page → activeId: settle-debounced (no IntersectionObserver — it flips mid-momentum).
-  // Round by the real content width, never 100vw (which ignores safe-area + scrollbar).
-  const settleTimer = useRef<number | null>(null);
-  const onTrackScroll = useCallback(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    if (settleTimer.current) window.clearTimeout(settleTimer.current);
-    settleTimer.current = window.setTimeout(() => {
-      const w = el.clientWidth || 1;
-      const i = Math.max(0, Math.min(portfolioOrder.length - 1, Math.round(el.scrollLeft / w)));
-      const next = portfolioOrder[i];
-      if (next !== activeId) setActiveId(next);
-    }, 120);
-  }, [portfolioOrder, activeId, setActiveId]);
-
-  // activeId → page: align ONCE per Dividends-tab entry, instantly, before paint.
-  // The Dividends track is the ONLY consumer of this machinery now (Upcoming has its
-  // own SwipePager instance keyed on the event filter), so the portfolio settle can
-  // never fire on Upcoming. activeId changes only via swipe while mounted → no reactive
-  // scrollTo fighting momentum (the Settings selector lives on a non-pager tab).
-  const didInitScroll = useRef(false);
-  useLayoutEffect(() => {
-    const el = trackRef.current;
-    if (!el || tab !== "dividends" || didInitScroll.current) return;
-    const i = portfolioOrder.indexOf(activeId);
-    el.scrollLeft = Math.max(0, i) * el.clientWidth;
-    didInitScroll.current = true;
-  }, [tab, portfolioOrder, activeId]);
-  useEffect(() => {
-    if (tab !== "dividends") didInitScroll.current = false;
-  }, [tab]);
-
   return (
     <>
       {/* Registers the push-only SW on every /pocket load (the installed PWA
           launches here), so Web Push can arm. No-op without serviceWorker. */}
       <PwaRegister />
-      {/* Dividends/Upcoming = a native horizontal scroll-snap pager. .pk-screen is the
-          positioning context; .pk-track is position:absolute inset:0 so its height is
-          DEFINITE — each .pk-page inherits it via height:100% and reproduces the proven
-          .pk-screen shape (overflow-y:auto column, hero spacers as DIRECT children, zero
-          wrappers). That's the explicit-size path, NOT flex-grow across a scroll boundary,
-          so the iOS spacer-collapse regression cannot recur. History/Settings keep the
-          plain scrolling .pk-screen (the base rule, since they don't match the override). */}
+      {/* Dividends/Upcoming/History are all FIXED-HEADER + sub-region pagers: a fixed
+          title above a .pk-paged-region whose abspos .pk-track gives each .pk-paged-page
+          a DEFINITE height (height:100%), so the Dividends hero spacers (direct children)
+          still center via the explicit-size path — NOT flex-grow across a scroll boundary.
+          Settings keeps the plain scrolling .pk-screen (base rule, no data-tab match). */}
       <div className="pk-screen" data-tab={tab}>
         {syncing && (
           <div
-            className={`pk-syncbar${tab === "dividends" ? " pk-syncbar-float" : ""}`}
+            className="pk-syncbar"
             role="status"
             aria-live="polite"
           >
@@ -307,34 +337,20 @@ export function PocketShell() {
           </div>
         )}
 
-        {/* Dividends portfolio pager — FROZEN: the verified-good hero-centering
-            track stays inline. .pk-track is position:absolute inset:0 (definite
-            height); each .pk-page is height:100% and PocketHero's spacers are its
-            DIRECT children. Do not wrap PocketHero or migrate it onto SwipePager. */}
+        {/* Dividends — fixed "Dividends" title + a sub-region pager over portfolios.
+            Swiping pages the per-portfolio block (name + AVG/USD + D/W/M/Y) together;
+            the title stays put. The hero stays vertically centered inside .pk-paged-page. */}
         {tab === "dividends" && (
-          <div className="pk-track" ref={trackRef} onScroll={onTrackScroll}>
-            {portfolioOrder.map((id, i) => {
-              const d = derivedByPortfolio[i];
-              return (
-                <div className="pk-page" key={id ?? "all"}>
-                  <PocketHero
-                    annualUSD={d.annualUSD}
-                    totalValueUSD={d.totalValueUSD}
-                    avgYieldPct={d.avgYieldPct}
-                    loading={loading}
-                    error={error}
-                    isEmpty={d.isEmpty}
-                    allExcluded={d.allExcluded}
-                    priceGap={d.priceGap}
-                    freqGuess={d.freqGuess}
-                    fxFallback={d.fxFallback}
-                    portfolioName={d.portfolioName}
-                    onRetry={() => load()}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <DividendsPager
+            derivedByPortfolio={derivedByPortfolio}
+            portfolioOrder={portfolioOrder}
+            activeId={activeId}
+            setActiveId={setActiveId}
+            ready={groupsLoaded}
+            loading={loading}
+            error={error}
+            onRetry={() => load()}
+          />
         )}
 
         {/* Upcoming — its OWN SwipePager: swipe cycles the event filter (all/ex/pay)

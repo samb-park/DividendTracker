@@ -108,8 +108,9 @@ export function PocketHero({
 
   return (
     <>
-      <div className="pk-topbar">
-        <h1 className="pk-title">Dividends</h1>
+      {/* The "Dividends" title is a FIXED header in PocketShell; only the portfolio
+          name + summary + hero live here and slide together per portfolio. */}
+      <div className="pk-hero-pfrow">
         <span className="pk-hero-pf">{portfolioName}</span>
       </div>
 
