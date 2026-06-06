@@ -1,6 +1,7 @@
 "use client";
 
 import type { Basis, PocketGroup, ThemePref } from "@/lib/pocket-types";
+import { PortfolioRow } from "./portfolio-row";
 
 interface Props {
   groups: PocketGroup[];
@@ -24,13 +25,6 @@ const BASIS_OPTS: { value: Basis; label: string }[] = [
   { value: "gross", label: "Gross" },
 ];
 
-/** Color dot for a group ("All" → hollow dot). */
-function Glyph({ group }: { group: PocketGroup | null }) {
-  if (group)
-    return <span className="pk-dot" style={{ background: group.color || "var(--pk-muted)" }} aria-hidden />;
-  return <span className="pk-dot pk-dot-all" aria-hidden />;
-}
-
 export function PocketSettings({
   groups,
   activeId,
@@ -49,46 +43,23 @@ export function PocketSettings({
         <div className="pk-section-label">Portfolio</div>
         {/* Selection lives here (not on Dividends) — Dividends stays clean. */}
         <div className="pk-pf-list" role="listbox" aria-label="Select portfolio">
-          <button
-            type="button"
-            role="option"
-            aria-selected={activeId === null}
-            className="pk-pfsel-item"
-            data-active={activeId === null}
+          <PortfolioRow
+            color={null}
+            name="All"
+            selected={activeId === null}
+            asOption
             onClick={() => onSelect(null)}
-          >
-            <span className="pk-pfsel-mark">
-              <Glyph group={null} />
-            </span>
-            <span className="pk-pfsel-name">All</span>
-            {activeId === null && (
-              <span className="pk-pfsel-check" aria-hidden>
-                ✓
-              </span>
-            )}
-          </button>
-
+          />
           {groups.map((g) => (
-            <button
+            <PortfolioRow
               key={g.id}
-              type="button"
-              role="option"
-              aria-selected={activeId === g.id}
-              className="pk-pfsel-item"
-              data-active={activeId === g.id}
+              color={g.color}
+              name={g.name}
+              count={g.tickers.length}
+              selected={activeId === g.id}
+              asOption
               onClick={() => onSelect(g.id)}
-            >
-              <span className="pk-pfsel-mark">
-                <Glyph group={g} />
-              </span>
-              <span className="pk-pfsel-name">{g.name}</span>
-              <span className="pk-pfsel-count">{g.tickers.length}</span>
-              {activeId === g.id && (
-                <span className="pk-pfsel-check" aria-hidden>
-                  ✓
-                </span>
-              )}
-            </button>
+            />
           ))}
         </div>
 

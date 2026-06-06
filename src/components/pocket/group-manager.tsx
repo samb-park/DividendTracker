@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
+import { PortfolioRow } from "./portfolio-row";
 
 const ACCT_LABELS: Record<string, string> = {
   TFSA: "TFSA",
@@ -156,34 +157,15 @@ export function GroupManager({
             ) : groups.length === 0 ? (
               <p className="pk-note">No portfolios yet. Create one below.</p>
             ) : (
-              <div className="pk-picker">
+              <div className="pk-pf-list">
                 {groups.map((g) => (
-                  <div
+                  <PortfolioRow
                     key={g.id}
-                    className="pk-picker-row"
-                    role="button"
-                    tabIndex={0}
+                    color={g.color}
+                    name={g.name}
+                    subtitle={`${acctSummary(g)} · ${g.tickers.length} tickers`}
                     onClick={() => startEdit(g)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        startEdit(g);
-                      }
-                    }}
-                  >
-                    <span className="pk-pfsel-mark" aria-hidden>
-                      <span className="pk-dot" style={{ background: g.color || "var(--pk-muted)" }} />
-                    </span>
-                    <div className="pk-picker-main">
-                      <span className="pk-picker-ticker">{g.name}</span>
-                      <span className="pk-picker-sub">
-                        {acctSummary(g)} · {g.tickers.length} tickers
-                      </span>
-                    </div>
-                    <span className="pk-gm-chevron" aria-hidden>
-                      ›
-                    </span>
-                  </div>
+                  />
                 ))}
               </div>
             )}

@@ -627,7 +627,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
 }
 
-/* portfolio selection list (Settings) + group glyphs ------------------- */
+/* portfolio row — one shared list-row language (Settings selector + manager) -- */
 .pk-dot {
   width: 10px;
   height: 10px;
@@ -639,16 +639,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   background: transparent;
   border: 1.5px solid var(--pk-faint);
 }
-.pk-pfsel-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  flex: 0 0 auto;
-}
-.pk-pfsel-emoji { font-size: 15px; line-height: 1; flex: 0 0 auto; }
 .pk-pf-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-.pk-pfsel-item {
+.pk-pfrow {
   appearance: none;
   display: flex;
   align-items: center;
@@ -665,28 +657,36 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-radius: 12px;
   cursor: pointer;
 }
-.pk-pfsel-item[data-active="true"] { background: var(--pk-tabbar-active); font-weight: 700; }
-.pk-pfsel-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-pfsel-count {
+.pk-pfrow[data-active="true"] { background: var(--pk-fill); font-weight: 700; }
+.pk-pfrow-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex: 0 0 auto;
+}
+.pk-pfrow-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.pk-pfrow-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-pfrow-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-pfrow-count {
   font-size: 12px;
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
-.pk-pfsel-check { color: var(--pk-ink); font-size: 15px; flex: 0 0 auto; }
+.pk-pfrow-check { color: var(--pk-ink); font-size: 15px; flex: 0 0 auto; }
+.pk-pfrow-chevron { color: var(--pk-faint); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
 
-/* group manager (Settings → 포트폴리오 관리) ----------------------------- */
+/* group manager (Settings → Manage portfolios) ------------------------- */
 .pk-textbtn:disabled { opacity: 0.4; cursor: default; }
-.pk-gm-count {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pk-muted);
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-.pk-gm-chevron { color: var(--pk-faint); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
 .pk-input {
   width: 100%;
   appearance: none;
