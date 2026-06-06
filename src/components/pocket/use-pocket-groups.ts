@@ -9,9 +9,12 @@ type GroupInput = {
   name: string;
   color?: string | null;
   icon?: string | null;
+  accounts?: string[];
   tickers?: string[];
 };
-type GroupPatch = Partial<Pick<PocketGroup, "name" | "color" | "icon" | "tickers" | "sortOrder">>;
+type GroupPatch = Partial<
+  Pick<PocketGroup, "name" | "color" | "icon" | "accounts" | "tickers" | "sortOrder">
+>;
 
 /** Pull a human-readable error message out of a failed JSON response. */
 async function errorOf(res: Response): Promise<string> {

@@ -246,6 +246,7 @@ model PocketGroup {
   name      String
   color     String?  // hex accent, e.g. "#0a8043" (null → neutral)
   icon      String?  // optional emoji label (null → color dot)
+  accounts  String[] @default([]) // account-type scope (TFSA/RRSP/FHSA/NON_REG/CASH); empty = all
   tickers   String[]
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())

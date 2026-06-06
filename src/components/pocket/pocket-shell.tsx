@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RunRateResponse, TickerAgg, PositionRunRate } from "@/lib/pocket-types";
-import { useExcludedAccounts, useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
+import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { usePocketGroups } from "./use-pocket-groups";
 import { usePocketSync } from "./use-pocket-sync";
 import { PocketHero } from "./pocket-hero";
@@ -63,7 +63,6 @@ export function PocketShell() {
   const [managing, setManaging] = useState(false);
   const [eventFilter, setEventFilter] = useEventFilter();
 
-  const { excluded: excludedAccounts, toggle: toggleAccount } = useExcludedAccounts();
   const [basis, setBasis] = useBasis();
   const [themePref, setThemePref] = usePocketTheme();
   const groupsApi = usePocketGroups();
@@ -94,12 +93,7 @@ export function PocketShell() {
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 
-  // Per-ticker rollup over the currently-selected accounts (for headline + Upcoming).
-  const tickerAggs = useMemo<TickerAgg[]>(
-    () => rollupTickers(positions.filter((p) => !excludedAccounts.has(p.accountType))),
-    [positions, excludedAccounts]
-  );
-  // Every held ticker (ignores the account filter) — for group membership editing.
+  // Every held ticker across all accounts — the "전체" view and the group editor.
   const allTickerAggs = useMemo<TickerAgg[]>(() => rollupTickers(positions), [positions]);
 
   const activeGroup = useMemo(
@@ -115,9 +109,16 @@ export function PocketShell() {
   }, [groupsLoaded, activeId, groups, setActiveId]);
 
   const derived = useMemo(() => {
-    // Active group filters tickers to its membership; "전체" keeps the account view.
-    const inView = (t: TickerAgg) => !activeGroup || activeGroup.tickers.includes(t.ticker);
-    const included = tickerAggs.filter(inView);
+    // A portfolio scopes BOTH accounts and tickers (account ∩ ticker); "전체" = all.
+    const included = activeGroup
+      ? rollupTickers(
+          positions.filter(
+            (p) =>
+              (activeGroup.accounts.length === 0 || activeGroup.accounts.includes(p.accountType)) &&
+              activeGroup.tickers.includes(p.ticker)
+          )
+        )
+      : allTickerAggs;
     const pick = (t: TickerAgg) => (basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD);
 
     const annualUSD = included.reduce((s, t) => s + pick(t), 0);
@@ -137,7 +138,7 @@ export function PocketShell() {
       freqGuess: included.some((t) => t.lowConfidence),
       fxFallback: data?.fx.fallback ?? false,
     };
-  }, [tickerAggs, activeGroup, basis, positions, data]);
+  }, [positions, activeGroup, allTickerAggs, basis, data]);
 
   return (
     <>
@@ -202,8 +203,6 @@ export function PocketShell() {
           allTickers={allTickerAggs}
           basis={basis}
           accountTypes={accountTypes}
-          excludedAccounts={excludedAccounts}
-          onToggleAccount={toggleAccount}
           onClose={() => setManaging(false)}
           onCreate={groupsApi.createGroup}
           onUpdate={groupsApi.updateGroup}

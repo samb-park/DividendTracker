@@ -69,6 +69,7 @@ export interface PocketGroup {
   name: string;
   color: string | null; // hex accent, e.g. "#0a8043"
   icon: string | null; // optional emoji label
+  accounts: string[]; // account-type scope (e.g. ["RRSP"]); empty = all accounts
   tickers: string[]; // held ticker symbols included in this group
   sortOrder: number;
 }

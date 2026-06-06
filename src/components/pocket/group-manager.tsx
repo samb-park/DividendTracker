@@ -8,27 +8,39 @@ import {
   type PocketGroup,
   type TickerAgg,
 } from "@/lib/pocket-types";
-import { AccountChips } from "./account-chips";
 import { TickerPicker } from "./ticker-picker";
+
+const ACCT_LABELS: Record<string, string> = {
+  TFSA: "TFSA",
+  RRSP: "RRSP",
+  FHSA: "FHSA",
+  NON_REG: "Non-Reg",
+  CASH: "Cash",
+};
 
 interface Props {
   groups: PocketGroup[];
   loading: boolean; // groups still loading from the server
   allTickers: TickerAgg[]; // every held ticker, for membership editing
   basis: Basis;
-  accountTypes: string[];
-  excludedAccounts: Set<string>;
-  onToggleAccount: (a: string) => void;
+  accountTypes: string[]; // account types the user actually holds
   onClose: () => void;
   onCreate: (input: {
     name: string;
     color: string | null;
     icon: string | null;
+    accounts: string[];
     tickers: string[];
   }) => Promise<{ group: PocketGroup | null; error: string | null }>;
   onUpdate: (
     id: string,
-    patch: { name?: string; color?: string | null; icon?: string | null; tickers?: string[] }
+    patch: {
+      name?: string;
+      color?: string | null;
+      icon?: string | null;
+      accounts?: string[];
+      tickers?: string[];
+    }
   ) => Promise<{ error: string | null }>;
   onDelete: (id: string) => Promise<{ error: string | null }>;
 }
@@ -41,8 +53,6 @@ export function GroupManager({
   allTickers,
   basis,
   accountTypes,
-  excludedAccounts,
-  onToggleAccount,
   onClose,
   onCreate,
   onUpdate,
@@ -52,6 +62,7 @@ export function GroupManager({
   const [draftName, setDraftName] = useState("");
   const [draftColor, setDraftColor] = useState<string | null>(POCKET_GROUP_COLORS[0]);
   const [draftIcon, setDraftIcon] = useState<string | null>(null);
+  const [draftAccounts, setDraftAccounts] = useState<Set<string>>(new Set());
   const [draftTickers, setDraftTickers] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,6 +74,7 @@ export function GroupManager({
     setDraftName("");
     setDraftColor(POCKET_GROUP_COLORS[0]);
     setDraftIcon(null);
+    setDraftAccounts(new Set());
     setDraftTickers(new Set());
     setErr(null);
   };
@@ -71,6 +83,7 @@ export function GroupManager({
     setDraftName(g.name);
     setDraftColor(g.color ?? POCKET_GROUP_COLORS[0]);
     setDraftIcon(g.icon ?? null);
+    setDraftAccounts(new Set(g.accounts));
     setDraftTickers(new Set(g.tickers));
     setErr(null);
   };
@@ -79,14 +92,16 @@ export function GroupManager({
     setErr(null);
   };
 
-  const toggleTicker = (ticker: string) => {
-    setDraftTickers((prev) => {
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (value: string) => {
+    setter((prev) => {
       const next = new Set(prev);
-      if (next.has(ticker)) next.delete(ticker);
-      else next.add(ticker);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
       return next;
     });
   };
+  const toggleAccount = toggleIn(setDraftAccounts);
+  const toggleTicker = toggleIn(setDraftTickers);
 
   const save = async () => {
     const name = draftName.trim();
@@ -94,7 +109,13 @@ export function GroupManager({
     setSaving(true);
     setErr(null);
     try {
-      const payload = { name, color: draftColor, icon: draftIcon, tickers: [...draftTickers] };
+      const payload = {
+        name,
+        color: draftColor,
+        icon: draftIcon,
+        accounts: [...draftAccounts],
+        tickers: [...draftTickers],
+      };
       let res: { error: string | null };
       if (editingId === NEW) res = await onCreate(payload);
       else if (editingId) res = await onUpdate(editingId, payload);
@@ -128,6 +149,11 @@ export function GroupManager({
     }
   };
 
+  const acctSummary = (g: PocketGroup) =>
+    g.accounts.length === 0
+      ? "전체 계좌"
+      : g.accounts.map((a) => ACCT_LABELS[a] ?? a).join(" · ");
+
   return (
     <>
       <div className="pk-sheet-scrim" onClick={editing ? backToList : onClose} />
@@ -142,17 +168,6 @@ export function GroupManager({
                 Done
               </button>
             </div>
-
-            {accountTypes.length > 1 && (
-              <section>
-                <div className="pk-section-label">Accounts</div>
-                <AccountChips
-                  accountTypes={accountTypes}
-                  excluded={excludedAccounts}
-                  onToggle={onToggleAccount}
-                />
-              </section>
-            )}
 
             <div className="pk-section-label">Portfolios</div>
             {loading && groups.length === 0 ? (
@@ -184,8 +199,10 @@ export function GroupManager({
                     </span>
                     <div className="pk-picker-main">
                       <span className="pk-picker-ticker">{g.name}</span>
+                      <span className="pk-picker-sub">
+                        {acctSummary(g)} · {g.tickers.length} 종목
+                      </span>
                     </div>
-                    <span className="pk-gm-count">{g.tickers.length} 종목</span>
                     <span className="pk-gm-chevron" aria-hidden>
                       ›
                     </span>
@@ -225,6 +242,29 @@ export function GroupManager({
             />
 
             {err && <p className="pk-note warn">{err}</p>}
+
+            {accountTypes.length > 0 && (
+              <section>
+                <div className="pk-section-label">Accounts</div>
+                <div className="pk-chips" role="group" aria-label="계좌">
+                  {accountTypes.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      className="pk-chip"
+                      data-active={draftAccounts.has(a)}
+                      aria-pressed={draftAccounts.has(a)}
+                      onClick={() => toggleAccount(a)}
+                    >
+                      {ACCT_LABELS[a] ?? a}
+                    </button>
+                  ))}
+                </div>
+                {draftAccounts.size === 0 && (
+                  <p className="pk-note">선택 안 하면 전체 계좌예요.</p>
+                )}
+              </section>
+            )}
 
             <section>
               <div className="pk-section-label">Color</div>

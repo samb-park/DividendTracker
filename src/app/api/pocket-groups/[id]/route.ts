@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   MAX_GROUP_NAME,
   MAX_TICKERS_PER_GROUP,
+  sanitizeAccounts,
   sanitizeColor,
   sanitizeIcon,
   sanitizeTickers,
@@ -23,6 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     name?: string;
     color?: string | null;
     icon?: string | null;
+    accounts?: string[];
     tickers?: string[];
     sortOrder?: number;
   } = {};
@@ -36,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (body?.color !== undefined) data.color = sanitizeColor(body.color);
   if (body?.icon !== undefined) data.icon = sanitizeIcon(body.icon);
+  if (body?.accounts !== undefined) data.accounts = sanitizeAccounts(body.accounts);
   if (body?.tickers !== undefined) {
     if (Array.isArray(body.tickers) && body.tickers.length > MAX_TICKERS_PER_GROUP) {
       return NextResponse.json({ error: `종목은 최대 ${MAX_TICKERS_PER_GROUP}개까지예요.` }, { status: 400 });
