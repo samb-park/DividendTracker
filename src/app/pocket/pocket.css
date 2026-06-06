@@ -366,9 +366,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 /* aligned columns: date | ticker | EX/PAY | days-left | amount */
 .pk-event-row {
   display: grid;
-  grid-template-columns: 58px 58px 42px 1fr 92px;
+  /* fits narrow phones: fixed cols + 8px gaps sum well under the content width;
+     the qty/days col is minmax(0,1fr) so it shrinks instead of forcing overflow */
+  grid-template-columns: 52px 54px 42px minmax(0, 1fr) 82px;
   align-items: center;
-  column-gap: 12px; /* on-grid; matches .pk-txn-row / hist / picker */
+  column-gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
@@ -709,9 +711,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    (reuses pk-event-* cell classes; wider badge track so "SELL" fits) */
 .pk-txn-row {
   display: grid;
-  grid-template-columns: 58px 58px 52px 1fr 92px; /* date/ticker match .pk-event-row; badge 52 fits SELL */
+  /* date/ticker/amount match .pk-event-row; only the badge cell differs (46 fits SELL).
+     qty col is minmax(0,1fr) so a wide "× 1.2694" can't push the row past the screen. */
+  grid-template-columns: 52px 54px 46px minmax(0, 1fr) 82px;
   align-items: center;
-  column-gap: 12px;
+  column-gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
