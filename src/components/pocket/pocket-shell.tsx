@@ -202,6 +202,7 @@ function DividendsPager({
   onRetry: () => void;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
+  const dotsRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
   const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
@@ -216,7 +217,7 @@ function DividendsPager({
           <span className="pk-hero-pf">{activeName}</span>
         </div>
         {items.length > 1 && (
-          <div className="pk-dots" aria-label="Portfolios">
+          <div className="pk-dots" ref={dotsRef} aria-label="Portfolios">
             {items.map((it, i) => (
               <button
                 key={it}
@@ -238,6 +239,16 @@ function DividendsPager({
           activeIndex={activeIndex}
           ready={ready}
           pageClassName="pk-paged-page"
+          onProgress={(f) => {
+            // Live: light up the dot for the page you're swiping toward (round at the
+            // midpoint), in sync with the content — not waiting for the 120ms settle.
+            const el = dotsRef.current;
+            if (!el) return;
+            const active = Math.max(0, Math.min(items.length - 1, Math.round(f)));
+            for (let i = 0; i < el.children.length; i++) {
+              (el.children[i] as HTMLElement).dataset.active = i === active ? "true" : "false";
+            }
+          }}
           onSettle={(i) => {
             const id = portfolioOrder[i];
             if (id !== activeId) setActiveId(id);
