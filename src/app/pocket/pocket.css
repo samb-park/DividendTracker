@@ -60,6 +60,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* app-like surface: no accidental text selection / iOS callout on press-hold */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .pocket-root[data-pocket-mode="dark"] {
@@ -117,7 +121,32 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   text-align: right;
 }
 /* horizontal swipe surface (Dividends/Upcoming) — vertical scroll stays native */
-.pk-swipe { touch-action: pan-y; }
+/* full-page horizontal swipe surface (Dividends/Upcoming). flex-fill so the hero
+   spacers vertically center the rows; vertical scroll stays native (pan-y). */
+.pk-swipe {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  touch-action: pan-y;
+}
+/* portfolio-change transition — re-keyed on the active portfolio so it replays */
+.pk-anim {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pk-anim[data-anim="next"] { animation: pk-pf-next 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
+.pk-anim[data-anim="prev"] { animation: pk-pf-prev 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes pk-pf-next {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pk-pf-prev {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: none; }
+}
 
 .pk-summary {
   display: flex;
@@ -673,6 +702,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   margin-bottom: 4px;
 }
 .pk-input:focus { outline: none; border-color: var(--pk-pill-bg); }
+/* re-enable selection inside the editable name field */
+.pk-input { -webkit-user-select: text; user-select: text; }
 .pk-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .pk-swatch {
   appearance: none;

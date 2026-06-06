@@ -92,6 +92,7 @@ export function PocketShell() {
 
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [managing, setManaging] = useState(false);
+  const [animDir, setAnimDir] = useState<"next" | "prev">("next");
   const [eventFilter, setEventFilter] = useEventFilter();
 
   const [basis, setBasis] = useBasis();
@@ -140,6 +141,7 @@ export function PocketShell() {
       const i = portfolioOrder.indexOf(activeId);
       const cur = i < 0 ? 0 : i;
       const next = (cur + dir + portfolioOrder.length) % portfolioOrder.length;
+      setAnimDir(dir === 1 ? "next" : "prev");
       setActiveId(portfolioOrder[next]);
     },
     [portfolioOrder, activeId, setActiveId]
@@ -202,32 +204,36 @@ export function PocketShell() {
 
         {tab === "dividends" && (
           <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
-            <PocketHero
-              annualUSD={derived.annualUSD}
-              totalValueUSD={derived.totalValueUSD}
-              avgYieldPct={derived.avgYieldPct}
-              loading={loading}
-              error={error}
-              isEmpty={derived.isEmpty}
-              allExcluded={derived.allExcluded}
-              priceGap={derived.priceGap}
-              freqGuess={derived.freqGuess}
-              fxFallback={derived.fxFallback}
-              portfolioName={activeGroup?.name ?? "All"}
-              onRetry={() => load()}
-            />
+            <div className="pk-anim" key={activeId ?? "all"} data-anim={animDir}>
+              <PocketHero
+                annualUSD={derived.annualUSD}
+                totalValueUSD={derived.totalValueUSD}
+                avgYieldPct={derived.avgYieldPct}
+                loading={loading}
+                error={error}
+                isEmpty={derived.isEmpty}
+                allExcluded={derived.allExcluded}
+                priceGap={derived.priceGap}
+                freqGuess={derived.freqGuess}
+                fxFallback={derived.fxFallback}
+                portfolioName={activeGroup?.name ?? "All"}
+                onRetry={() => load()}
+              />
+            </div>
           </div>
         )}
 
         {tab === "upcoming" && (
           <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
-            <UpcomingList
-              tickers={derived.included}
-              basis={basis}
-              filter={eventFilter}
-              setFilter={setEventFilter}
-              loading={loading}
-            />
+            <div className="pk-anim" key={activeId ?? "all"} data-anim={animDir}>
+              <UpcomingList
+                tickers={derived.included}
+                basis={basis}
+                filter={eventFilter}
+                setFilter={setEventFilter}
+                loading={loading}
+              />
+            </div>
           </div>
         )}
 
