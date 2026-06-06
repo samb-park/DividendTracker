@@ -1,6 +1,7 @@
 "use client";
 
 import type { HistoryMode } from "@/lib/pocket-types";
+import { AnimatedSegment } from "./animated-segment";
 
 const OPTS: { value: HistoryMode; label: string }[] = [
   { value: "dividends", label: "Dividends" },
@@ -8,19 +9,5 @@ const OPTS: { value: HistoryMode; label: string }[] = [
 ];
 
 export function HistoryModeToggle({ mode, setMode }: { mode: HistoryMode; setMode: (m: HistoryMode) => void }) {
-  return (
-    <div className="pk-seg" role="group" aria-label="History mode">
-      {OPTS.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          className="pk-seg-btn"
-          data-active={mode === o.value}
-          onClick={() => setMode(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <AnimatedSegment options={OPTS} value={mode} onChange={setMode} ariaLabel="History mode" />;
 }

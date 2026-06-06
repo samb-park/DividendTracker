@@ -30,8 +30,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pocket-root {
   /* Light (reference default) */
   --pk-bg: #ffffff;
+  --pk-elevated: #ffffff; /* raised surfaces (sheet, active segment pill) */
   --pk-ink: #0a0a0a;
-  --pk-muted: #a3a3a8;
+  --pk-muted: #8a8a8f; /* AA-passing secondary text (was #a3a3a8, ~2.5:1) */
+  --pk-badge-ink: #6b6b70; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
   --pk-faint: #c9c9ce;
   --pk-pill-bg: #0a0a0a;
   --pk-pill-ink: #ffffff;
@@ -68,12 +70,14 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 
 .pocket-root[data-pocket-mode="dark"] {
   --pk-bg: #000000;
+  --pk-elevated: #1c1c1e; /* raised surfaces sit ABOVE the #000 page */
   --pk-ink: #ffffff;
-  --pk-muted: #6e6e73;
+  --pk-muted: #8e8e93; /* Apple systemGray, ~4.6:1 (was #6e6e73) */
+  --pk-badge-ink: #b0b0b5;
   --pk-faint: #48484a;
   --pk-pill-bg: #ffffff;
   --pk-pill-ink: #000000;
-  --pk-hairline: rgba(255, 255, 255, 0.12);
+  --pk-hairline: rgba(255, 255, 255, 0.16);
   --pk-tabbar-bg: rgba(28, 28, 30, 0.86);
   --pk-tabbar-active: rgba(255, 255, 255, 0.12);
   --pk-warn: #e08a3c;
@@ -138,7 +142,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   letter-spacing: -0.6px;
   line-height: 1.05;
 }
-/* Dividends fixed header: "Dividends" title + active portfolio name (right). */
+/* Dividends fixed header: title + name row, then the page dots, tight together. */
+.pk-dividends-top { display: flex; flex-direction: column; gap: 12px; }
 .pk-dividends-head {
   display: flex;
   align-items: baseline;
@@ -149,7 +154,6 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-size: 15px;
   font-weight: 600;
   color: var(--pk-muted);
-  letter-spacing: -0.2px;
   max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -161,14 +165,13 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 8px;
 }
 .pk-summary-cell { display: flex; align-items: baseline; gap: 8px; }
 .pk-summary-cell.right { justify-content: flex-end; }
 .pk-summary-label {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px; /* unified ALL-CAPS tracking (was 0.4) */
   color: var(--pk-muted);
 }
 .pk-summary-value {
@@ -365,7 +368,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   display: grid;
   grid-template-columns: 58px 58px 42px 1fr 92px;
   align-items: center;
-  column-gap: 9px;
+  column-gap: 12px; /* on-grid; matches .pk-txn-row / hist / picker */
   padding: 12px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
@@ -375,7 +378,6 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.3px;
   white-space: nowrap;
 }
 .pk-event-date .est { color: var(--pk-muted); font-weight: 600; }
@@ -394,7 +396,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 2px 7px;
   border-radius: 8px;
   background: var(--pk-tabbar-active);
-  color: var(--pk-muted);
+  color: var(--pk-badge-ink); /* readable EX/BUY/DIV (was --pk-muted, ~2.4:1) */
 }
 .pk-event-tag[data-type="pay"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
 /* transaction action badges: sell = filled (notable), buy/div = base light tint */
@@ -421,7 +423,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pk-sheet-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.45); /* dims enough over a #000 dark page too */
   z-index: 60;
   animation: pk-fade 0.16s ease-out;
 }
@@ -431,7 +433,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   right: 0;
   bottom: 0;
   z-index: 61;
-  background: var(--pk-bg);
+  background: var(--pk-elevated); /* raised above the page (correct in dark) */
+  border-top: 1px solid var(--pk-hairline);
   border-top-left-radius: 22px;
   border-top-right-radius: 22px;
   padding: 10px 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
@@ -463,6 +466,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
+  letter-spacing: -0.3px; /* Row-emphasis tracking (bold ≥17px) */
   cursor: pointer;
   padding: 6px 2px;
   transition: opacity 0.12s ease;
@@ -503,9 +507,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-radius: 7px;
   cursor: pointer;
   min-height: 30px;
+  transition: color 0.15s ease; /* tween the label color so it doesn't pop late */
 }
 .pk-seg-btn[data-active="true"] {
-  background: var(--pk-bg);
+  background: var(--pk-elevated); /* raised above the track (correct in dark too) */
   color: var(--pk-ink);
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
@@ -531,14 +536,18 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   top: 2px;
   left: 2px;
   bottom: 2px;
-  width: calc((100% - 4px) / 3); /* 3 segments, minus the 2px L/R padding */
+  width: calc((100% - 4px) / var(--seg-count, 3)); /* N segments, minus 2px L/R padding */
   border-radius: 7px;
-  background: var(--pk-bg);
+  background: var(--pk-elevated);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transform: translateX(calc(var(--seg-progress, 0) * 100%));
   z-index: 0;
   pointer-events: none;
 }
+.pocket-root[data-pocket-mode="dark"] .pk-seg-pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+/* tap-only segments (Settings, History toggle/filter) glide the pill on tap;
+   the swipe pager segment (Upcoming) drives --seg-progress live, so NO transition there. */
+.pk-seg-tap .pk-seg-pill { transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
 
 /* settings action row — matches the segmented controls' light, rounded tone */
 .pk-action {
@@ -651,7 +660,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.4px;
-  color: var(--pk-muted);
+  color: var(--pk-ink); /* live value, not a disabled-looking header (was --pk-muted) */
   font-variant-numeric: tabular-nums;
 }
 
@@ -700,9 +709,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    (reuses pk-event-* cell classes; wider badge track so "SELL" fits) */
 .pk-txn-row {
   display: grid;
-  grid-template-columns: 56px 56px 52px 1fr 92px;
+  grid-template-columns: 58px 58px 52px 1fr 92px; /* date/ticker match .pk-event-row; badge 52 fits SELL */
   align-items: center;
-  column-gap: 9px;
+  column-gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
@@ -772,14 +781,15 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   background: transparent;
   color: var(--pk-ink);
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px; /* Row-emphasis — unified with ticker rows (was 15/600) */
+  font-weight: 700;
+  letter-spacing: -0.3px;
   text-align: left;
   padding: 10px;
   border-radius: 12px;
   cursor: pointer;
 }
-.pk-pfrow[data-active="true"] { background: var(--pk-fill); font-weight: 700; }
+.pk-pfrow[data-active="true"] { background: var(--pk-fill); }
 .pk-pfrow-mark {
   display: inline-flex;
   align-items: center;
@@ -798,7 +808,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   white-space: nowrap;
 }
 .pk-pfrow-count {
-  font-size: 12px;
+  font-size: 13px; /* Caption — matches .pk-event-days (was 12) */
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
@@ -816,7 +826,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 12px 0;
 }
 .pk-switch-row + .pk-switch-row { border-top: 1px solid var(--pk-hairline); }
-.pk-switch-label { font-size: 15px; font-weight: 600; color: var(--pk-ink); }
+.pk-switch-label { font-size: 15px; font-weight: 700; color: var(--pk-ink); }
 .pk-switch {
   appearance: none;
   flex: 0 0 auto;
@@ -938,5 +948,37 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 @keyframes pk-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Dividends page dots — discoverable, tappable portfolio navigation -------- */
+.pk-dots { display: flex; justify-content: center; gap: 7px; padding-bottom: 2px; }
+.pk-dot-nav {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px; /* enlarge the tap target around the 7px dot */
+  line-height: 0;
+}
+.pk-dot-nav::before {
+  content: "";
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pk-faint);
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.pk-dot-nav[data-active="true"]::before { background: var(--pk-ink); transform: scale(1.2); }
+
+/* Respect the OS reduced-motion preference: drop pager/pill/sheet/spinner motion. */
+@media (prefers-reduced-motion: reduce) {
+  .pocket-root *,
+  .pocket-root *::before,
+  .pocket-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

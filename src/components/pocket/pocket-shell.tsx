@@ -201,19 +201,39 @@ function DividendsPager({
   error: boolean;
   onRetry: () => void;
 }) {
+  const pagerRef = useRef<SwipePagerHandle>(null);
   const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
   const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
   return (
     <div className="pk-dividends">
-      {/* FIXED header: "Dividends" + the active portfolio name (right). The name
-          updates when the portfolio settles; only the content below slides. */}
-      <div className="pk-dividends-head">
-        <h1 className="pk-title">Dividends</h1>
-        <span className="pk-hero-pf">{activeName}</span>
+      {/* FIXED header: "Dividends" + active portfolio name + page dots. The dots
+          make the other portfolios discoverable (swipe alone is invisible) and are
+          tappable. Only the content below the header slides. */}
+      <div className="pk-dividends-top">
+        <div className="pk-dividends-head">
+          <h1 className="pk-title">Dividends</h1>
+          <span className="pk-hero-pf">{activeName}</span>
+        </div>
+        {items.length > 1 && (
+          <div className="pk-dots" aria-label="Portfolios">
+            {items.map((it, i) => (
+              <button
+                key={it}
+                type="button"
+                className="pk-dot-nav"
+                data-active={i === activeIndex}
+                aria-label={`Go to portfolio ${i + 1}`}
+                aria-current={i === activeIndex || undefined}
+                onClick={() => pagerRef.current?.scrollToIndex(i)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       <div className="pk-paged-region">
         <SwipePager
+          ref={pagerRef}
           items={items}
           activeIndex={activeIndex}
           ready={ready}

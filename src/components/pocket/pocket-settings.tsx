@@ -3,6 +3,7 @@
 import type { Basis, PocketGroup, ThemePref } from "@/lib/pocket-types";
 import { DraggablePortfolioList } from "./draggable-portfolio-list";
 import { NotifySettings } from "./notify-settings";
+import { AnimatedSegment } from "./animated-segment";
 
 interface Props {
   groups: PocketGroup[];
@@ -62,36 +63,12 @@ export function PocketSettings({
 
       <section>
         <div className="pk-section-label">Amount basis</div>
-        <div className="pk-seg" role="group" aria-label="Amount basis">
-          {BASIS_OPTS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className="pk-seg-btn"
-              data-active={basis === o.value}
-              onClick={() => setBasis(o.value)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <AnimatedSegment options={BASIS_OPTS} value={basis} onChange={setBasis} ariaLabel="Amount basis" />
       </section>
 
       <section>
         <div className="pk-section-label">Theme</div>
-        <div className="pk-seg" role="group" aria-label="Theme">
-          {THEME_OPTS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className="pk-seg-btn"
-              data-active={themePref === o.value}
-              onClick={() => setThemePref(o.value)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <AnimatedSegment options={THEME_OPTS} value={themePref} onChange={setThemePref} ariaLabel="Theme" />
       </section>
 
       <NotifySettings />

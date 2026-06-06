@@ -163,7 +163,7 @@ export function GroupManager({
                     key={g.id}
                     color={g.color}
                     name={g.name}
-                    subtitle={`${acctSummary(g)} · ${g.tickers.length} tickers`}
+                    subtitle={`${acctSummary(g)} · ${g.tickers.length} ticker${g.tickers.length === 1 ? "" : "s"}`}
                     onClick={() => startEdit(g)}
                   />
                 ))}

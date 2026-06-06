@@ -5,6 +5,7 @@ import type { HistoryMode, TxnFilter, TransactionRow } from "@/lib/pocket-types"
 import { HistoryModeToggle } from "./history-mode-toggle";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PeriodStrip } from "./period-strip";
+import { AnimatedSegment } from "./animated-segment";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -172,19 +173,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
       <HistoryModeToggle mode={mode} setMode={setMode} />
 
       {/* Action filter — directly below the mode toggle. */}
-      <div className="pk-seg" role="group" aria-label="Transaction type">
-        {FILTER_OPTS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className="pk-seg-btn"
-            data-active={filter === o.value}
-            onClick={() => setFilter(o.value)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <AnimatedSegment options={FILTER_OPTS} value={filter} onChange={setFilter} ariaLabel="Transaction type" />
 
       {/* Year stepper + current period label (updates on swipe). */}
       <div className="pk-year-row">
