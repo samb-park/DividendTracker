@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basis, HistoryMode } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
-import { PeriodLabel } from "./period-label";
+import { PeriodStrip } from "./period-strip";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -80,6 +80,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const pagerRef = useRef<SwipePagerHandle>(null);
+  const periodRef = useRef<HTMLDivElement>(null);
 
   // Load the list of years that have received dividends.
   useEffect(() => {
@@ -129,7 +130,10 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const monthsWithData = useMemo(() => months.filter((m) => m.items.length > 0).map((m) => m.month), [months]);
   const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
   const periodIdx = Math.max(0, periodSeq.indexOf(month));
-  const periodLabel = month === "all" ? "Year" : MONTH_LABELS[parseInt(month.slice(5, 7), 10) - 1];
+  const periodLabels = useMemo(
+    () => periodSeq.map((p) => (p === "all" ? "Year" : MONTH_LABELS[parseInt(p.slice(5, 7), 10) - 1])),
+    [periodSeq]
+  );
 
   // Header USD total reflects the CURRENT period.
   const total = useMemo(() => {
@@ -177,7 +181,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
             ›
           </button>
         </div>
-        <PeriodLabel label={periodLabel} index={periodIdx} />
+        <PeriodStrip labels={periodLabels} ref={periodRef} />
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
@@ -187,6 +191,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
           items={periodSeq}
           activeIndex={periodIdx}
           pageClassName="pk-paged-page"
+          onProgress={(f) => periodRef.current?.style.setProperty("--period-progress", String(f))}
           onSettle={(i) => {
             const p = periodSeq[i];
             if (p !== month) setMonth(p);
