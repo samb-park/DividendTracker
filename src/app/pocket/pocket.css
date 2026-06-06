@@ -94,6 +94,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
+/* Horizontal swipe lives on the two swipeable tabs only: pan-y keeps native
+   vertical scroll while our JS handles the horizontal flick. History (month
+   chips) and Settings keep default touch-action for their own h-scroll. */
+.pk-screen[data-tab="dividends"],
+.pk-screen[data-tab="upcoming"] { touch-action: pan-y; }
 
 /* header ---------------------------------------------------------------- */
 .pk-topbar {
@@ -120,25 +125,16 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   white-space: nowrap;
   text-align: right;
 }
-/* horizontal swipe surface (Dividends/Upcoming) — vertical scroll stays native */
-/* full-page horizontal swipe surface (Dividends/Upcoming). flex-fill so the hero
-   spacers vertically center the rows; vertical scroll stays native (pan-y). */
-.pk-swipe {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  touch-action: pan-y;
-}
-/* portfolio-change transition — re-keyed on the active portfolio so it replays */
-.pk-anim {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.pk-anim[data-anim="next"] { animation: pk-pf-next 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
-.pk-anim[data-anim="prev"] { animation: pk-pf-prev 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
+/* portfolio-change transition — the slide rides the .pk-hero element (Dividends)
+   and the .pk-slide wrapper (Upcoming), each re-keyed on the active portfolio so
+   it replays. Deliberately NOT a flex-fill wrapper between .pk-screen and the
+   hero: that nesting collapsed the spacer-based vertical centering on iOS Safari.
+   The hero spacers therefore stay DIRECT children of .pk-screen (one flex level,
+   the structure that worked before swipe was added). */
+.pk-hero[data-anim="next"],
+.pk-slide[data-anim="next"] { animation: pk-pf-next 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
+.pk-hero[data-anim="prev"],
+.pk-slide[data-anim="prev"] { animation: pk-pf-prev 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
 @keyframes pk-pf-next {
   from { opacity: 0; transform: translateX(28px); }
   to { opacity: 1; transform: none; }

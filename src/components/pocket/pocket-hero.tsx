@@ -24,6 +24,8 @@ interface Props {
   freqGuess: boolean; // a selected ticker's payment frequency was guessed (<2 records)
   fxFallback: boolean; // FX rate is a stale/default fallback
   portfolioName: string; // active portfolio label shown at the header's right edge
+  animKey: string; // re-keys .pk-hero on portfolio change so the slide replays
+  animDir: "next" | "prev"; // swipe direction → which slide keyframe to play
   onRetry: () => void;
 }
 
@@ -62,6 +64,8 @@ export function PocketHero({
   freqGuess,
   fxFallback,
   portfolioName,
+  animKey,
+  animDir,
   onRetry,
 }: Props) {
   const colRef = useRef<HTMLDivElement>(null);
@@ -95,7 +99,7 @@ export function PocketHero({
     const ro = new ResizeObserver(fit);
     ro.observe(col);
     return () => ro.disconnect();
-  }, [annualUSD, loading, isEmpty, allExcluded]);
+  }, [annualUSD, loading, isEmpty, allExcluded, animKey]);
 
   const showZero = !loading && (isEmpty || allExcluded);
   const showData = !error && !loading && !isEmpty && !allExcluded;
@@ -126,7 +130,7 @@ export function PocketHero({
 
       <div className="pk-spacer-top" />
 
-      <div className="pk-hero" ref={colRef}>
+      <div className="pk-hero" ref={colRef} key={animKey} data-anim={animDir}>
         {ROWS.map((row) => (
           <div className="pk-row" key={row.key}>
             <span className="pk-row-label" data-hero-label>

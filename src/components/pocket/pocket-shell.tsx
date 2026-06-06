@@ -192,7 +192,16 @@ export function PocketShell() {
 
   return (
     <>
-      <div className="pk-screen">
+      {/* Swipe + animation live WITHOUT extra flex wrappers: nesting flex-fill
+          columns between .pk-screen and the hero collapsed the spacer-based
+          centering on iOS Safari. Handlers sit on .pk-screen (gated to the
+          swipeable tabs) and the slide animation rides the .pk-hero element
+          itself — so the spacers stay direct children of .pk-screen. */}
+      <div
+        className="pk-screen"
+        data-tab={tab}
+        {...(tab === "dividends" || tab === "upcoming" ? swipe : {})}
+      >
         {syncing && (
           <div className="pk-syncbar" role="status" aria-live="polite">
             <span className="pk-sync-spin" aria-hidden>
@@ -203,37 +212,33 @@ export function PocketShell() {
         )}
 
         {tab === "dividends" && (
-          <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
-            <div className="pk-anim" key={activeId ?? "all"} data-anim={animDir}>
-              <PocketHero
-                annualUSD={derived.annualUSD}
-                totalValueUSD={derived.totalValueUSD}
-                avgYieldPct={derived.avgYieldPct}
-                loading={loading}
-                error={error}
-                isEmpty={derived.isEmpty}
-                allExcluded={derived.allExcluded}
-                priceGap={derived.priceGap}
-                freqGuess={derived.freqGuess}
-                fxFallback={derived.fxFallback}
-                portfolioName={activeGroup?.name ?? "All"}
-                onRetry={() => load()}
-              />
-            </div>
-          </div>
+          <PocketHero
+            annualUSD={derived.annualUSD}
+            totalValueUSD={derived.totalValueUSD}
+            avgYieldPct={derived.avgYieldPct}
+            loading={loading}
+            error={error}
+            isEmpty={derived.isEmpty}
+            allExcluded={derived.allExcluded}
+            priceGap={derived.priceGap}
+            freqGuess={derived.freqGuess}
+            fxFallback={derived.fxFallback}
+            portfolioName={activeGroup?.name ?? "All"}
+            animKey={activeId ?? "all"}
+            animDir={animDir}
+            onRetry={() => load()}
+          />
         )}
 
         {tab === "upcoming" && (
-          <div className="pk-swipe" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
-            <div className="pk-anim" key={activeId ?? "all"} data-anim={animDir}>
-              <UpcomingList
-                tickers={derived.included}
-                basis={basis}
-                filter={eventFilter}
-                setFilter={setEventFilter}
-                loading={loading}
-              />
-            </div>
+          <div className="pk-slide" key={activeId ?? "all"} data-anim={animDir}>
+            <UpcomingList
+              tickers={derived.included}
+              basis={basis}
+              filter={eventFilter}
+              setFilter={setEventFilter}
+              loading={loading}
+            />
           </div>
         )}
 
