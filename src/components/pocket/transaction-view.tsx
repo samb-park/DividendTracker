@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryMode, TxnFilter, TransactionRow } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
+import { PeriodLabel } from "./period-label";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -204,7 +205,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
             ›
           </button>
         </div>
-        <span className="pk-history-label">{periodLabel}</span>
+        <PeriodLabel label={periodLabel} index={periodIdx} />
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
