@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryMode, TxnFilter, TransactionRow } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -42,6 +43,50 @@ interface Props {
   setMode: (m: HistoryMode) => void;
 }
 
+/** Transaction rows for ONE period (a pager page), filtered by the action filter. */
+function TxnPeriodRows({
+  period,
+  yearTxns,
+  filter,
+  toUSD,
+  loading,
+  error,
+}: {
+  period: string; // "all" | "YYYY-MM"
+  yearTxns: TransactionRow[];
+  filter: TxnFilter;
+  toUSD: (v: number, currency: string) => number;
+  loading: boolean;
+  error: boolean;
+}) {
+  const rows = useMemo(
+    () =>
+      yearTxns
+        .filter((t) => period === "all" || t.date.slice(0, 7) === period)
+        .filter((t) => filter === "all" || t.action === FILTER_ACTION[filter as Exclude<TxnFilter, "all">]),
+    [yearTxns, period, filter]
+  );
+
+  if (error) return <p className="pk-note warn">Couldn’t load transactions.</p>;
+  if (loading) return <p className="pk-note">Loading…</p>;
+  if (rows.length === 0) return <p className="pk-note">No transactions in this period.</p>;
+  return (
+    <div className="pk-picker">
+      {rows.map((t) => (
+        <div className="pk-txn-row" key={t.id}>
+          <span className="pk-event-date">{fmtDate(t.date)}</span>
+          <span className="pk-event-ticker">{t.ticker}</span>
+          <span className="pk-event-tag" data-type={BADGE[t.action].type}>
+            {BADGE[t.action].label}
+          </span>
+          <span className="pk-event-days">{t.action === "DIVIDEND" ? "" : `× ${qtyFmt(t.quantity)}`}</span>
+          <span className="pk-event-amt">${money(toUSD(t.total, t.currency))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function TransactionView({ fxRate, mode, setMode }: Props) {
   const [txns, setTxns] = useState<TransactionRow[]>([]);
   const [year, setYear] = useState<number | null>(null);
@@ -49,6 +94,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
   const [filter, setFilter] = useState<TxnFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const pagerRef = useRef<SwipePagerHandle>(null);
 
   useEffect(() => {
     (async () => {
@@ -77,8 +123,11 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
   useEffect(() => {
     if (year == null && years.length) setYear(years[0]);
   }, [years, year]);
+  // Year change resets the period to "Year" and snaps the pager to index 0
+  // (monthsWithData is synchronous here, so length can change this same render).
   useEffect(() => {
     setMonth("all");
+    pagerRef.current?.scrollToIndex(0);
   }, [year]);
 
   const yearTxns = useMemo(
@@ -89,13 +138,16 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
     () => [...new Set(yearTxns.map((t) => t.date.slice(0, 7)))].sort(),
     [yearTxns]
   );
+  const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
+  const periodIdx = Math.max(0, periodSeq.indexOf(month));
+  const periodLabel = month === "all" ? "Year" : MONTH_LABELS[parseInt(month.slice(5, 7), 10) - 1];
 
-  const { rows, total } = useMemo(() => {
-    const rows = yearTxns
+  // Header USD total = current period × current action filter.
+  const total = useMemo(() => {
+    return yearTxns
       .filter((t) => month === "all" || t.date.slice(0, 7) === month)
-      .filter((t) => filter === "all" || t.action === FILTER_ACTION[filter as Exclude<TxnFilter, "all">]);
-    const total = rows.reduce((s, t) => s + toUSD(t.total, t.currency), 0);
-    return { rows, total };
+      .filter((t) => filter === "all" || t.action === FILTER_ACTION[filter as Exclude<TxnFilter, "all">])
+      .reduce((s, t) => s + toUSD(t.total, t.currency), 0);
   }, [yearTxns, month, filter, toUSD]);
 
   const yearIdx = year != null ? years.indexOf(year) : -1;
@@ -103,7 +155,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
   const canOlder = yearIdx >= 0 && yearIdx < years.length - 1;
 
   return (
-    <div className="pk-settings">
+    <div className="pk-history">
       <div className="pk-summary">
         <h1 className="pk-title">History</h1>
         <div className="pk-summary-cell right">
@@ -114,30 +166,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
 
       <HistoryModeToggle mode={mode} setMode={setMode} />
 
-      {/* Year stepper */}
-      <div className="pk-year">
-        <button
-          type="button"
-          className="pk-year-arrow"
-          onClick={() => canOlder && setYear(years[yearIdx + 1])}
-          disabled={!canOlder}
-          aria-label="Older year"
-        >
-          ‹
-        </button>
-        <span className="pk-year-label">{year ?? "—"}</span>
-        <button
-          type="button"
-          className="pk-year-arrow"
-          onClick={() => canNewer && setYear(years[yearIdx - 1])}
-          disabled={!canNewer}
-          aria-label="Newer year"
-        >
-          ›
-        </button>
-      </div>
-
-      {/* Action filter */}
+      {/* Action filter — directly below the mode toggle. */}
       <div className="pk-seg" role="group" aria-label="Transaction type">
         {FILTER_OPTS.map((o) => (
           <button
@@ -152,43 +181,55 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
         ))}
       </div>
 
-      {/* Month filter */}
-      {monthsWithData.length > 0 && (
-        <div className="pk-chips pk-scroll">
-          <button type="button" className="pk-chip" data-active={month === "all"} onClick={() => setMonth("all")}>
-            Year
+      {/* Year stepper + current period label (updates on swipe). */}
+      <div className="pk-year-row">
+        <div className="pk-year">
+          <button
+            type="button"
+            className="pk-year-arrow"
+            onClick={() => canOlder && setYear(years[yearIdx + 1])}
+            disabled={!canOlder}
+            aria-label="Older year"
+          >
+            ‹
           </button>
-          {monthsWithData.map((m) => (
-            <button key={m} type="button" className="pk-chip" data-active={month === m} onClick={() => setMonth(m)}>
-              {MONTH_LABELS[parseInt(m.slice(5, 7), 10) - 1]}
-            </button>
-          ))}
+          <span className="pk-year-label">{year ?? "—"}</span>
+          <button
+            type="button"
+            className="pk-year-arrow"
+            onClick={() => canNewer && setYear(years[yearIdx - 1])}
+            disabled={!canNewer}
+            aria-label="Newer year"
+          >
+            ›
+          </button>
         </div>
-      )}
+        <span className="pk-history-label">{periodLabel}</span>
+      </div>
 
-      <section>
-        {error ? (
-          <p className="pk-note warn">Couldn’t load transactions.</p>
-        ) : loading ? (
-          <p className="pk-note">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="pk-note">No transactions in this period.</p>
-        ) : (
-          <div className="pk-picker">
-            {rows.map((t) => (
-              <div className="pk-txn-row" key={t.id}>
-                <span className="pk-event-date">{fmtDate(t.date)}</span>
-                <span className="pk-event-ticker">{t.ticker}</span>
-                <span className="pk-event-tag" data-type={BADGE[t.action].type}>
-                  {BADGE[t.action].label}
-                </span>
-                <span className="pk-event-days">{t.action === "DIVIDEND" ? "" : `× ${qtyFmt(t.quantity)}`}</span>
-                <span className="pk-event-amt">${money(toUSD(t.total, t.currency))}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
+      <div className="pk-history-pager">
+        <SwipePager
+          ref={pagerRef}
+          items={periodSeq}
+          activeIndex={periodIdx}
+          pageClassName="pk-history-page"
+          onSettle={(i) => {
+            const p = periodSeq[i];
+            if (p !== month) setMonth(p);
+          }}
+          renderPage={(period) => (
+            <TxnPeriodRows
+              period={period}
+              yearTxns={yearTxns}
+              filter={filter}
+              toUSD={toUSD}
+              loading={loading}
+              error={error}
+            />
+          )}
+        />
+      </div>
     </div>
   );
 }

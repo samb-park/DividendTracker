@@ -62,8 +62,11 @@ export function useExcludedAccounts() {
   return useExcludedSet(EXCLUDED_ACCOUNTS_KEY);
 }
 
-export function useEventFilter(): [EventFilter, (f: EventFilter) => void] {
+export function useEventFilter(): [EventFilter, (f: EventFilter) => void, boolean] {
   const [filter, setFilterState] = useState<EventFilter>("all");
+  // `hydrated` lets the Upcoming pager defer its once-per-mount align until the
+  // persisted filter has loaded (else a deep-link to Upcoming snaps to "all").
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
@@ -72,6 +75,7 @@ export function useEventFilter(): [EventFilter, (f: EventFilter) => void] {
     } catch {
       /* ignore */
     }
+    setHydrated(true);
   }, []);
 
   const setFilter = useCallback((f: EventFilter) => {
@@ -83,7 +87,7 @@ export function useEventFilter(): [EventFilter, (f: EventFilter) => void] {
     }
   }, []);
 
-  return [filter, setFilter];
+  return [filter, setFilter, hydrated];
 }
 
 export function useBasis(): [Basis, (b: Basis) => void] {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basis, HistoryMode } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -28,6 +29,48 @@ interface Props {
   setMode: (m: HistoryMode) => void;
 }
 
+/** Received-dividend rows for ONE period (a pager page): aggregate by ticker, USD desc. */
+function PeriodRows({
+  period,
+  months,
+  basis,
+  toUSD,
+  loading,
+  error,
+}: {
+  period: string; // "all" | "YYYY-MM"
+  months: IncomeMonth[];
+  basis: Basis;
+  toUSD: (v: number, currency: string) => number;
+  loading: boolean;
+  error: boolean;
+}) {
+  const rows = useMemo(() => {
+    const items =
+      period === "all" ? months.flatMap((m) => m.items) : months.find((m) => m.month === period)?.items ?? [];
+    const byTicker = new Map<string, number>();
+    for (const it of items) {
+      const v = basis === "net" ? it.net : it.amount;
+      byTicker.set(it.ticker, (byTicker.get(it.ticker) ?? 0) + toUSD(v, it.currency));
+    }
+    return [...byTicker.entries()].map(([ticker, amt]) => ({ ticker, amt })).sort((a, b) => b.amt - a.amt);
+  }, [period, months, basis, toUSD]);
+
+  if (error) return <p className="pk-note warn">Couldn’t load history.</p>;
+  if (loading) return <p className="pk-note">Loading…</p>;
+  if (rows.length === 0) return <p className="pk-note">No dividends received in this period.</p>;
+  return (
+    <div className="pk-picker">
+      {rows.map((r) => (
+        <div className="pk-hist-row" key={r.ticker}>
+          <span className="pk-event-ticker">{r.ticker}</span>
+          <span className="pk-event-amt">${money(r.amt)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const [years, setYears] = useState<number[]>([]);
   const [year, setYear] = useState<number | null>(null);
@@ -35,6 +78,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const [month, setMonth] = useState<string>("all"); // "all" | "YYYY-MM"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const pagerRef = useRef<SwipePagerHandle>(null);
 
   // Load the list of years that have received dividends.
   useEffect(() => {
@@ -54,12 +98,14 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
     })();
   }, []);
 
-  // Load received dividends for the selected year.
+  // Load received dividends for the selected year. Resets the period to "Year" and
+  // snaps the pager back to index 0 (unconditional — even between equal-month years).
   useEffect(() => {
     if (year == null) return;
     setLoading(true);
     setError(false);
     setMonth("all");
+    pagerRef.current?.scrollToIndex(0);
     (async () => {
       try {
         const res = await fetch(`/api/dividend-income?mode=past&year=${year}`, { cache: "no-store" });
@@ -80,21 +126,15 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   );
 
   const monthsWithData = useMemo(() => months.filter((m) => m.items.length > 0).map((m) => m.month), [months]);
+  const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
+  const periodIdx = Math.max(0, periodSeq.indexOf(month));
+  const periodLabel = month === "all" ? "Year" : MONTH_LABELS[parseInt(month.slice(5, 7), 10) - 1];
 
-  const { rows, total } = useMemo(() => {
+  // Header USD total reflects the CURRENT period.
+  const total = useMemo(() => {
     const items =
-      month === "all"
-        ? months.flatMap((m) => m.items)
-        : months.find((m) => m.month === month)?.items ?? [];
-    const byTicker = new Map<string, number>();
-    for (const it of items) {
-      const v = basis === "net" ? it.net : it.amount;
-      byTicker.set(it.ticker, (byTicker.get(it.ticker) ?? 0) + toUSD(v, it.currency));
-    }
-    const rows = [...byTicker.entries()]
-      .map(([ticker, amt]) => ({ ticker, amt }))
-      .sort((a, b) => b.amt - a.amt);
-    return { rows, total: rows.reduce((s, r) => s + r.amt, 0) };
+      month === "all" ? months.flatMap((m) => m.items) : months.find((m) => m.month === month)?.items ?? [];
+    return items.reduce((s, it) => s + toUSD(basis === "net" ? it.net : it.amount, it.currency), 0);
   }, [months, month, basis, toUSD]);
 
   const yearIdx = year != null ? years.indexOf(year) : -1;
@@ -102,7 +142,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const canOlder = yearIdx >= 0 && yearIdx < years.length - 1;
 
   return (
-    <div className="pk-settings">
+    <div className="pk-history">
       <div className="pk-summary">
         <h1 className="pk-title">History</h1>
         <div className="pk-summary-cell right">
@@ -113,61 +153,48 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
 
       <HistoryModeToggle mode={mode} setMode={setMode} />
 
-      {/* Year stepper */}
-      <div className="pk-year">
-        <button
-          type="button"
-          className="pk-year-arrow"
-          onClick={() => canOlder && setYear(years[yearIdx + 1])}
-          disabled={!canOlder}
-          aria-label="Older year"
-        >
-          ‹
-        </button>
-        <span className="pk-year-label">{year ?? "—"}</span>
-        <button
-          type="button"
-          className="pk-year-arrow"
-          onClick={() => canNewer && setYear(years[yearIdx - 1])}
-          disabled={!canNewer}
-          aria-label="Newer year"
-        >
-          ›
-        </button>
+      {/* Year stepper (arrows = year) + current period label (updates on swipe). */}
+      <div className="pk-year-row">
+        <div className="pk-year">
+          <button
+            type="button"
+            className="pk-year-arrow"
+            onClick={() => canOlder && setYear(years[yearIdx + 1])}
+            disabled={!canOlder}
+            aria-label="Older year"
+          >
+            ‹
+          </button>
+          <span className="pk-year-label">{year ?? "—"}</span>
+          <button
+            type="button"
+            className="pk-year-arrow"
+            onClick={() => canNewer && setYear(years[yearIdx - 1])}
+            disabled={!canNewer}
+            aria-label="Newer year"
+          >
+            ›
+          </button>
+        </div>
+        <span className="pk-history-label">{periodLabel}</span>
       </div>
 
-      {/* Month filter */}
-      {monthsWithData.length > 0 && (
-        <div className="pk-chips pk-scroll">
-          <button type="button" className="pk-chip" data-active={month === "all"} onClick={() => setMonth("all")}>
-            Year
-          </button>
-          {monthsWithData.map((m) => (
-            <button key={m} type="button" className="pk-chip" data-active={month === m} onClick={() => setMonth(m)}>
-              {MONTH_LABELS[parseInt(m.slice(5, 7), 10) - 1]}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <section>
-        {error ? (
-          <p className="pk-note warn">Couldn’t load history.</p>
-        ) : loading ? (
-          <p className="pk-note">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="pk-note">No dividends received in this period.</p>
-        ) : (
-          <div className="pk-picker">
-            {rows.map((r) => (
-              <div className="pk-hist-row" key={r.ticker}>
-                <span className="pk-event-ticker">{r.ticker}</span>
-                <span className="pk-event-amt">${money(r.amt)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
+      <div className="pk-history-pager">
+        <SwipePager
+          ref={pagerRef}
+          items={periodSeq}
+          activeIndex={periodIdx}
+          pageClassName="pk-history-page"
+          onSettle={(i) => {
+            const p = periodSeq[i];
+            if (p !== month) setMonth(p);
+          }}
+          renderPage={(period) => (
+            <PeriodRows period={period} months={months} basis={basis} toUSD={toUSD} loading={loading} error={error} />
+          )}
+        />
+      </div>
     </div>
   );
 }

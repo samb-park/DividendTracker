@@ -106,6 +106,16 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding: 0;              /* padding relocates to .pk-page */
 }
 
+/* History is a FIXED-HEADER + horizontally-paging-rows layout (not the base
+   scrolling .pk-screen). overflow:hidden so the outer screen never co-scrolls
+   vertically with the pages (TransactionView's header is taller). Settings keeps
+   the base .pk-screen — it does NOT match this selector. */
+.pk-screen[data-tab="history"] {
+  overflow: hidden;
+  padding: 0;
+  min-height: 0;
+}
+
 /* The track. Its DEFINITE height comes from inset:0 ALONE (do NOT add height:100%
    here — that would be a % against the flex item and reintroduce the fragile path).
    Native overflow-x scroll gives 1:1 finger-tracking + iOS momentum + rubber-band;
@@ -568,7 +578,70 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   line-height: 1;
 }
 
-/* history: year stepper + per-ticker received rows --------------------- */
+/* history: fixed header + horizontally-paging rows --------------------- */
+/* AIRTIGHT iOS-WebKit HEIGHT CHAIN for the rows sub-region pager — the proven
+   Dividends chain one flex level deeper, with the growing flex item
+   (.pk-history-pager, overflow:hidden) DELIBERATELY NOT the scroll boundary:
+     .pocket-root        height:100dvh; flex column            (root, definite)
+     .pk-screen[history] flex:1 1 0; min-height:0; overflow:hidden
+     .pk-history         flex:1 1 0; min-height:0; flex column (bounded by screen)
+       header rows       flex:0 0 auto                         (intrinsic height)
+       .pk-history-pager flex:1 1 0; min-height:0; position:relative; overflow:hidden
+                         → DEFINITE used height = screen − header
+         .pk-track       position:absolute; inset:0 → height = pager (DEFINITE)
+         .pk-history-page height:100% of inset:0 track (explicit size, set BEFORE the
+                         scroll boundary, NOT flex-grow across it) + overflow-y:auto.
+   The flex-grow-through-scroll spacer-collapse cannot recur: the box that grows
+   is overflow:hidden and is not itself the scroll boundary. */
+.pk-history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+  gap: 24px;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px 0;
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+.pk-history-pager {
+  position: relative;
+  overflow: hidden;        /* pages scroll, not this box */
+  min-height: 0;
+  flex: 1 1 0;
+  margin: 0 -24px;         /* pages span edge-to-edge; page padding restores the gutter */
+}
+.pk-history-page {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  touch-action: auto;      /* iOS directional-lock; NOT pan-y */
+  padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+
+/* year stepper + period label on one row (label updates as you swipe) */
+.pk-year-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pk-history-label {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .pk-year {
   display: flex;
   align-items: center;

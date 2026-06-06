@@ -8,8 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RunRateResponse, TickerAgg, PositionRunRate, Basis } from "@/lib/pocket-types";
+import type { RunRateResponse, TickerAgg, PositionRunRate, Basis, EventFilter } from "@/lib/pocket-types";
 import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
+import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { usePocketGroups } from "./use-pocket-groups";
 import { usePocketSync } from "./use-pocket-sync";
 import { PocketHero } from "./pocket-hero";
@@ -104,6 +105,56 @@ function computeDerived(
   };
 }
 
+const UPCOMING_FILTERS: EventFilter[] = ["all", "ex", "pay"];
+
+/**
+ * Upcoming swipe cycles the event FILTER (all/ex/pay) of the ACTIVE portfolio —
+ * NOT the portfolio. Each page renders that portfolio's events filtered; the
+ * per-page .pk-seg segment is the live indicator (active by construction) and
+ * tapping it drives the pager via scrollToIndex. Its own SwipePager instance →
+ * its own align/settle, independent of the Dividends portfolio pager.
+ */
+function UpcomingPager({
+  included,
+  basis,
+  loading,
+  eventFilter,
+  setEventFilter,
+  hydrated,
+}: {
+  included: TickerAgg[];
+  basis: Basis;
+  loading: boolean;
+  eventFilter: EventFilter;
+  setEventFilter: (f: EventFilter) => void;
+  hydrated: boolean;
+}) {
+  const pagerRef = useRef<SwipePagerHandle>(null);
+  const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
+  return (
+    <SwipePager
+      ref={pagerRef}
+      items={UPCOMING_FILTERS}
+      activeIndex={idx}
+      ready={hydrated}
+      pageClassName="pk-page"
+      onSettle={(i) => {
+        const f = UPCOMING_FILTERS[i];
+        if (f !== eventFilter) setEventFilter(f);
+      }}
+      renderPage={(f) => (
+        <UpcomingList
+          tickers={included}
+          basis={basis}
+          filter={f as EventFilter}
+          setFilter={(nf) => pagerRef.current?.scrollToIndex(UPCOMING_FILTERS.indexOf(nf))}
+          loading={loading}
+        />
+      )}
+    />
+  );
+}
+
 export function PocketShell() {
   const [data, setData] = useState<RunRateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,9 +162,10 @@ export function PocketShell() {
 
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [managing, setManaging] = useState(false);
-  const [eventFilter, setEventFilter] = useEventFilter();
+  const [eventFilter, setEventFilter, eventFilterHydrated] = useEventFilter();
 
-  // Dividends + Upcoming are a native horizontal scroll-snap pager; History/Settings are not.
+  // Dividends + Upcoming both render full-screen pages (CSS .pk-screen[data-tab] +
+  // syncbar-float); only Dividends rides the portfolio pager below.
   const isPagerTab = tab === "dividends" || tab === "upcoming";
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -194,20 +246,22 @@ export function PocketShell() {
     }, 120);
   }, [portfolioOrder, activeId, setActiveId]);
 
-  // activeId → page: align ONCE per pager-tab entry, instantly, before paint (no flash).
-  // While the pager is mounted, activeId changes only via swipe, so there is no reactive
-  // scrollTo to fight native momentum — the Settings selector lives on a non-pager tab.
+  // activeId → page: align ONCE per Dividends-tab entry, instantly, before paint.
+  // The Dividends track is the ONLY consumer of this machinery now (Upcoming has its
+  // own SwipePager instance keyed on the event filter), so the portfolio settle can
+  // never fire on Upcoming. activeId changes only via swipe while mounted → no reactive
+  // scrollTo fighting momentum (the Settings selector lives on a non-pager tab).
   const didInitScroll = useRef(false);
   useLayoutEffect(() => {
     const el = trackRef.current;
-    if (!el || !isPagerTab || didInitScroll.current) return;
+    if (!el || tab !== "dividends" || didInitScroll.current) return;
     const i = portfolioOrder.indexOf(activeId);
     el.scrollLeft = Math.max(0, i) * el.clientWidth;
     didInitScroll.current = true;
-  }, [isPagerTab, portfolioOrder, activeId]);
+  }, [tab, portfolioOrder, activeId]);
   useEffect(() => {
-    if (!isPagerTab) didInitScroll.current = false;
-  }, [isPagerTab]);
+    if (tab !== "dividends") didInitScroll.current = false;
+  }, [tab]);
 
   return (
     <>
@@ -235,40 +289,48 @@ export function PocketShell() {
           </div>
         )}
 
-        {isPagerTab && (
+        {/* Dividends portfolio pager — FROZEN: the verified-good hero-centering
+            track stays inline. .pk-track is position:absolute inset:0 (definite
+            height); each .pk-page is height:100% and PocketHero's spacers are its
+            DIRECT children. Do not wrap PocketHero or migrate it onto SwipePager. */}
+        {tab === "dividends" && (
           <div className="pk-track" ref={trackRef} onScroll={onTrackScroll}>
             {portfolioOrder.map((id, i) => {
               const d = derivedByPortfolio[i];
               return (
                 <div className="pk-page" key={id ?? "all"}>
-                  {tab === "dividends" ? (
-                    <PocketHero
-                      annualUSD={d.annualUSD}
-                      totalValueUSD={d.totalValueUSD}
-                      avgYieldPct={d.avgYieldPct}
-                      loading={loading}
-                      error={error}
-                      isEmpty={d.isEmpty}
-                      allExcluded={d.allExcluded}
-                      priceGap={d.priceGap}
-                      freqGuess={d.freqGuess}
-                      fxFallback={d.fxFallback}
-                      portfolioName={d.portfolioName}
-                      onRetry={() => load()}
-                    />
-                  ) : (
-                    <UpcomingList
-                      tickers={d.included}
-                      basis={basis}
-                      filter={eventFilter}
-                      setFilter={setEventFilter}
-                      loading={loading}
-                    />
-                  )}
+                  <PocketHero
+                    annualUSD={d.annualUSD}
+                    totalValueUSD={d.totalValueUSD}
+                    avgYieldPct={d.avgYieldPct}
+                    loading={loading}
+                    error={error}
+                    isEmpty={d.isEmpty}
+                    allExcluded={d.allExcluded}
+                    priceGap={d.priceGap}
+                    freqGuess={d.freqGuess}
+                    fxFallback={d.fxFallback}
+                    portfolioName={d.portfolioName}
+                    onRetry={() => load()}
+                  />
                 </div>
               );
             })}
           </div>
+        )}
+
+        {/* Upcoming — its OWN SwipePager: swipe cycles the event filter (all/ex/pay)
+            of the active portfolio. Separate tab branch → remounts on entry → its
+            align/settle are independent of the Dividends portfolio pager. */}
+        {tab === "upcoming" && (
+          <UpcomingPager
+            included={derivedByPortfolio[Math.max(0, portfolioOrder.indexOf(activeId))]?.included ?? []}
+            basis={basis}
+            loading={loading}
+            eventFilter={eventFilter}
+            setEventFilter={setEventFilter}
+            hydrated={eventFilterHydrated}
+          />
         )}
 
         {tab === "history" && <HistoryTab basis={basis} fxRate={data?.fx?.usdcad ?? null} />}
