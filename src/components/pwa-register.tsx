@@ -2,20 +2,17 @@
 
 import { useEffect } from "react";
 
-// 2026-05-21 KILL SWITCH: do NOT register a service worker right now.
-// iOS Safari kept serving stale JS chunks because the previous SW pinned a
-// fixed cache name. /sw.js currently runs a self-unregister-and-purge routine
-// on install. We must not call register() again until we ship a SW with a
-// versioned-cache strategy that's safe to re-enable.
+// Registers the push-only /sw.js at scope '/' — the SAME scope the historical SW
+// used, so this is a clean UPDATE of any existing registration, not a second
+// coexisting one. Scope '/' is required: the /v1 surface and the installed
+// /pocket PWA must share one worker. The SW has NO fetch handler, so a '/'-scoped
+// worker is cache-safe (it cannot serve stale assets — see public/sw.js).
 export function PwaRegister() {
   useEffect(() => {
-    // Best-effort cleanup: if any old SW is still registered, unregister it
-    // so this user reverts to direct network fetches.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations()
-        .then((regs) => Promise.all(regs.map((r) => r.unregister().catch(() => {}))))
-        .catch(() => {});
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .catch((err) => console.debug("SW registration failed:", err));
   }, []);
 
   return null;

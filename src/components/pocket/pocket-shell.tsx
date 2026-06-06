@@ -18,6 +18,7 @@ import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
 import { UpcomingList } from "./upcoming-list";
 import { HistoryTab } from "./history-tab";
+import { PwaRegister } from "@/components/pwa-register";
 
 /** Roll (account × ticker) positions up to per-ticker USD aggregates. */
 function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
@@ -210,6 +211,9 @@ export function PocketShell() {
 
   return (
     <>
+      {/* Registers the push-only SW on every /pocket load (the installed PWA
+          launches here), so Web Push can arm. No-op without serviceWorker. */}
+      <PwaRegister />
       {/* Dividends/Upcoming = a native horizontal scroll-snap pager. .pk-screen is the
           positioning context; .pk-track is position:absolute inset:0 so its height is
           DEFINITE — each .pk-page inherits it via height:100% and reproduces the proven

@@ -254,6 +254,21 @@ model PocketGroup {
   @@index([userId])
 }
 
+/// Web Push subscriptions for same-day Ex/Pay dividend alerts (multi-device).
+/// userId is a soft ref (single-user mode: "sangbong"); no FK, matching PocketGroup.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  lastSeenAt DateTime @default(now()) @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
 // =============================================================================
 // Observability layer (Phase 1 — Slice 1.1) — additive only.
 //   - No FK to existing tables (audit trails must survive user deletion).

@@ -721,6 +721,44 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pk-pfrow-check { color: var(--pk-ink); font-size: 15px; flex: 0 0 auto; }
 .pk-pfrow-chevron { color: var(--pk-faint); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
 
+/* notification toggles (Settings → Dividend alerts) --------------------- */
+.pk-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+}
+.pk-switch-row + .pk-switch-row { border-top: 1px solid var(--pk-hairline); }
+.pk-switch-label { font-size: 15px; font-weight: 600; color: var(--pk-ink); }
+.pk-switch {
+  appearance: none;
+  flex: 0 0 auto;
+  position: relative;
+  width: 48px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: var(--pk-faint);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease;
+}
+.pk-switch[data-on="true"] { background: #0a8043; } /* brand green */
+.pk-switch:disabled { opacity: 0.5; cursor: default; }
+.pk-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
+}
+.pk-switch[data-on="true"] .pk-switch-knob { transform: translateX(18px); }
+
 /* drag-to-reorder (Settings portfolio list) ----------------------------- */
 /* Keep the page scrollable on the rows before a drag starts. dnd-kit's
    TouchSensor suppresses scroll DURING an active drag via its own non-passive

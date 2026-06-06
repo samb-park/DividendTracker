@@ -2,6 +2,7 @@
 
 import type { Basis, PocketGroup, ThemePref } from "@/lib/pocket-types";
 import { DraggablePortfolioList } from "./draggable-portfolio-list";
+import { NotifySettings } from "./notify-settings";
 
 interface Props {
   groups: PocketGroup[];
@@ -92,6 +93,8 @@ export function PocketSettings({
           ))}
         </div>
       </section>
+
+      <NotifySettings />
     </div>
   );
 }
