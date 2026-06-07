@@ -46,8 +46,23 @@ export interface TickerAgg {
 
 export type Basis = "net" | "gross";
 export type EventFilter = "all" | "ex" | "pay";
-export type HistoryMode = "dividends" | "transactions";
+export type HistoryMode = "dividends" | "transactions" | "cashflow";
 export type TxnFilter = "all" | "buy" | "sell" | "div";
+
+/** A row from GET /api/cash-transactions?year=YYYY — a deposit/withdrawal tied to
+ *  a brokerage account (portfolio). Used by the History → Cash Flow view to show
+ *  per-account contributions ("불입") per year, in CAD. */
+export interface CashFlowRow {
+  id: string;
+  date: string; // YYYY-MM-DD
+  portfolioId: string;
+  portfolioName: string;
+  portfolioAccountType: string; // TFSA / RRSP / FHSA / NON_REG / CASH
+  action: "DEPOSIT" | "WITHDRAWAL";
+  amount: number; // native currency, always positive
+  currency: "CAD" | "USD";
+  notes: string | null;
+}
 
 /** A row from GET /api/transactions/calendar (all actions, date desc). */
 export interface TransactionRow {

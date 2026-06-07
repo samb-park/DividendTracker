@@ -753,6 +753,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-bottom: 1px solid var(--pk-hairline);
 }
 .pk-hist-row:last-child { border-bottom: none; }
+/* cash-flow account name: truncate long custom names instead of overflowing the 1fr cell */
+.pk-cf-acct { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* transaction log row: date · ticker · action badge · qty · amount
    (reuses pk-event-* cell classes; wider badge track so "SELL" fits) */
