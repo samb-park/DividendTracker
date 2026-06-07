@@ -410,22 +410,32 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 .pk-event-row:last-child { border-bottom: none; }
 .pk-event-date {
-  position: relative; /* anchor the hung "~" so the month glyph keeps the column edge */
+  position: relative; /* anchor the hung est-clock so the month glyph keeps the column edge */
   font-size: 15px;
   font-weight: 700;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* Hang the estimated tilde into the left gutter so "Jul"/"Jun" stay left-aligned
-   down the column (tabular-nums can't align a non-digit prefix inline). */
+/* Hang the estimated-date clock into the left gutter so "Jul"/"Jun" stay
+   left-aligned down the column (a prefix glyph can't align inline with
+   tabular-nums). top/bottom:0 + flex centers the small icon against the date. */
 .pk-event-date .est {
   position: absolute;
   right: 100%;
-  margin-right: 2px;
+  margin-right: 3px;
   top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
   color: var(--pk-muted);
-  font-weight: 600;
+}
+.pk-est-ico { display: block; }
+/* "[clock] estimated date" legend above the list. */
+.pk-est-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 .pk-event-ticker {
   font-size: 17px;
@@ -1052,16 +1062,6 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   transition: background 0.18s ease, transform 0.18s ease;
 }
 .pk-dot-nav[data-active="true"]::before { background: var(--pk-ink); transform: scale(1.2); }
-
-/* Inline jargon/key caption sitting directly under a control (Net/Gross, Ex/Pay).
-   Same caption type as .pk-note but a tight 8px lead (it belongs to the control above). */
-.pk-hint {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pk-muted);
-  line-height: 1.4;
-  margin-top: 8px;
-}
 
 /* Visually-hidden, screen-reader-only text (e.g. "estimated" before the ~ tilde). */
 .pk-sr-only {

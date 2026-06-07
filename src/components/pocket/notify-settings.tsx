@@ -218,10 +218,6 @@ export function NotifySettings() {
             </p>
           )}
           {errMsg && <p className="pk-note warn">{errMsg}</p>}
-          <p className="pk-note">
-            Sent every morning (~08:00 Toronto) for confirmed ex/pay dates today. Estimated “~”
-            dates alert once they’re confirmed.
-          </p>
         </>
       )}
     </section>

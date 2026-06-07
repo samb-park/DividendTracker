@@ -58,7 +58,6 @@ export function PocketSettings({
       <section>
         <div className="pk-section-label">Amount basis</div>
         <AnimatedSegment options={BASIS_OPTS} value={basis} onChange={setBasis} ariaLabel="Amount basis" />
-        <p className="pk-hint">Net = after withholding tax · Gross = before tax</p>
       </section>
 
       <section>

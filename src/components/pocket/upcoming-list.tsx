@@ -38,6 +38,24 @@ interface EventRow {
   confirmed: boolean;
 }
 
+/** Tiny clock = this date isn't confirmed yet (an estimate). Monochrome, inherits
+ *  the muted color of whatever it sits in (the date gutter or the legend). */
+function EstClock() {
+  return (
+    <svg className="pk-est-ico" viewBox="0 0 16 16" width="11" height="11" aria-hidden focusable="false">
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 4.6V8l2.3 1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /**
  * The upcoming-events list for ONE filter (a pager page) — no header/segment.
  * The All/Ex/Pay segment is a FIXED header above the pager (UpcomingView), so
@@ -72,8 +90,11 @@ export function UpcomingEvents({
   if (events.length === 0) return <p className="pk-note">No upcoming dividends for the selected holdings.</p>;
   return (
     <>
-      <p className="pk-hint">Ex = own-by date · Pay = payout date</p>
-      {events.some((e) => !e.confirmed) && <p className="pk-note">~ estimated date</p>}
+      {events.some((e) => !e.confirmed) && (
+        <p className="pk-note pk-est-legend">
+          <EstClock /> estimated date
+        </p>
+      )}
       <div className="pk-picker">
         {events.map((e) => (
           <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
@@ -82,7 +103,7 @@ export function UpcomingEvents({
                 <>
                   <span className="pk-sr-only">estimated </span>
                   <span className="est" aria-hidden>
-                    ~
+                    <EstClock />
                   </span>
                 </>
               )}

@@ -133,10 +133,6 @@ export function PocketHero({
         ))}
       </div>
 
-      {/* The big numbers are an AVERAGE run-rate (annual ÷ 365/52/12/1), not actual
-          receipts — say so once so "M" isn't misread as this month's real income. */}
-      {showData && <p className="pk-note">Average at your current dividend rate</p>}
-
       {error && (
         <div>
           <p className="pk-note warn">Couldn’t load data.</p>
