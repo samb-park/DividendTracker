@@ -10,6 +10,7 @@ import {
 import type { RunRateResponse, TickerAgg, PositionRunRate, Basis, EventFilter } from "@/lib/pocket-types";
 import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
+import { PageDots, setActiveDots } from "./page-dots";
 import { usePocketGroups } from "./use-pocket-groups";
 import { usePocketSync } from "./use-pocket-sync";
 import { PocketHero } from "./pocket-hero";
@@ -131,9 +132,20 @@ function UpcomingPager({
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const segRef = useRef<HTMLDivElement>(null);
+  const dotsRef = useRef<HTMLDivElement>(null);
   const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
   return (
     <div className="pk-upcoming">
+      {/* Page dots at the very top mark the three filter pages and that you can
+          swipe between them — consistent with every other pager. */}
+      <PageDots
+        ref={dotsRef}
+        count={UPCOMING_FILTERS.length}
+        activeIndex={idx}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Event filter"
+        itemLabel={(i) => UPCOMING_FILTER_OPTS[i].label}
+      />
       {/* FIXED header: title + All/Ex/Pay segment. The white pill slides 1:1 with
           the swipe (onProgress sets --seg-progress on every frame); tapping a
           segment drives the pager. The pill is the active indicator. */}
@@ -163,7 +175,10 @@ function UpcomingPager({
           ready={hydrated}
           pageClassName="pk-paged-page"
           dragSwipe
-          onProgress={(f) => segRef.current?.style.setProperty("--seg-progress", String(f))}
+          onProgress={(f) => {
+            segRef.current?.style.setProperty("--seg-progress", String(f));
+            setActiveDots(dotsRef.current, Math.round(f));
+          }}
           onSettle={(i) => {
             const f = UPCOMING_FILTERS[i];
             if (f !== eventFilter) setEventFilter(f);
@@ -211,29 +226,21 @@ function DividendsPager({
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
   return (
     <div className="pk-dividends">
-      {/* FIXED header: "Dividends" + active portfolio name + page dots. The dots
-          make the other portfolios discoverable (swipe alone is invisible) and are
-          tappable. Only the content below the header slides. */}
-      <div className="pk-dividends-top">
-        <div className="pk-dividends-head">
-          <h1 className="pk-title">Dividends</h1>
-          <span className="pk-hero-pf" ref={nameRef}>{activeName}</span>
-        </div>
-        {items.length > 1 && (
-          <div className="pk-dots" ref={dotsRef} aria-label="Portfolios">
-            {items.map((it, i) => (
-              <button
-                key={it}
-                type="button"
-                className="pk-dot-nav"
-                data-active={i === activeIndex}
-                aria-label={`Show ${derivedByPortfolio[i]?.portfolioName ?? "All"}`}
-                aria-current={i === activeIndex || undefined}
-                onClick={() => pagerRef.current?.scrollToIndex(i)}
-              />
-            ))}
-          </div>
-        )}
+      {/* Page dots sit ABOVE the title — the topmost element — so the swipe is
+          discoverable (and tappable) before you even read the heading. */}
+      <PageDots
+        ref={dotsRef}
+        count={items.length}
+        activeIndex={activeIndex}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Portfolios"
+        itemLabel={(i) => `Show ${derivedByPortfolio[i]?.portfolioName ?? "All"}`}
+      />
+      {/* FIXED header: "Dividends" + active portfolio name. Only the content
+          below slides; the title + name stay put. */}
+      <div className="pk-dividends-head">
+        <h1 className="pk-title">Dividends</h1>
+        <span className="pk-hero-pf" ref={nameRef}>{activeName}</span>
       </div>
       <div className="pk-paged-region">
         <SwipePager
@@ -247,12 +254,7 @@ function DividendsPager({
             // 120ms settle): light up the toward-dot AND swap the header name so the
             // fixed title's portfolio label changes with the page, not after it.
             const active = Math.max(0, Math.min(items.length - 1, Math.round(f)));
-            const el = dotsRef.current;
-            if (el) {
-              for (let i = 0; i < el.children.length; i++) {
-                (el.children[i] as HTMLElement).dataset.active = i === active ? "true" : "false";
-              }
-            }
+            setActiveDots(dotsRef.current, active);
             const nm = nameRef.current;
             if (nm) nm.textContent = derivedByPortfolio[active]?.portfolioName ?? "All";
           }}

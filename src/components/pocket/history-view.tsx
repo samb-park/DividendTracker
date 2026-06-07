@@ -5,6 +5,7 @@ import type { Basis, HistoryMode } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PeriodStrip } from "./period-strip";
+import { PageDots, setActiveDots } from "./page-dots";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -81,6 +82,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   const [error, setError] = useState(false);
   const pagerRef = useRef<SwipePagerHandle>(null);
   const periodRef = useRef<HTMLDivElement>(null);
+  const dotsRef = useRef<HTMLDivElement>(null);
 
   // Load the list of years that have received dividends.
   useEffect(() => {
@@ -148,6 +150,15 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
 
   return (
     <div className="pk-history">
+      {/* Page dots at the top mark the swipeable periods (Year ↔ each month). */}
+      <PageDots
+        ref={dotsRef}
+        count={periodSeq.length}
+        activeIndex={periodIdx}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Periods"
+        itemLabel={(i) => periodLabels[i]}
+      />
       <div className="pk-summary">
         <h1 className="pk-title">History</h1>
         <div className="pk-summary-cell right">
@@ -192,7 +203,10 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
           activeIndex={periodIdx}
           pageClassName="pk-paged-page"
           dragSwipe
-          onProgress={(f) => periodRef.current?.style.setProperty("--period-progress", String(f))}
+          onProgress={(f) => {
+            periodRef.current?.style.setProperty("--period-progress", String(f));
+            setActiveDots(dotsRef.current, Math.round(f));
+          }}
           onSettle={(i) => {
             const p = periodSeq[i];
             if (p !== month) setMonth(p);

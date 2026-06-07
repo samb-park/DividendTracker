@@ -156,8 +156,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   letter-spacing: -0.6px;
   line-height: 1.05;
 }
-/* Dividends fixed header: title + name row, then the page dots, tight together. */
-.pk-dividends-top { display: flex; flex-direction: column; gap: 12px; }
+/* Dividends fixed header: title + active-portfolio name (dots sit above it). */
 .pk-dividends-head {
   display: flex;
   align-items: baseline;
@@ -998,14 +997,22 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   }
 }
 
-/* Dividends page dots — discoverable, tappable portfolio navigation -------- */
-.pk-dots { display: flex; justify-content: center; gap: 7px; padding-bottom: 2px; }
+/* Page dots — the topmost element of every swipeable surface (Dividends, Upcoming,
+   History, Transactions): a centered, tappable page control. The negative bottom
+   margin trims the 24px section gap so the dots sit a calm ~16px above the title. */
+.pk-dots {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: -8px;
+}
 .pk-dot-nav {
   appearance: none;
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 14px 6px; /* vertical-only enlargement → ~35px tall target; 6px keeps the 7px-gap dots from overlapping */
+  padding: 9px 6px; /* tappable area around the 7px dot; 6px keeps the gap-7 dots from overlapping */
   line-height: 0;
 }
 .pk-dot-nav::before {
