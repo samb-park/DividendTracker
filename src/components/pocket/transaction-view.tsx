@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryMode, TxnFilter, TransactionRow } from "@/lib/pocket-types";
+import { inAccountScope } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PeriodStrip } from "./period-strip";
 import { AnimatedSegment } from "./animated-segment";
@@ -44,6 +46,9 @@ interface Props {
   fxRate: number | null;
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
+  activeAccounts: string[]; // portfolio account scope ([] = all)
+  portfolioName: string;
+  onOpenPicker: () => void;
 }
 
 /** Transaction rows for ONE period (a pager page), filtered by the action filter. */
@@ -90,7 +95,7 @@ function TxnPeriodRows({
   );
 }
 
-export function TransactionView({ fxRate, mode, setMode }: Props) {
+export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [txns, setTxns] = useState<TransactionRow[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [month, setMonth] = useState<string>("all"); // "all" | "YYYY-MM"
@@ -120,10 +125,15 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
     [fxRate]
   );
 
-  // Years derived from the transactions themselves (includes buy/sell-only years).
+  // Account-scope filter (empty = all) — drives years, periods, rows, and total.
+  const scopedTxns = useMemo(
+    () => txns.filter((t) => inAccountScope(t.accountType, activeAccounts)),
+    [txns, activeAccounts]
+  );
+  // Years derived from the (scoped) transactions themselves (includes buy/sell-only years).
   const years = useMemo(
-    () => [...new Set(txns.map((t) => parseInt(t.date.slice(0, 4), 10)))].sort((a, b) => b - a),
-    [txns]
+    () => [...new Set(scopedTxns.map((t) => parseInt(t.date.slice(0, 4), 10)))].sort((a, b) => b - a),
+    [scopedTxns]
   );
   useEffect(() => {
     if (year == null && years.length) setYear(years[0]);
@@ -136,8 +146,8 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
   }, [year]);
 
   const yearTxns = useMemo(
-    () => (year == null ? [] : txns.filter((t) => t.date.slice(0, 4) === String(year))),
-    [txns, year]
+    () => (year == null ? [] : scopedTxns.filter((t) => t.date.slice(0, 4) === String(year))),
+    [scopedTxns, year]
   );
   const monthsWithData = useMemo(
     () => [...new Set(yearTxns.map((t) => t.date.slice(0, 7)))].sort(),
@@ -165,7 +175,7 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
   return (
     <div className="pk-history">
       <div className="pk-summary">
-        <h1 className="pk-title">Activity</h1>
+        <PortfolioPickerButton name={portfolioName} onOpen={onOpenPicker} />
         <div className="pk-summary-cell right">
           <span className="pk-summary-label">USD</span>
           <span className="pk-summary-value">{loading ? "—" : money(total)}</span>

@@ -163,16 +163,30 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   justify-content: space-between;
   gap: 12px;
 }
-.pk-hero-pf {
-  font-size: 13px; /* Caption — on the documented scale (was an orphan 15/600) */
-  font-weight: 600;
-  color: var(--pk-muted);
-  max-width: 55%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
+/* Tappable portfolio picker button — shared by Dividends + the Activity views
+   (opens the root PortfolioPicker). Size is set by context: a small muted caption
+   on the Dividends header right, the header identity in the Activity .pk-summary. */
+.pk-pf-pick {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--pk-ink);
+  cursor: pointer;
+  padding: 4px 2px;
+  margin: -4px 0;
+  -webkit-tap-highlight-color: transparent;
 }
+.pk-pf-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-pf-pick-caret { flex: 0 0 auto; font-size: 0.62em; color: var(--pk-muted); transform: translateY(-1px); }
+.pk-pf-pick:active { opacity: 0.55; }
+/* Dividends header: small muted caption on the right (replaces the old .pk-hero-pf). */
+.pk-dividends-head .pk-pf-pick { font-size: 13px; font-weight: 600; color: var(--pk-muted); max-width: 55%; }
+/* Activity views: the picker IS the header identity (the "Activity" h1 was dropped). */
+.pk-summary .pk-pf-pick { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; max-width: 64%; }
 .pk-summary {
   display: flex;
   align-items: baseline;

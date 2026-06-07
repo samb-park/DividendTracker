@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryMode, CashFlowRow } from "@/lib/pocket-types";
+import { inAccountScope } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PeriodStrip } from "./period-strip";
 import { PageDots, setActiveDots } from "./page-dots";
@@ -17,6 +19,9 @@ interface Props {
   fxRate: number | null; // USDCAD; USD → CAD = amount * fxRate
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
+  activeAccounts: string[]; // portfolio account scope ([] = all)
+  portfolioName: string;
+  onOpenPicker: () => void;
 }
 
 /** Per-account CONTRIBUTIONS (gross deposits, "불입") for ONE period (a pager page),
@@ -66,7 +71,7 @@ function AccountRows({
   );
 }
 
-export function CashFlowView({ fxRate, mode, setMode }: Props) {
+export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [year, setYear] = useState<number>(() => new Date().getFullYear());
   const [years, setYears] = useState<number[]>([]);
   const [items, setItems] = useState<CashFlowRow[]>([]);
@@ -110,9 +115,15 @@ export function CashFlowView({ fxRate, mode, setMode }: Props) {
     [fxRate]
   );
 
+  // Account-scope filter (empty = all): only the selected portfolio's accounts.
+  const scopedItems = useMemo(
+    () => items.filter((t) => inAccountScope(t.portfolioAccountType, activeAccounts)),
+    [items, activeAccounts]
+  );
+
   const monthsWithData = useMemo(
-    () => [...new Set(items.filter((t) => t.action === "DEPOSIT").map((t) => t.date.slice(0, 7)))].sort(),
-    [items]
+    () => [...new Set(scopedItems.filter((t) => t.action === "DEPOSIT").map((t) => t.date.slice(0, 7)))].sort(),
+    [scopedItems]
   );
   const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
   const periodIdx = Math.max(0, periodSeq.indexOf(month));
@@ -123,10 +134,10 @@ export function CashFlowView({ fxRate, mode, setMode }: Props) {
 
   // Header total = total CONTRIBUTED (gross deposits) for the current period (CAD).
   const total = useMemo(() => {
-    return items
+    return scopedItems
       .filter((t) => t.action === "DEPOSIT" && (month === "all" || t.date.slice(0, 7) === month))
       .reduce((s, t) => s + toCAD(t.amount, t.currency), 0);
-  }, [items, month, toCAD]);
+  }, [scopedItems, month, toCAD]);
 
   const yearIdx = years.indexOf(year);
   const canNewer = yearIdx > 0; // years are sorted descending
@@ -135,7 +146,7 @@ export function CashFlowView({ fxRate, mode, setMode }: Props) {
   return (
     <div className="pk-history">
       <div className="pk-summary">
-        <h1 className="pk-title">Activity</h1>
+        <PortfolioPickerButton name={portfolioName} onOpen={onOpenPicker} />
         <div className="pk-summary-cell right">
           <span className="pk-summary-label">CAD</span>
           <span className="pk-summary-value">{loading ? "—" : cad(total)}</span>
@@ -187,7 +198,7 @@ export function CashFlowView({ fxRate, mode, setMode }: Props) {
             if (p !== month) setMonth(p);
           }}
           renderPage={(period) => (
-            <AccountRows period={period} items={items} toCAD={toCAD} loading={loading} error={error} />
+            <AccountRows period={period} items={scopedItems} toCAD={toCAD} loading={loading} error={error} />
           )}
         />
       </div>

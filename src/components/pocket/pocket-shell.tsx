@@ -20,6 +20,7 @@ import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
 import { ChartsView } from "./charts-view";
 import { PortfolioPicker } from "./portfolio-picker";
+import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { HistoryTab } from "./history-tab";
 import { PwaRegister } from "@/components/pwa-register";
 
@@ -123,6 +124,7 @@ function DividendsPager({
   loading,
   error,
   onRetry,
+  onOpenPicker,
 }: {
   derivedByPortfolio: Derived[];
   portfolioOrder: (string | null)[];
@@ -132,6 +134,7 @@ function DividendsPager({
   loading: boolean;
   error: boolean;
   onRetry: () => void;
+  onOpenPicker: () => void;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
@@ -139,13 +142,21 @@ function DividendsPager({
   const items = useMemo(() => portfolioOrder.map((id) => id ?? "all"), [portfolioOrder]);
   const activeIndex = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
+  // Picking a portfolio (root sheet) changes activeId externally → scroll the pager
+  // to it. Idempotent: a swipe-settle change targets the index we're already on, and
+  // native scroll makes a same-position set a no-op. Gated on `ready` so it can't
+  // fire with a stale activeIndex before portfolioOrder is complete.
+  useEffect(() => {
+    if (ready) pagerRef.current?.scrollToIndex(activeIndex);
+  }, [activeIndex, ready]);
   return (
     <div className="pk-dividends">
-      {/* FIXED header: "Dividends" + active portfolio name. Only the content
-          below slides; the title + name stay put. */}
+      {/* FIXED header: "Dividends" + the active portfolio name as a TAPPABLE picker.
+          Swiping still pages portfolios (name live-updates via nameRef); tapping the
+          name opens the picker sheet. Only the content below slides. */}
       <div className="pk-dividends-head">
         <h1 className="pk-title">Dividends</h1>
-        <span className="pk-hero-pf" ref={nameRef}>{activeName}</span>
+        <PortfolioPickerButton name={activeName} onOpen={onOpenPicker} ref={nameRef} />
       </div>
       <div className="pk-paged-region">
         <SwipePager
@@ -311,9 +322,18 @@ export function PocketShell() {
     [accountPortfolios, groups]
   );
 
-  // The portfolio currently selected on Dividends (shared with Charts + Upcoming).
+  // The portfolio currently selected on Dividends (shared with Charts + Activity).
   const activeIdx = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeDerived = derivedByPortfolio[activeIdx];
+  const activeName = activeDerived?.portfolioName ?? "All";
+  // Account scope of the active selection for filtering Activity's history modes:
+  // [] = all accounts (the "All" portfolio, or a group with no account scope), else
+  // the held account type(s). Account-only (no ticker filter) keeps past-sold holdings.
+  const activeAccounts = useMemo<string[]>(() => {
+    if (activeId == null) return [];
+    if (activeId.startsWith(ACCT_PORTFOLIO_PREFIX)) return [activeId.slice(ACCT_PORTFOLIO_PREFIX.length)];
+    return groups.find((g) => g.id === activeId)?.accounts ?? [];
+  }, [activeId, groups]);
 
   return (
     <>
@@ -356,6 +376,7 @@ export function PocketShell() {
             loading={loading}
             error={error}
             onRetry={() => load()}
+            onOpenPicker={() => setPickerOpen(true)}
           />
         )}
 
@@ -384,6 +405,9 @@ export function PocketShell() {
             eventFilter={eventFilter}
             setEventFilter={setEventFilter}
             eventFilterHydrated={eventFilterHydrated}
+            portfolioName={activeName}
+            activeAccounts={activeAccounts}
+            onOpenPicker={() => setPickerOpen(true)}
           />
         )}
 

@@ -77,6 +77,7 @@ export interface TransactionRow {
   commission: number;
   total: number; // quantity × price (native currency; for DIVIDEND, price=net so total=net)
   currency: string;
+  accountType: string; // TFSA/RRSP/FHSA/NON_REG/CASH — for portfolio (account-scope) filtering
 }
 export type ThemePref = "system" | "light" | "dark";
 
@@ -102,6 +103,10 @@ export interface PocketGroup {
 
 /** Synthetic-id prefix for a built-in per-account portfolio (e.g. "acct:RRSP"). */
 export const ACCT_PORTFOLIO_PREFIX = "acct:";
+
+/** True if an account type is in the selected portfolio's scope. Empty scope = all. */
+export const inAccountScope = (accountType: string, scope: string[]) =>
+  scope.length === 0 || scope.includes(accountType);
 
 /**
  * One selectable portfolio in the unified picker/order: the pinned "All" (id=null),

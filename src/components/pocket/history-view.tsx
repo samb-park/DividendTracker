@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basis, HistoryMode } from "@/lib/pocket-types";
+import { inAccountScope } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PeriodStrip } from "./period-strip";
 import { PageDots, setActiveDots } from "./page-dots";
@@ -29,6 +31,9 @@ interface Props {
   fxRate: number | null; // USDCAD; CAD → USD = amount / fxRate
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
+  activeAccounts: string[]; // portfolio account scope ([] = all)
+  portfolioName: string;
+  onOpenPicker: () => void;
 }
 
 /** Received-dividend rows for ONE period (a pager page): aggregate by ticker, USD desc. */
@@ -73,7 +78,7 @@ function PeriodRows({
   );
 }
 
-export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
+export function HistoryView({ basis, fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [years, setYears] = useState<number[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [months, setMonths] = useState<IncomeMonth[]>([]);
@@ -129,7 +134,13 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
     [fxRate]
   );
 
-  const monthsWithData = useMemo(() => months.filter((m) => m.items.length > 0).map((m) => m.month), [months]);
+  // Account-scope filter (received dividends carry accountType): keep only the
+  // selected portfolio's accounts. Empty scope = all. Drives rows, total, and periods.
+  const scopedMonths = useMemo(
+    () => months.map((m) => ({ ...m, items: m.items.filter((it) => inAccountScope(it.accountType, activeAccounts)) })),
+    [months, activeAccounts]
+  );
+  const monthsWithData = useMemo(() => scopedMonths.filter((m) => m.items.length > 0).map((m) => m.month), [scopedMonths]);
   const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
   const periodIdx = Math.max(0, periodSeq.indexOf(month));
   const periodLabels = useMemo(
@@ -140,9 +151,9 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   // Header USD total reflects the CURRENT period.
   const total = useMemo(() => {
     const items =
-      month === "all" ? months.flatMap((m) => m.items) : months.find((m) => m.month === month)?.items ?? [];
+      month === "all" ? scopedMonths.flatMap((m) => m.items) : scopedMonths.find((m) => m.month === month)?.items ?? [];
     return items.reduce((s, it) => s + toUSD(basis === "net" ? it.net : it.amount, it.currency), 0);
-  }, [months, month, basis, toUSD]);
+  }, [scopedMonths, month, basis, toUSD]);
 
   const yearIdx = year != null ? years.indexOf(year) : -1;
   const canNewer = yearIdx > 0; // years are sorted descending
@@ -151,7 +162,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   return (
     <div className="pk-history">
       <div className="pk-summary">
-        <h1 className="pk-title">Activity</h1>
+        <PortfolioPickerButton name={portfolioName} onOpen={onOpenPicker} />
         <div className="pk-summary-cell right">
           <span className="pk-summary-label">USD</span>
           <span className="pk-summary-value">{loading ? "—" : money(total)}</span>
@@ -203,7 +214,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
             if (p !== month) setMonth(p);
           }}
           renderPage={(period) => (
-            <PeriodRows period={period} months={months} basis={basis} toUSD={toUSD} loading={loading} error={error} />
+            <PeriodRows period={period} months={scopedMonths} basis={basis} toUSD={toUSD} loading={loading} error={error} />
           )}
         />
       </div>

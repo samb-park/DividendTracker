@@ -10,7 +10,7 @@ export async function GET() {
 
   const transactions = await prisma.transaction.findMany({
     where: { holding: { portfolio: { userId: session.user.id } } },
-    include: { holding: { select: { ticker: true, currency: true } } },
+    include: { holding: { select: { ticker: true, currency: true, portfolio: { select: { accountType: true } } } } },
     orderBy: { date: "desc" },
   });
 
@@ -25,6 +25,7 @@ export async function GET() {
       commission: parseFloat((t.commission ?? 0).toString()),
       total: parseFloat(t.quantity.toString()) * parseFloat(t.price.toString()),
       currency: t.holding.currency,
+      accountType: t.holding.portfolio?.accountType ?? "NON_REG",
     }))
   );
 }

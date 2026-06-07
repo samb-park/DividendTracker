@@ -5,6 +5,7 @@ import type { Basis, EventFilter, HistoryMode, TickerAgg } from "@/lib/pocket-ty
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
 import { HistoryModeToggle } from "./history-mode-toggle";
+import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
 
 const UPCOMING_FILTERS: EventFilter[] = UPCOMING_FILTER_OPTS.map((o) => o.value);
@@ -25,6 +26,8 @@ export function UpcomingView({
   hydrated,
   mode,
   setMode,
+  portfolioName,
+  onOpenPicker,
 }: {
   included: TickerAgg[];
   basis: Basis;
@@ -34,6 +37,8 @@ export function UpcomingView({
   hydrated: boolean;
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
+  portfolioName: string;
+  onOpenPicker: () => void;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const segRef = useRef<HTMLDivElement>(null);
@@ -44,7 +49,9 @@ export function UpcomingView({
       {/* FIXED header: title + the Activity switch + the All/Ex/Pay segment. The
           white pill slides 1:1 with the swipe (onProgress sets --seg-progress). */}
       <div className="pk-upcoming-head">
-        <h1 className="pk-title">Activity</h1>
+        <div className="pk-summary">
+          <PortfolioPickerButton name={portfolioName} onOpen={onOpenPicker} />
+        </div>
         <HistoryModeToggle mode={mode} setMode={setMode} />
         <div className="pk-seg pk-seg-anim" ref={segRef} role="group" aria-label="Event filter">
           <span className="pk-seg-pill" aria-hidden />
