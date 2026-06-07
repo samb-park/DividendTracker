@@ -136,16 +136,6 @@ function UpcomingPager({
   const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
   return (
     <div className="pk-upcoming">
-      {/* Page dots float above the tab bar (fixed) — mark the three filter pages
-          and that you can swipe between them, consistent with every other pager. */}
-      <PageDots
-        ref={dotsRef}
-        count={UPCOMING_FILTERS.length}
-        activeIndex={idx}
-        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
-        ariaLabel="Event filter"
-        itemLabel={(i) => UPCOMING_FILTER_OPTS[i].label}
-      />
       {/* FIXED header: title + All/Ex/Pay segment. The white pill slides 1:1 with
           the swipe (onProgress sets --seg-progress on every frame); tapping a
           segment drives the pager. The pill is the active indicator. */}
@@ -188,6 +178,16 @@ function UpcomingPager({
           )}
         />
       </div>
+      {/* Page dots DOCKED below the list, just above the tab bar — mark the three
+          filter pages and that you can swipe between them. */}
+      <PageDots
+        ref={dotsRef}
+        count={UPCOMING_FILTERS.length}
+        activeIndex={idx}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Event filter"
+        itemLabel={(i) => UPCOMING_FILTER_OPTS[i].label}
+      />
     </div>
   );
 }
@@ -226,17 +226,6 @@ function DividendsPager({
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
   return (
     <div className="pk-dividends">
-      {/* Page dots float in a pill just ABOVE the tab bar (CSS position:fixed, so
-          this leaves the flow and the title below renders at the top). They make
-          the portfolio swipe discoverable and are tappable. */}
-      <PageDots
-        ref={dotsRef}
-        count={items.length}
-        activeIndex={activeIndex}
-        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
-        ariaLabel="Portfolios"
-        itemLabel={(i) => `Show ${derivedByPortfolio[i]?.portfolioName ?? "All"}`}
-      />
       {/* FIXED header: "Dividends" + active portfolio name. Only the content
           below slides; the title + name stay put. */}
       <div className="pk-dividends-head">
@@ -284,6 +273,16 @@ function DividendsPager({
           }}
         />
       </div>
+      {/* Page dots DOCKED below the scroll region, just above the tab bar — they
+          make the portfolio swipe discoverable and are tappable. */}
+      <PageDots
+        ref={dotsRef}
+        count={items.length}
+        activeIndex={activeIndex}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Portfolios"
+        itemLabel={(i) => `Show ${derivedByPortfolio[i]?.portfolioName ?? "All"}`}
+      />
     </div>
   );
 }

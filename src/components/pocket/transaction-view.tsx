@@ -164,15 +164,6 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
 
   return (
     <div className="pk-history">
-      {/* Page dots float above the tab bar (fixed) — mark the swipeable periods (Year ↔ each month). */}
-      <PageDots
-        ref={dotsRef}
-        count={periodSeq.length}
-        activeIndex={periodIdx}
-        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
-        ariaLabel="Periods"
-        itemLabel={(i) => periodLabels[i]}
-      />
       <div className="pk-summary">
         <h1 className="pk-title">History</h1>
         <div className="pk-summary-cell right">
@@ -240,6 +231,15 @@ export function TransactionView({ fxRate, mode, setMode }: Props) {
           )}
         />
       </div>
+      {/* Page dots DOCKED below the list, just above the tab bar — mark the swipeable periods (Year ↔ each month). */}
+      <PageDots
+        ref={dotsRef}
+        count={periodSeq.length}
+        activeIndex={periodIdx}
+        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
+        ariaLabel="Periods"
+        itemLabel={(i) => periodLabels[i]}
+      />
     </div>
   );
 }

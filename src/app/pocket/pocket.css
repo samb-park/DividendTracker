@@ -644,7 +644,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   min-height: 0;
   flex: 1 1 0;
   gap: 24px;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px 0;
+  /* bottom pad = the floating tab-bar clearance; the docked .pk-dots band sits at
+     the top of this pad (~8px above the bar), the scroll region above the dots. */
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
@@ -668,8 +670,9 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   scroll-snap-align: start;
   scroll-snap-stop: always;
   touch-action: auto;      /* iOS directional-lock; NOT pan-y */
-  /* bottom pad clears BOTH the floating dots pill (~bottom 76→107) and the tab bar */
-  padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 112px);
+  /* just breathing room — the surface's bottom padding + docked dots band handle
+     tab-bar clearance now (the region no longer extends behind the bar). */
+  padding: 0 24px 16px;
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
@@ -998,39 +1001,24 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   }
 }
 
-/* Page dots — a small floating page control that hovers just ABOVE the tab bar
-   (bottom-center), shared by every swipeable surface (Dividends/Upcoming/History/
-   Transactions). position:fixed takes it out of each surface's flow, so the title
-   sits at the top and the dots ride at the bottom. The translucent blurred pill
-   (same material as the tab bar) lets list rows scroll cleanly under it. */
+/* Page dots — DOCKED (not floating): the last flex child of each swipeable
+   surface, in its own non-scrolling band just above the tab bar. The scroll
+   region (flex:1) lives ABOVE it, so list rows physically can't reach the dots'
+   row → zero overlap, no fade/mask needed. The surface's bottom padding holds
+   the tab-bar clearance below this band. */
 .pk-dots {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 76px; /* clears the 14+~54 tab bar by ~8px (constant, like the tab bar) */
-  z-index: 45; /* above content, below the sheet (60) */
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 7px;
-  max-width: calc(100vw - 32px);
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: var(--pk-tabbar-bg);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 1px 0 var(--pk-hairline) inset;
-}
-/* In the installed PWA honor the bottom safe-area, matching the tab bar. */
-@media (display-mode: standalone) {
-  .pk-dots { bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
+  gap: 9px;
 }
 .pk-dot-nav {
   appearance: none;
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 6px 5px; /* tappable area around the 7px dot inside the pill */
+  padding: 6px 5px; /* tappable area around the 7px dot */
   line-height: 0;
 }
 .pk-dot-nav::before {
