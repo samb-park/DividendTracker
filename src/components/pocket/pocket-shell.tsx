@@ -18,6 +18,7 @@ import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
 import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
+import { ChartsPager } from "./charts-pager";
 import { HistoryTab } from "./history-tab";
 import { PwaRegister } from "@/components/pwa-register";
 
@@ -395,6 +396,18 @@ export function PocketShell() {
             loading={loading}
             error={error}
             onRetry={() => load()}
+          />
+        )}
+
+        {/* Charts — fixed "Charts" title + a swipeable pager of distribution donuts
+            (by holding / account / group / sector). Own branch → remounts on entry. */}
+        {tab === "charts" && (
+          <ChartsPager
+            positions={positions}
+            allTickerAggs={allTickerAggs}
+            derivedByPortfolio={derivedByPortfolio}
+            basis={basis}
+            loading={loading}
           />
         )}
 

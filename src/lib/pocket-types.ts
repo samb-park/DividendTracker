@@ -78,6 +78,15 @@ export interface TransactionRow {
 }
 export type ThemePref = "system" | "light" | "dark";
 
+/** Human labels for account types — shared by the group manager and the charts. */
+export const ACCT_LABELS: Record<string, string> = {
+  TFSA: "TFSA",
+  RRSP: "RRSP",
+  FHSA: "FHSA",
+  NON_REG: "Non-Reg",
+  CASH: "Cash",
+};
+
 /** A user-defined ticker group ("포트폴리오") persisted server-side. */
 export interface PocketGroup {
   id: string;

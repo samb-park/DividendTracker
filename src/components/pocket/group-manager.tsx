@@ -1,17 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
+import { ACCT_LABELS, POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
 import { PortfolioRow } from "./portfolio-row";
-
-const ACCT_LABELS: Record<string, string> = {
-  TFSA: "TFSA",
-  RRSP: "RRSP",
-  FHSA: "FHSA",
-  NON_REG: "Non-Reg",
-  CASH: "Cash",
-};
 
 interface Props {
   groups: PocketGroup[];

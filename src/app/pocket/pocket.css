@@ -104,6 +104,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    co-scrolls vertically with the pages. Settings keeps the base .pk-screen
    (vertical scroll + padding) — it does NOT match this selector. */
 .pk-screen[data-tab="dividends"],
+.pk-screen[data-tab="charts"],
 .pk-screen[data-tab="history"],
 .pk-screen[data-tab="upcoming"] {
   overflow: hidden;
@@ -298,7 +299,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  padding: 11px 12px; /* grows the hit target to ≥44px; glyph + bar look unchanged */
+  padding: 11px 8px; /* ≥44px tall hit target; 8px horiz so all 5 tabs fit ≤360px */
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
@@ -638,6 +639,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 /* Shared host for the fixed-header + sub-region pager layout. */
 .pk-history,
 .pk-upcoming,
+.pk-charts,
 .pk-dividends {
   display: flex;
   flex-direction: column;
@@ -1067,6 +1069,97 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 /* the name field already signals focus via its border-color — no double ring */
 .pk-input:focus-visible { outline: none; }
+
+/* Charts tab — fixed "Charts" title + live subtitle (which breakdown), then a
+   swipeable pager of donut pages (same fixed-header pattern as Dividends). */
+.pk-charts-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pk-charts-sub {
+  font-size: 13px; /* Caption */
+  font-weight: 600;
+  color: var(--pk-muted);
+  white-space: nowrap;
+}
+
+/* One donut page: ring (centered total overlay) + caption + legend, stacked and
+   vertically centered in the page so a short page reads like the Dividends hero. */
+.pk-donut-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-height: 100%;
+}
+.pk-donut-ring {
+  position: relative;
+  width: min(64vw, 240px);
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+}
+.pk-donut-ring svg { display: block; width: 100%; height: 100%; }
+.pk-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.pk-donut-value {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pk-donut-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pk-muted);
+}
+.pk-donut-caption {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  line-height: 1.4;
+  text-align: center;
+  max-width: 280px;
+  margin: -8px 0 0;
+}
+.pk-legend { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; }
+.pk-legend-row { display: flex; align-items: center; gap: 10px; }
+.pk-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.pk-legend-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px; /* Body */
+  font-weight: 700;
+  color: var(--pk-ink);
+}
+.pk-legend-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.pk-legend-pct {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  width: 38px;
+  text-align: right;
+}
+/* donut empty/degenerate note — centered in the page */
+.pk-donut-empty { display: flex; align-items: center; justify-content: center; min-height: 100%; }
 
 /* Respect the OS reduced-motion preference: drop pager/pill/sheet/spinner motion. */
 @media (prefers-reduced-motion: reduce) {
