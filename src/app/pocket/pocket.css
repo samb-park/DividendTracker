@@ -392,6 +392,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 
 /* upcoming events list -------------------------------------------------- */
 .pk-upcoming-head { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+/* The column is align-items:flex-start (legacy left-aligned title), so its children
+   shrink-to-fit. Force the picker row full-width or the picker's %-max-width collapses
+   the name to "R…". (The segments below are already width:100%.) */
+.pk-upcoming-head .pk-summary { width: 100%; }
 
 /* aligned columns: date | ticker | EX/PAY | days-left | amount */
 .pk-event-row {
