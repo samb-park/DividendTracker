@@ -143,6 +143,10 @@ export function HistoryView({ basis, fxRate, mode, setMode, activeAccounts, port
   const monthsWithData = useMemo(() => scopedMonths.filter((m) => m.items.length > 0).map((m) => m.month), [scopedMonths]);
   const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
   const periodIdx = Math.max(0, periodSeq.indexOf(month));
+  // Keep the period pager aligned to periodIdx: when an account filter changes the
+  // period set, a now-invalid `month` collapses periodIdx → scroll there; onSettle
+  // reconciles `month` (→ "all"). Idempotent for a normal swipe-settle (no-op).
+  useEffect(() => { pagerRef.current?.scrollToIndex(periodIdx); }, [periodIdx]);
   const periodLabels = useMemo(
     () => periodSeq.map((p) => (p === "all" ? "Year" : MONTH_LABELS[parseInt(p.slice(5, 7), 10) - 1])),
     [periodSeq]

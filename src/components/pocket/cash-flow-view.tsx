@@ -127,6 +127,9 @@ export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioN
   );
   const periodSeq = useMemo(() => ["all", ...monthsWithData], [monthsWithData]);
   const periodIdx = Math.max(0, periodSeq.indexOf(month));
+  // Keep the period pager aligned to periodIdx when an account filter changes the
+  // period set (onSettle reconciles a now-invalid `month` → "all"). Idempotent on swipe.
+  useEffect(() => { pagerRef.current?.scrollToIndex(periodIdx); }, [periodIdx]);
   const periodLabels = useMemo(
     () => periodSeq.map((p) => (p === "all" ? "Year" : MONTH_LABELS[parseInt(p.slice(5, 7), 10) - 1])),
     [periodSeq]
