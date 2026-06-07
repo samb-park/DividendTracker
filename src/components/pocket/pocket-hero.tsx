@@ -100,8 +100,7 @@ export function PocketHero({
 
   const numText = (div: number) => {
     if (loading) return "—";
-    if (showZero) return money(0);
-    return money(annualUSD / div);
+    return `$${money(showZero ? 0 : annualUSD / div)}`; // $-prefixed to match every other money figure in the app
   };
 
   return (
@@ -110,12 +109,12 @@ export function PocketHero({
           only the summary + hero live here and slide per portfolio. */}
       <div className="pk-summary">
         <div className="pk-summary-cell">
-          <span className="pk-summary-label">AVG</span>
+          <span className="pk-summary-label">YIELD</span>
           <span className="pk-summary-value">{loading ? "—" : `${money(showZero ? 0 : avgYieldPct)}%`}</span>
         </div>
         <div className="pk-summary-cell right">
-          <span className="pk-summary-label">USD</span>
-          <span className="pk-summary-value">{loading ? "—" : money(showZero ? 0 : totalValueUSD)}</span>
+          <span className="pk-summary-label">VALUE</span>
+          <span className="pk-summary-value">{loading ? "—" : `$${money(showZero ? 0 : totalValueUSD)}`}</span>
         </div>
       </div>
 
@@ -133,6 +132,10 @@ export function PocketHero({
           </div>
         ))}
       </div>
+
+      {/* The big numbers are an AVERAGE run-rate (annual ÷ 365/52/12/1), not actual
+          receipts — say so once so "M" isn't misread as this month's real income. */}
+      {showData && <p className="pk-note">Average at your current dividend rate</p>}
 
       {error && (
         <div>

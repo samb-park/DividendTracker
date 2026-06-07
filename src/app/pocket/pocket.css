@@ -32,7 +32,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   --pk-bg: #ffffff;
   --pk-elevated: #ffffff; /* raised surfaces (sheet, active segment pill) */
   --pk-ink: #0a0a0a;
-  --pk-muted: #8a8a8f; /* AA-passing secondary text (was #a3a3a8, ~2.5:1) */
+  --pk-muted: #6e6e73; /* secondary text — 5.08:1 on #fff, AA (was #8a8a8f, only 3.44:1) */
   --pk-badge-ink: #6b6b70; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
   --pk-faint: #c9c9ce;
   --pk-pill-bg: #0a0a0a;
@@ -70,7 +70,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 
 .pocket-root[data-pocket-mode="dark"] {
   --pk-bg: #000000;
-  --pk-elevated: #1c1c1e; /* raised surfaces sit ABOVE the #000 page */
+  --pk-elevated: #2c2c2e; /* raised surfaces (sheet, active seg pill) — a real step above #000 (was #1c1c1e, ~flat) */
   --pk-ink: #ffffff;
   --pk-muted: #8e8e93; /* Apple systemGray, ~4.6:1 (was #6e6e73) */
   --pk-badge-ink: #b0b0b5;
@@ -165,7 +165,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   gap: 12px;
 }
 .pk-hero-pf {
-  font-size: 15px;
+  font-size: 13px; /* Caption — on the documented scale (was an orphan 15/600) */
   font-weight: 600;
   color: var(--pk-muted);
   max-width: 55%;
@@ -299,11 +299,14 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  padding: 7px 11px;
+  padding: 11px 12px; /* grows the hit target to ≥44px; glyph + bar look unchanged */
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
-  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   white-space: nowrap;
 }
 .pk-tab[data-active="true"] {
@@ -390,13 +393,23 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 .pk-event-row:last-child { border-bottom: none; }
 .pk-event-date {
+  position: relative; /* anchor the hung "~" so the month glyph keeps the column edge */
   font-size: 15px;
   font-weight: 700;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.pk-event-date .est { color: var(--pk-muted); font-weight: 600; }
+/* Hang the estimated tilde into the left gutter so "Jul"/"Jun" stay left-aligned
+   down the column (tabular-nums can't align a non-digit prefix inline). */
+.pk-event-date .est {
+  position: absolute;
+  right: 100%;
+  margin-right: 2px;
+  top: 0;
+  color: var(--pk-muted);
+  font-weight: 600;
+}
 .pk-event-ticker {
   font-size: 17px;
   font-weight: 700;
@@ -414,8 +427,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   background: var(--pk-tabbar-active);
   color: var(--pk-badge-ink); /* readable EX/BUY/DIV (was --pk-muted, ~2.4:1) */
 }
-.pk-event-tag[data-type="pay"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
-/* transaction action badges: sell = filled (notable), buy/div = base light tint */
+/* EX and PAY both use the base light tint (distinguished by their text); the dark
+   solid fill is reserved for the genuine exception — a SELL in the transaction log. */
 .pk-event-tag[data-type="sell"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
 .pk-event-days {
   justify-self: end;
@@ -441,7 +454,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   inset: 0;
   background: rgba(0, 0, 0, 0.45); /* dims enough over a #000 dark page too */
   z-index: 60;
-  animation: pk-fade 0.16s ease-out;
+  animation: pk-fade 0.2s ease-out; /* symmetric with the 0.2s close fade-out */
 }
 .pk-sheet {
   position: fixed;
@@ -484,7 +497,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
   letter-spacing: -0.3px; /* Row-emphasis tracking (bold ≥17px) */
   cursor: pointer;
-  padding: 6px 2px;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 8px; /* ≥44px hit target for the sheet Back/Save/Done (was 6px 2px) */
+  min-height: 44px;
   transition: opacity 0.12s ease;
 }
 .pk-textbtn:active { opacity: 0.6; }
@@ -533,7 +549,8 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border-radius: 7px;
   cursor: pointer;
   min-height: 30px;
-  transition: color 0.15s ease; /* tween the label color so it doesn't pop late */
+  /* match the pill's glide so the label color settles AS the pill arrives (was 0.15s ease) */
+  transition: color 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .pk-seg-btn[data-active="true"] {
   background: var(--pk-elevated); /* raised above the track (correct in dark too) */
@@ -705,8 +722,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 10px;
-  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px; /* ≥44px hit target for the corner arrows (was 4px 10px / 40px) */
+  min-height: 44px;
   transition: opacity 0.12s ease;
 }
 .pk-year-arrow:disabled { color: var(--pk-faint); cursor: default; }
@@ -796,7 +816,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 .pk-dot-all {
   background: transparent;
-  border: 1.5px solid var(--pk-faint);
+  border: 1.5px solid var(--pk-muted); /* perceivable hollow ring beside the filled dots (was --pk-faint, ~invisible) */
 }
 .pk-pf-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
 .pk-pfrow {
@@ -813,7 +833,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-weight: 700;
   letter-spacing: -0.3px;
   text-align: left;
-  padding: 10px;
+  padding: 12px 10px; /* taller hit target for the portfolio rows (was 10px) */
   border-radius: 12px;
   cursor: pointer;
 }
@@ -962,8 +982,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   justify-content: center;
   gap: 7px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  font-weight: 600; /* no letter-spacing: positive tracking is for ALL-CAPS labels only, not this sentence-case text */
   color: var(--pk-muted);
   padding: 0 0 10px;
 }
@@ -986,7 +1005,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 4px; /* enlarge the tap target around the 7px dot */
+  padding: 14px 6px; /* vertical-only enlargement → ~35px tall target; 6px keeps the 7px-gap dots from overlapping */
   line-height: 0;
 }
 .pk-dot-nav::before {
@@ -999,6 +1018,40 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   transition: background 0.18s ease, transform 0.18s ease;
 }
 .pk-dot-nav[data-active="true"]::before { background: var(--pk-ink); transform: scale(1.2); }
+
+/* Inline jargon/key caption sitting directly under a control (Net/Gross, Ex/Pay).
+   Same caption type as .pk-note but a tight 8px lead (it belongs to the control above). */
+.pk-hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+/* Visually-hidden, screen-reader-only text (e.g. "estimated" before the ~ tilde). */
+.pk-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Keyboard focus ring — :focus-visible only, so it never shows on touch taps and
+   the calm app look is preserved. Covers every focusable control on the surface
+   (the dnd-kit keyboard-reorder rows finally get a visible indicator). */
+.pocket-root :focus-visible {
+  outline: 2px solid var(--pk-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* the name field already signals focus via its border-color — no double ring */
+.pk-input:focus-visible { outline: none; }
 
 /* Respect the OS reduced-motion preference: drop pager/pill/sheet/spinner motion. */
 @media (prefers-reduced-motion: reduce) {

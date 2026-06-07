@@ -35,6 +35,7 @@ export function AnimatedSegment<T extends string>({
           type="button"
           className="pk-seg-btn"
           data-active={value === o.value}
+          aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
         >
           {o.label}

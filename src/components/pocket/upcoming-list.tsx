@@ -72,12 +72,20 @@ export function UpcomingEvents({
   if (events.length === 0) return <p className="pk-note">No upcoming dividends for the selected holdings.</p>;
   return (
     <>
+      <p className="pk-hint">Ex = own-by date · Pay = payout date</p>
       {events.some((e) => !e.confirmed) && <p className="pk-note">~ estimated date</p>}
       <div className="pk-picker">
         {events.map((e) => (
           <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
             <span className="pk-event-date">
-              {e.confirmed ? "" : <span className="est">~</span>}
+              {!e.confirmed && (
+                <>
+                  <span className="pk-sr-only">estimated </span>
+                  <span className="est" aria-hidden>
+                    ~
+                  </span>
+                </>
+              )}
               {fmtDate(e.date)}
             </span>
             <span className="pk-event-ticker">{e.ticker}</span>

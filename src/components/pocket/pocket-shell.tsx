@@ -147,6 +147,7 @@ function UpcomingPager({
               type="button"
               className="pk-seg-btn"
               data-active={eventFilter === o.value}
+              aria-pressed={eventFilter === o.value}
               onClick={() => pagerRef.current?.scrollToIndex(UPCOMING_FILTERS.indexOf(o.value))}
             >
               {o.label}
@@ -226,7 +227,7 @@ function DividendsPager({
                 type="button"
                 className="pk-dot-nav"
                 data-active={i === activeIndex}
-                aria-label={`Go to portfolio ${i + 1}`}
+                aria-label={`Show ${derivedByPortfolio[i]?.portfolioName ?? "All"}`}
                 aria-current={i === activeIndex || undefined}
                 onClick={() => pagerRef.current?.scrollToIndex(i)}
               />

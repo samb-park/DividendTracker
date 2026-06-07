@@ -170,7 +170,6 @@ export function GroupManager({
               </button>
             </div>
 
-            <div className="pk-section-label">Portfolios</div>
             {loading && groups.length === 0 ? (
               <p className="pk-note">Loading…</p>
             ) : groups.length === 0 ? (
@@ -245,14 +244,14 @@ export function GroupManager({
             <section>
               <div className="pk-section-label">Color</div>
               <div className="pk-swatches" role="group" aria-label="Color">
-                {POCKET_GROUP_COLORS.map((c) => (
+                {POCKET_GROUP_COLORS.map((c, i) => (
                   <button
                     key={c}
                     type="button"
                     className="pk-swatch"
                     data-active={draftColor === c}
                     style={{ background: c }}
-                    aria-label={c}
+                    aria-label={`Color ${i + 1}`}
                     aria-pressed={draftColor === c}
                     onClick={() => setDraftColor(c)}
                   />

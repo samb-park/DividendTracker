@@ -36,7 +36,11 @@ export function PortfolioRow({ color, name, subtitle, count, selected = false, a
         <span className="pk-pfrow-name">{name}</span>
         {subtitle && <span className="pk-pfrow-sub">{subtitle}</span>}
       </span>
-      {count != null && <span className="pk-pfrow-count">{count}</span>}
+      {count != null && (
+        <span className="pk-pfrow-count">
+          {count} ticker{count === 1 ? "" : "s"}
+        </span>
+      )}
       {asOption ? (
         selected && (
           <span className="pk-pfrow-check" aria-hidden>
