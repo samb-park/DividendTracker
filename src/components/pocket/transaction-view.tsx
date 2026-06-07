@@ -5,8 +5,9 @@ import type { HistoryMode, TxnFilter, TransactionRow } from "@/lib/pocket-types"
 import { inAccountScope } from "@/lib/pocket-types";
 import { HistoryModeToggle } from "./history-mode-toggle";
 import { PortfolioPickerButton } from "./portfolio-picker-button";
+import { PeriodPickerButton } from "./period-picker-button";
+import { PeriodPicker } from "./period-picker";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
-import { PeriodStrip } from "./period-strip";
 import { AnimatedSegment } from "./animated-segment";
 import { PageDots, setActiveDots } from "./page-dots";
 
@@ -102,8 +103,9 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
   const [filter, setFilter] = useState<TxnFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [periodOpen, setPeriodOpen] = useState(false);
   const pagerRef = useRef<SwipePagerHandle>(null);
-  const periodRef = useRef<HTMLDivElement>(null);
+  const periodLabelRef = useRef<HTMLSpanElement>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,10 +173,6 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
       .reduce((s, t) => s + toUSD(t.total, t.currency), 0);
   }, [yearTxns, month, filter, toUSD]);
 
-  const yearIdx = year != null ? years.indexOf(year) : -1;
-  const canNewer = yearIdx > 0;
-  const canOlder = yearIdx >= 0 && yearIdx < years.length - 1;
-
   return (
     <div className="pk-history">
       <div className="pk-summary">
@@ -190,30 +188,15 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
       {/* Action filter — directly below the mode toggle. */}
       <AnimatedSegment options={FILTER_OPTS} value={filter} onChange={setFilter} ariaLabel="Transaction type" />
 
-      {/* Year stepper + current period label (updates on swipe). */}
+      {/* Tappable "year · period ▾" → PeriodPicker sheet (period label live-updates
+          on swipe; year only changes via the picker). */}
       <div className="pk-year-row">
-        <div className="pk-year">
-          <button
-            type="button"
-            className="pk-year-arrow"
-            onClick={() => canOlder && setYear(years[yearIdx + 1])}
-            disabled={!canOlder}
-            aria-label="Older year"
-          >
-            ‹
-          </button>
-          <span className="pk-year-label">{year ?? "—"}</span>
-          <button
-            type="button"
-            className="pk-year-arrow"
-            onClick={() => canNewer && setYear(years[yearIdx - 1])}
-            disabled={!canNewer}
-            aria-label="Newer year"
-          >
-            ›
-          </button>
-        </div>
-        <PeriodStrip labels={periodLabels} ref={periodRef} />
+        <PeriodPickerButton
+          ref={periodLabelRef}
+          year={year}
+          periodLabel={periodLabels[periodIdx]}
+          onOpen={() => setPeriodOpen(true)}
+        />
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}
@@ -225,7 +208,8 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
           pageClassName="pk-paged-page"
           dragSwipe
           onProgress={(f) => {
-            periodRef.current?.style.setProperty("--period-progress", String(f));
+            const lbl = periodLabels[Math.round(f)];
+            if (periodLabelRef.current && lbl != null) periodLabelRef.current.textContent = lbl;
             setActiveDots(dotsRef.current, Math.round(f));
           }}
           onSettle={(i) => {
@@ -253,6 +237,19 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
         ariaLabel="Periods"
         itemLabel={(i) => periodLabels[i]}
       />
+
+      {periodOpen && (
+        <PeriodPicker
+          year={year}
+          years={years}
+          onYear={setYear}
+          periods={periodSeq.map((k, i) => ({ key: k, label: periodLabels[i] }))}
+          activeKey={month}
+          loading={loading}
+          onPeriod={setMonth}
+          onClose={() => setPeriodOpen(false)}
+        />
+      )}
     </div>
   );
 }

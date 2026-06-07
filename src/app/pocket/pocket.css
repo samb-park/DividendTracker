@@ -187,6 +187,12 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 .pk-dividends-head .pk-pf-pick { font-size: 13px; font-weight: 600; color: var(--pk-muted); max-width: 55%; }
 /* Activity views: the picker IS the header identity (the "Activity" h1 was dropped). */
 .pk-summary .pk-pf-pick { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; max-width: 64%; }
+/* Activity period trigger "2026 · Jun ▾" — tappable, opens the PeriodPicker sheet
+   (replaces the old year stepper + sliding PeriodStrip). */
+.pk-period-pick { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+.pk-period-pick-year { color: var(--pk-ink); }
+.pk-period-pick-sep { margin: 0 6px; color: var(--pk-muted); font-weight: 600; }
+.pk-period-pick-period { color: var(--pk-ink); }
 .pk-summary {
   display: flex;
   align-items: baseline;
@@ -706,72 +712,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-right: max(24px, env(safe-area-inset-right));
 }
 
-/* year stepper + period label on one row (label updates as you swipe) */
+/* holds the tappable "year · period ▾" trigger (opens the PeriodPicker sheet) */
 .pk-year-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
-}
-/* Period indicator that slides 1:1 WITH the swipe (like the Upcoming pill): a
-   strip of all period labels clipped to one cell, translated by --period-progress
-   (the pager's live onProgress fraction). Only the current period shows at rest;
-   the next tracks in as you swipe. */
-.pk-period {
-  --period-cw: 64px;
-  width: var(--period-cw);
-  flex: 0 0 auto;
-  overflow: hidden;
-}
-.pk-period-track {
-  display: flex;
-  transform: translateX(calc(var(--period-progress, 0) * var(--period-cw) * -1));
-  will-change: transform;
-}
-.pk-period-cell {
-  flex: 0 0 var(--period-cw);
-  text-align: right;
-  white-space: nowrap;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
-  color: var(--pk-ink); /* live value, not a disabled-looking header (was --pk-muted) */
-  font-variant-numeric: tabular-nums;
-}
-
-.pk-year {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.pk-year-arrow {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--pk-ink);
-  font-family: inherit;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px; /* ≥44px hit target for the corner arrows (was 4px 10px / 40px) */
-  min-height: 44px;
-  transition: opacity 0.12s ease;
-}
-.pk-year-arrow:disabled { color: var(--pk-faint); cursor: default; }
-.pk-year-arrow:active:not(:disabled) { opacity: 0.6; }
-.pk-year-label {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
-  line-height: 1.05;
-  color: var(--pk-ink);
-  font-variant-numeric: tabular-nums;
-  min-width: 70px;
-  text-align: center;
 }
 .pk-hist-row {
   display: grid;
