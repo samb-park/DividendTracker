@@ -1070,14 +1070,19 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 /* the name field already signals focus via its border-color — no double ring */
 .pk-input:focus-visible { outline: none; }
 
-/* Charts tab — fixed "Charts" title + live subtitle (which breakdown), then a
-   swipeable pager of donut pages (same fixed-header pattern as Dividends). */
+/* Charts tab — fixed "Charts" title + a live "Metric · Portfolio" subtitle, then a
+   swipeable 2-donut pager (Dividend / Value) for the Dividends-selected portfolio. */
 .pk-charts-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pk-charts-head .pk-title { flex: 0 0 auto; }
 .pk-charts-sub {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px; /* Caption */
   font-weight: 600;
   color: var(--pk-muted);
-  white-space: nowrap;
 }
 
 /* One donut page: ring (centered total overlay) + caption + legend, stacked and

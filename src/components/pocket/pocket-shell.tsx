@@ -18,7 +18,7 @@ import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
 import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
-import { ChartsPager } from "./charts-pager";
+import { ChartsView } from "./charts-view";
 import { HistoryTab } from "./history-tab";
 import { PwaRegister } from "@/components/pwa-register";
 
@@ -359,6 +359,10 @@ export function PocketShell() {
     [portfolioOrder, groups, positions, allTickerAggs, basis, data]
   );
 
+  // The portfolio currently selected on Dividends (shared with Charts + Upcoming).
+  const activeIdx = Math.max(0, portfolioOrder.indexOf(activeId));
+  const activeDerived = derivedByPortfolio[activeIdx];
+
   return (
     <>
       {/* Registers the push-only SW on every /pocket load (the installed PWA
@@ -399,13 +403,13 @@ export function PocketShell() {
           />
         )}
 
-        {/* Charts — fixed "Charts" title + a swipeable pager of distribution donuts
-            (by holding / account / group / sector). Own branch → remounts on entry. */}
+        {/* Charts — fixed "Charts" title + the active portfolio name, then a single
+            by-holding distribution donut. Mirrors the Dividends selection (shared
+            activeId); this branch remounts on entry so it always reflects it. */}
         {tab === "charts" && (
-          <ChartsPager
-            positions={positions}
-            allTickerAggs={allTickerAggs}
-            derivedByPortfolio={derivedByPortfolio}
+          <ChartsView
+            included={activeDerived?.included ?? []}
+            portfolioName={activeDerived?.portfolioName ?? "All"}
             basis={basis}
             loading={loading}
           />
@@ -416,7 +420,7 @@ export function PocketShell() {
             align/settle are independent of the Dividends portfolio pager. */}
         {tab === "upcoming" && (
           <UpcomingPager
-            included={derivedByPortfolio[Math.max(0, portfolioOrder.indexOf(activeId))]?.included ?? []}
+            included={activeDerived?.included ?? []}
             basis={basis}
             loading={loading}
             eventFilter={eventFilter}
