@@ -320,7 +320,7 @@ export function PocketShell() {
       {/* Registers the push-only SW on every /pocket load (the installed PWA
           launches here), so Web Push can arm. No-op without serviceWorker. */}
       <PwaRegister />
-      {/* Dividends/Upcoming/History are all FIXED-HEADER + sub-region pagers: a fixed
+      {/* Dividends/Charts/Activity are all FIXED-HEADER + sub-region pagers: a fixed
           title above a .pk-paged-region whose abspos .pk-track gives each .pk-paged-page
           a DEFINITE height (height:100%), so the Dividends hero spacers (direct children)
           still center via the explicit-size path — NOT flex-grow across a scroll boundary.

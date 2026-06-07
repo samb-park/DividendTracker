@@ -98,7 +98,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
-/* Dividends/Upcoming/History are all FIXED-HEADER + sub-region pagers: a fixed
+/* Dividends/Charts/Activity are all FIXED-HEADER + sub-region pagers: a fixed
    title (+ controls) above a swipeable .pk-paged-region whose abspos track lives
    INSIDE the region (not the screen). overflow:hidden so the outer screen never
    co-scrolls vertically with the pages. Settings keeps the base .pk-screen

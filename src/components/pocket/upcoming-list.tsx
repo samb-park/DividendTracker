@@ -40,7 +40,7 @@ interface EventRow {
 
 /**
  * The upcoming-events list for ONE filter (a pager page) — no header/segment.
- * The All/Ex/Pay segment is a FIXED header above the pager (UpcomingPager), so
+ * The All/Ex/Pay segment is a FIXED header above the pager (UpcomingView), so
  * swiping changes the active filter while the segment stays put.
  */
 export function UpcomingEvents({
