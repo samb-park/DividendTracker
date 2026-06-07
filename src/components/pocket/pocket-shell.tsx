@@ -136,8 +136,8 @@ function UpcomingPager({
   const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
   return (
     <div className="pk-upcoming">
-      {/* Page dots at the very top mark the three filter pages and that you can
-          swipe between them — consistent with every other pager. */}
+      {/* Page dots float above the tab bar (fixed) — mark the three filter pages
+          and that you can swipe between them, consistent with every other pager. */}
       <PageDots
         ref={dotsRef}
         count={UPCOMING_FILTERS.length}
@@ -226,8 +226,9 @@ function DividendsPager({
   const activeName = derivedByPortfolio[activeIndex]?.portfolioName ?? "All";
   return (
     <div className="pk-dividends">
-      {/* Page dots sit ABOVE the title — the topmost element — so the swipe is
-          discoverable (and tappable) before you even read the heading. */}
+      {/* Page dots float in a pill just ABOVE the tab bar (CSS position:fixed, so
+          this leaves the flow and the title below renders at the top). They make
+          the portfolio swipe discoverable and are tappable. */}
       <PageDots
         ref={dotsRef}
         count={items.length}

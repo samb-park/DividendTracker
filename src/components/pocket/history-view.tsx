@@ -150,7 +150,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
 
   return (
     <div className="pk-history">
-      {/* Page dots at the top mark the swipeable periods (Year ↔ each month). */}
+      {/* Page dots float above the tab bar (fixed) — mark the swipeable periods (Year ↔ each month). */}
       <PageDots
         ref={dotsRef}
         count={periodSeq.length}
