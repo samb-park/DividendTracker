@@ -151,7 +151,7 @@ export function HistoryView({ basis, fxRate, mode, setMode }: Props) {
   return (
     <div className="pk-history">
       <div className="pk-summary">
-        <h1 className="pk-title">History</h1>
+        <h1 className="pk-title">Activity</h1>
         <div className="pk-summary-cell right">
           <span className="pk-summary-label">USD</span>
           <span className="pk-summary-value">{loading ? "—" : money(total)}</span>

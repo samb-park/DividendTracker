@@ -105,8 +105,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    (vertical scroll + padding) — it does NOT match this selector. */
 .pk-screen[data-tab="dividends"],
 .pk-screen[data-tab="charts"],
-.pk-screen[data-tab="history"],
-.pk-screen[data-tab="upcoming"] {
+.pk-screen[data-tab="activity"] {
   overflow: hidden;
   padding: 0;
   min-height: 0;
@@ -545,7 +544,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   font-size: 13px;
   font-weight: 600;
   text-align: center;
-  padding: 5px 11px;
+  padding: 5px 8px; /* tightened so the 4-way Activity switch fits four labels at 390px */
   border-radius: 7px;
   cursor: pointer;
   min-height: 30px;

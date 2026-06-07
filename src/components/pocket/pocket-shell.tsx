@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RunRateResponse, TickerAgg, PositionRunRate, Basis, EventFilter } from "@/lib/pocket-types";
+import type { RunRateResponse, TickerAgg, PositionRunRate, Basis } from "@/lib/pocket-types";
 import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, type PortfolioOption } from "@/lib/pocket-types";
 import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
@@ -18,7 +18,6 @@ import { PocketHero } from "./pocket-hero";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
-import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
 import { ChartsView } from "./charts-view";
 import { PortfolioPicker } from "./portfolio-picker";
 import { HistoryTab } from "./history-tab";
@@ -106,93 +105,6 @@ function computeDerived(
     fxFallback,
     portfolioName,
   };
-}
-
-const UPCOMING_FILTERS: EventFilter[] = UPCOMING_FILTER_OPTS.map((o) => o.value);
-
-/**
- * Upcoming swipe cycles the event FILTER (all/ex/pay) of the ACTIVE portfolio —
- * NOT the portfolio. The All/Ex/Pay segment is a FIXED header (it does not slide);
- * swiping the list below changes which segment is active (settle → setEventFilter),
- * and tapping a segment drives the pager via scrollToIndex. Same fixed-header +
- * sub-region pager pattern as History. Its own SwipePager instance → own
- * align/settle, independent of the Dividends portfolio pager.
- */
-function UpcomingPager({
-  included,
-  basis,
-  loading,
-  eventFilter,
-  setEventFilter,
-  hydrated,
-}: {
-  included: TickerAgg[];
-  basis: Basis;
-  loading: boolean;
-  eventFilter: EventFilter;
-  setEventFilter: (f: EventFilter) => void;
-  hydrated: boolean;
-}) {
-  const pagerRef = useRef<SwipePagerHandle>(null);
-  const segRef = useRef<HTMLDivElement>(null);
-  const dotsRef = useRef<HTMLDivElement>(null);
-  const idx = Math.max(0, UPCOMING_FILTERS.indexOf(eventFilter));
-  return (
-    <div className="pk-upcoming">
-      {/* FIXED header: title + All/Ex/Pay segment. The white pill slides 1:1 with
-          the swipe (onProgress sets --seg-progress on every frame); tapping a
-          segment drives the pager. The pill is the active indicator. */}
-      <div className="pk-upcoming-head">
-        <h1 className="pk-title">Upcoming</h1>
-        <div className="pk-seg pk-seg-anim" ref={segRef} role="group" aria-label="Event filter">
-          <span className="pk-seg-pill" aria-hidden />
-          {UPCOMING_FILTER_OPTS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className="pk-seg-btn"
-              data-active={eventFilter === o.value}
-              aria-pressed={eventFilter === o.value}
-              onClick={() => pagerRef.current?.scrollToIndex(UPCOMING_FILTERS.indexOf(o.value))}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="pk-paged-region">
-        <SwipePager
-          ref={pagerRef}
-          items={UPCOMING_FILTERS}
-          activeIndex={idx}
-          ready={hydrated}
-          pageClassName="pk-paged-page"
-          dragSwipe
-          onProgress={(f) => {
-            segRef.current?.style.setProperty("--seg-progress", String(f));
-            setActiveDots(dotsRef.current, Math.round(f));
-          }}
-          onSettle={(i) => {
-            const f = UPCOMING_FILTERS[i];
-            if (f !== eventFilter) setEventFilter(f);
-          }}
-          renderPage={(f) => (
-            <UpcomingEvents tickers={included} basis={basis} filter={f as EventFilter} loading={loading} />
-          )}
-        />
-      </div>
-      {/* Page dots DOCKED below the list, just above the tab bar — mark the three
-          filter pages and that you can swipe between them. */}
-      <PageDots
-        ref={dotsRef}
-        count={UPCOMING_FILTERS.length}
-        activeIndex={idx}
-        onSelect={(i) => pagerRef.current?.scrollToIndex(i)}
-        ariaLabel="Event filter"
-        itemLabel={(i) => UPCOMING_FILTER_OPTS[i].label}
-      />
-    </div>
-  );
 }
 
 /**
@@ -460,21 +372,20 @@ export function PocketShell() {
           />
         )}
 
-        {/* Upcoming — its OWN SwipePager: swipe cycles the event filter (all/ex/pay)
-            of the active portfolio. Separate tab branch → remounts on entry → its
-            align/settle are independent of the Dividends portfolio pager. */}
-        {tab === "upcoming" && (
-          <UpcomingPager
-            included={activeDerived?.included ?? []}
+        {/* Activity — merged Upcoming + History. A 4-way switch (Upcoming / Received /
+            Trades / Cash) picks the mode; each renders its own self-contained surface.
+            Remounts on entry. Upcoming uses the active portfolio's events. */}
+        {tab === "activity" && (
+          <HistoryTab
             basis={basis}
+            fxRate={data?.fx?.usdcad ?? null}
+            upcomingIncluded={activeDerived?.included ?? []}
             loading={loading}
             eventFilter={eventFilter}
             setEventFilter={setEventFilter}
-            hydrated={eventFilterHydrated}
+            eventFilterHydrated={eventFilterHydrated}
           />
         )}
-
-        {tab === "history" && <HistoryTab basis={basis} fxRate={data?.fx?.usdcad ?? null} />}
 
         {tab === "settings" && (
           <PocketSettings
