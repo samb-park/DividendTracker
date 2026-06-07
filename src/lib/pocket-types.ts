@@ -98,6 +98,21 @@ export interface PocketGroup {
   sortOrder: number;
 }
 
+/** Synthetic-id prefix for a built-in per-account portfolio (e.g. "acct:RRSP"). */
+export const ACCT_PORTFOLIO_PREFIX = "acct:";
+
+/**
+ * One selectable portfolio in the unified picker/order: the pinned "All" (id=null),
+ * a built-in per-account portfolio (id="acct:<TYPE>", always-current, not editable),
+ * or a user PocketGroup (id=group id). Color is for the row/legend dot only.
+ */
+export interface PortfolioOption {
+  id: string | null;
+  name: string;
+  kind: "all" | "account" | "group";
+  color: string | null;
+}
+
 /** Preset accent colors for pocket groups (first = default for a new group). */
 export const POCKET_GROUP_COLORS = [
   "#0a8043", // brand green

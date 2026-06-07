@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import type { RunRateResponse, TickerAgg, PositionRunRate, Basis, EventFilter } from "@/lib/pocket-types";
+import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, type PortfolioOption } from "@/lib/pocket-types";
 import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
@@ -19,6 +20,7 @@ import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
 import { UpcomingEvents, UPCOMING_FILTER_OPTS } from "./upcoming-list";
 import { ChartsView } from "./charts-view";
+import { PortfolioPicker } from "./portfolio-picker";
 import { HistoryTab } from "./history-tab";
 import { PwaRegister } from "@/components/pwa-register";
 
@@ -295,6 +297,7 @@ export function PocketShell() {
 
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [managing, setManaging] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [eventFilter, setEventFilter, eventFilterHydrated] = useEventFilter();
 
   const [basis, setBasis] = useBasis();
@@ -330,21 +333,43 @@ export function PocketShell() {
   // Every held ticker across all accounts — the "All" view and the group editor.
   const allTickerAggs = useMemo<TickerAgg[]>(() => rollupTickers(positions), [positions]);
 
-  // Pager order: All → each group. Native snap clamps at the ends (no wrap).
-  const portfolioOrder = useMemo<(string | null)[]>(() => [null, ...groups.map((g) => g.id)], [groups]);
+  // Built-in per-account portfolios (always-current, not editable): one per held
+  // account type. Synthetic id "acct:<TYPE>" — dynamically all holdings in that account.
+  const accountPortfolioIds = useMemo<string[]>(
+    () => accountTypes.map((a) => ACCT_PORTFOLIO_PREFIX + a),
+    [accountTypes]
+  );
 
-  // A stored selection whose group was deleted (or never existed) falls back to "All".
+  // Pager/selection order: All → each built-in account → each group. Native snap
+  // clamps at the ends (no wrap). Built-ins MUST live here too, or the Dividends
+  // pager's indexOf(activeId) desyncs when a built-in account is selected.
+  const portfolioOrder = useMemo<(string | null)[]>(
+    () => [null, ...accountPortfolioIds, ...groups.map((g) => g.id)],
+    [accountPortfolioIds, groups]
+  );
+
+  // A stored selection that no longer resolves (deleted group, or an account no
+  // longer held) falls back to "All". Gate on `data` too so a valid "acct:*" id
+  // isn't wrongly reset (then flashed) before accountTypes have loaded.
   useEffect(() => {
-    if (groupsLoaded && activeId && !groups.some((g) => g.id === activeId)) {
-      setActiveId(null);
-    }
-  }, [groupsLoaded, activeId, groups, setActiveId]);
+    if (!groupsLoaded || !data || !activeId) return;
+    const valid = new Set(portfolioOrder.filter((x): x is string => x != null));
+    if (!valid.has(activeId)) setActiveId(null);
+  }, [groupsLoaded, data, activeId, portfolioOrder, setActiveId]);
 
-  // One figure-set per portfolio page (account ∩ ticker; "All" = everything).
+  // One figure-set per portfolio page: null="All"=everything, "acct:<TYPE>"=all
+  // holdings in that account (dynamic, no ticker list), else a group (account ∩ ticker).
   const derivedByPortfolio = useMemo<Derived[]>(
     () =>
       portfolioOrder.map((id) => {
-        const g = id == null ? null : groups.find((x) => x.id === id) ?? null;
+        if (id == null)
+          return computeDerived(allTickerAggs, basis, positions.length, data?.fx.fallback ?? false, "All");
+        if (id.startsWith(ACCT_PORTFOLIO_PREFIX)) {
+          const acct = id.slice(ACCT_PORTFOLIO_PREFIX.length);
+          const included = rollupTickers(positions.filter((p) => p.accountType === acct));
+          return computeDerived(included, basis, positions.length, data?.fx.fallback ?? false, ACCT_LABELS[acct] ?? acct);
+        }
+        const g = groups.find((x) => x.id === id) ?? null;
         const included = g
           ? rollupTickers(
               positions.filter(
@@ -357,6 +382,21 @@ export function PocketShell() {
         return computeDerived(included, basis, positions.length, data?.fx.fallback ?? false, g?.name ?? "All");
       }),
     [portfolioOrder, groups, positions, allTickerAggs, basis, data]
+  );
+
+  // Built-in account portfolios as picker/Settings options (muted dot, "Account").
+  const accountPortfolios = useMemo<PortfolioOption[]>(
+    () => accountTypes.map((a) => ({ id: ACCT_PORTFOLIO_PREFIX + a, name: ACCT_LABELS[a] ?? a, kind: "account", color: "var(--pk-muted)" })),
+    [accountTypes]
+  );
+  // The full unified portfolio list for the Charts picker (All + accounts + groups).
+  const portfolioOptions = useMemo<PortfolioOption[]>(
+    () => [
+      { id: null, name: "All", kind: "all", color: null },
+      ...accountPortfolios,
+      ...groups.map((g) => ({ id: g.id, name: g.name, kind: "group" as const, color: g.color })),
+    ],
+    [accountPortfolios, groups]
   );
 
   // The portfolio currently selected on Dividends (shared with Charts + Upcoming).
@@ -396,22 +436,27 @@ export function PocketShell() {
             portfolioOrder={portfolioOrder}
             activeId={activeId}
             setActiveId={setActiveId}
-            ready={groupsLoaded}
+            // Gate the once-per-mount align on BOTH groups AND run-rate data: a stored
+            // "acct:*" selection only enters portfolioOrder once accountTypes load, so
+            // aligning on groupsLoaded alone would lock the pager on "All" (didInit) and
+            // desync from Charts on a cold load.
+            ready={groupsLoaded && !!data}
             loading={loading}
             error={error}
             onRetry={() => load()}
           />
         )}
 
-        {/* Charts — fixed "Charts" title + the active portfolio name, then a single
-            by-holding distribution donut. Mirrors the Dividends selection (shared
-            activeId); this branch remounts on entry so it always reflects it. */}
+        {/* Charts — fixed "Charts" title + live metric + a tappable portfolio name,
+            then a swipeable Dividend/Value donut pager. Mirrors the shared activeId
+            (Dividends + the root PortfolioPicker both write it). Remounts on entry. */}
         {tab === "charts" && (
           <ChartsView
             included={activeDerived?.included ?? []}
             portfolioName={activeDerived?.portfolioName ?? "All"}
             basis={basis}
             loading={loading}
+            onOpenPicker={() => setPickerOpen(true)}
           />
         )}
 
@@ -434,6 +479,7 @@ export function PocketShell() {
         {tab === "settings" && (
           <PocketSettings
             groups={groups}
+            accountPortfolios={accountPortfolios}
             activeId={activeId}
             onSelect={setActiveId}
             onReorder={groupsApi.reorderGroups}
@@ -447,6 +493,17 @@ export function PocketShell() {
       </div>
 
       <PocketTabBar active={tab} onChange={setTab} />
+
+      {/* Charts portfolio picker — rendered at root (NOT inside the tab) so its
+          fixed sheet anchors to the viewport and paints above the tab bar. */}
+      {pickerOpen && (
+        <PortfolioPicker
+          options={portfolioOptions}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       {managing && (
         <GroupManager

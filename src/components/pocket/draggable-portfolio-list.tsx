@@ -21,11 +21,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { PocketGroup } from "@/lib/pocket-types";
+import type { PocketGroup, PortfolioOption } from "@/lib/pocket-types";
 import { PortfolioRow } from "./portfolio-row";
 
 interface Props {
   groups: PocketGroup[];
+  accountPortfolios: PortfolioOption[]; // built-in per-account portfolios (non-draggable)
   activeId: string | null;
   onSelect: (id: string | null) => void;
   onReorder: (orderedIds: string[]) => void;
@@ -75,7 +76,7 @@ function SortableRow({
   );
 }
 
-export function DraggablePortfolioList({ groups, activeId, onSelect, onReorder }: Props) {
+export function DraggablePortfolioList({ groups, accountPortfolios, activeId, onSelect, onReorder }: Props) {
   const [activeDrag, setActiveDrag] = useState<PocketGroup | null>(null);
 
   // TouchSensor (long-press 200ms = pick up; its non-passive window touchmove is
@@ -117,6 +118,19 @@ export function DraggablePortfolioList({ groups, activeId, onSelect, onReorder }
         asOption
         onClick={() => onSelect(null)}
       />
+      {/* Built-in per-account portfolios — selectable but NOT reorderable (they're
+          derived, not stored rows), so they sit outside the DnD context. */}
+      {accountPortfolios.map((p) => (
+        <PortfolioRow
+          key={p.id ?? "all"}
+          color={p.color}
+          name={p.name}
+          subtitle="Account"
+          selected={activeId === p.id}
+          asOption
+          onClick={() => onSelect(p.id)}
+        />
+      ))}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

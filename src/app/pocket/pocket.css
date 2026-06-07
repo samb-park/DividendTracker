@@ -1070,20 +1070,41 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 /* the name field already signals focus via its border-color — no double ring */
 .pk-input:focus-visible { outline: none; }
 
-/* Charts tab — fixed "Charts" title + a live "Metric · Portfolio" subtitle, then a
-   swipeable 2-donut pager (Dividend / Value) for the Dividends-selected portfolio. */
+/* Charts tab — fixed "Charts" title + a live metric label and a TAPPABLE portfolio
+   name (opens the picker), then a swipeable 2-donut pager (Dividend / Value). */
 .pk-charts-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .pk-charts-head .pk-title { flex: 0 0 auto; }
-.pk-charts-sub {
-  flex: 0 1 auto;
+.pk-charts-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 13px; /* Caption */
   font-weight: 600;
-  color: var(--pk-muted);
 }
+.pk-charts-metric { flex: 0 0 auto; color: var(--pk-muted); }
+.pk-charts-sep { flex: 0 0 auto; color: var(--pk-muted); opacity: 0.6; }
+/* The portfolio name is the interactive bit: ink-colored + caret, generous tap area. */
+.pk-charts-pf {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 52vw;
+  padding: 6px 2px;
+  margin: -6px 0; /* keep the baseline put while enlarging the hit area */
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pk-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pk-charts-pf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-charts-caret { flex: 0 0 auto; font-size: 10px; color: var(--pk-muted); transform: translateY(-1px); }
+.pk-charts-pf:active { opacity: 0.6; }
 
 /* One donut page: ring (centered total overlay) + caption + legend, stacked and
    vertically centered in the page so a short page reads like the Dividends hero. */

@@ -15,28 +15,30 @@ function Centered({ children }: { children: ReactNode }) {
 }
 
 /**
- * Charts = a FIXED "Charts" title + a live "Metric · Portfolio" subtitle, above a
- * swipeable 2-donut pager for the Dividends-selected portfolio:
+ * Charts = a FIXED header ("Charts" + the live metric + a tappable portfolio
+ * button) above a swipeable 2-donut pager for the selected portfolio:
  *   • Dividend — annual run-rate per holding (center = the Dividends "Y" total)
  *   • Value    — market value per holding   (center = the Dividends "VALUE" total)
- * The portfolio (All / a group) mirrors the shared Dividends selection (activeId);
- * this branch remounts on tab entry so it always reflects it. Swiping switches the
- * METRIC only. Same net/gross basis as the rest of /pocket.
+ * The portfolio (All / a built-in account / a group) is the shared Dividends
+ * selection; tapping the name opens the root PortfolioPicker (→ setActiveId, which
+ * Dividends follows too). Swiping switches the METRIC only. Same net/gross basis.
  */
 export function ChartsView({
   included,
   portfolioName,
   basis,
   loading,
+  onOpenPicker,
 }: {
   included: TickerAgg[];
   portfolioName: string;
   basis: Basis;
   loading: boolean;
+  onOpenPicker: () => void;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
-  const subRef = useRef<HTMLSpanElement>(null);
+  const metricRef = useRef<HTMLSpanElement>(null);
   const [activeMetric, setActiveMetric] = useState<Metric>("dividend");
   const activeIndex = Math.max(0, METRICS.indexOf(activeMetric));
 
@@ -51,8 +53,6 @@ export function ChartsView({
     [included]
   );
 
-  const sub = (m: Metric) => `${METRIC_LABELS[m]} · ${portfolioName}`;
-
   const renderPage = (metric: string) => {
     if (loading) return <Centered><p className="pk-note">Loading…</p></Centered>;
     if (metric === "value")
@@ -62,11 +62,23 @@ export function ChartsView({
 
   return (
     <div className="pk-charts">
-      {/* FIXED header: "Charts" + the active metric · the mirrored portfolio name.
-          The subtitle's metric updates live as you swipe; the portfolio is ambient. */}
+      {/* FIXED header: "Charts" + the active metric (live on swipe) · the tappable
+          portfolio name (opens the picker). The portfolio is ambient/shared. */}
       <div className="pk-charts-head">
         <h1 className="pk-title">Charts</h1>
-        <span className="pk-charts-sub" ref={subRef}>{sub(activeMetric)}</span>
+        <div className="pk-charts-meta">
+          <span className="pk-charts-metric" ref={metricRef}>{METRIC_LABELS[activeMetric]}</span>
+          <span className="pk-charts-sep" aria-hidden>·</span>
+          <button
+            type="button"
+            className="pk-charts-pf"
+            onClick={onOpenPicker}
+            aria-label={`Portfolio: ${portfolioName}. Tap to change.`}
+          >
+            <span className="pk-charts-pf-name">{portfolioName}</span>
+            <span className="pk-charts-caret" aria-hidden>▾</span>
+          </button>
+        </div>
       </div>
       <div className="pk-paged-region">
         <SwipePager
@@ -78,7 +90,7 @@ export function ChartsView({
           onProgress={(f) => {
             const active = Math.max(0, Math.min(METRICS.length - 1, Math.round(f)));
             setActiveDots(dotsRef.current, active);
-            if (subRef.current) subRef.current.textContent = sub(METRICS[active]);
+            if (metricRef.current) metricRef.current.textContent = METRIC_LABELS[METRICS[active]];
           }}
           onSettle={(i) => {
             const m = METRICS[i];

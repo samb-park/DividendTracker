@@ -1,12 +1,13 @@
 "use client";
 
-import type { Basis, PocketGroup, ThemePref } from "@/lib/pocket-types";
+import type { Basis, PocketGroup, PortfolioOption, ThemePref } from "@/lib/pocket-types";
 import { DraggablePortfolioList } from "./draggable-portfolio-list";
 import { NotifySettings } from "./notify-settings";
 import { AnimatedSegment } from "./animated-segment";
 
 interface Props {
   groups: PocketGroup[];
+  accountPortfolios: PortfolioOption[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
   onReorder: (orderedIds: string[]) => void;
@@ -30,6 +31,7 @@ const BASIS_OPTS: { value: Basis; label: string }[] = [
 
 export function PocketSettings({
   groups,
+  accountPortfolios,
   activeId,
   onSelect,
   onReorder,
@@ -50,6 +52,7 @@ export function PocketSettings({
             swipe pager, which derives its order from this list). */}
         <DraggablePortfolioList
           groups={groups}
+          accountPortfolios={accountPortfolios}
           activeId={activeId}
           onSelect={onSelect}
           onReorder={onReorder}
