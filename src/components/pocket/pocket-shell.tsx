@@ -321,6 +321,9 @@ export function PocketShell() {
     ],
     [accountPortfolios, groups]
   );
+  // The currently-selected option, shown as Settings' single portfolio row (falls
+  // back to "All" if a stored group id no longer resolves).
+  const activePortfolio = portfolioOptions.find((o) => o.id === activeId) ?? portfolioOptions[0];
 
   // The portfolio currently selected on Dividends (shared with Charts + Activity).
   const activeIdx = Math.max(0, portfolioOrder.indexOf(activeId));
@@ -413,11 +416,8 @@ export function PocketShell() {
 
         {tab === "settings" && (
           <PocketSettings
-            groups={groups}
-            accountPortfolios={accountPortfolios}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onReorder={groupsApi.reorderGroups}
+            activePortfolio={activePortfolio}
+            onOpenPicker={() => setPickerOpen(true)}
             onEdit={() => setManaging(true)}
             basis={basis}
             setBasis={setBasis}
@@ -448,6 +448,7 @@ export function PocketShell() {
           basis={basis}
           accountTypes={accountTypes}
           onClose={() => setManaging(false)}
+          onReorder={groupsApi.reorderGroups}
           onCreate={groupsApi.createGroup}
           onUpdate={groupsApi.updateGroup}
           onDelete={groupsApi.deleteGroup}

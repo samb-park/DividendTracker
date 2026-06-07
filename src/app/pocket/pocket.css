@@ -927,11 +927,11 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 }
 .pk-switch[data-on="true"] .pk-switch-knob { transform: translateX(18px); }
 
-/* drag-to-reorder (Settings portfolio list) ----------------------------- */
-/* Keep the page scrollable on the rows before a drag starts. dnd-kit's
+/* drag-to-reorder (Manage portfolios sheet) ----------------------------- */
+/* Keep the sheet scrollable on the rows before a drag starts. dnd-kit's
    TouchSensor suppresses scroll DURING an active drag via its own non-passive
    touchmove listener — so we must NOT set touch-action:none here (that would
-   kill the pre-activation page scroll). The displaced rows slide via the
+   kill the pre-activation sheet scroll). The displaced rows slide via the
    `transition` dnd-kit puts on each useSortable item (FLIP). */
 .pk-sortable-row { touch-action: auto; }
 

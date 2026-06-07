@@ -1,6 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { ACCT_LABELS, POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
 import { PortfolioRow } from "./portfolio-row";
@@ -12,6 +32,7 @@ interface Props {
   basis: Basis;
   accountTypes: string[]; // account types the user actually holds
   onClose: () => void;
+  onReorder: (orderedIds: string[]) => void; // persist drag-reordered group order
   onCreate: (input: {
     name: string;
     color: string | null;
@@ -27,6 +48,37 @@ interface Props {
 
 const NEW = "__new__";
 
+/**
+ * One reorderable portfolio row in the manage sheet. Drag listeners live on the
+ * WRAPPER div (not the inner button) so a real tap still reaches PortfolioRow's
+ * onClick → edit, while a long-press (TouchSensor delay) activates the drag. The
+ * in-place row goes transparent while dragging — the DragOverlay is the only
+ * visible "lifted" copy, so nothing double-renders.
+ */
+function SortableGroupRow({
+  group,
+  subtitle,
+  onEdit,
+}: {
+  group: PocketGroup;
+  subtitle: string;
+  onEdit: (g: PocketGroup) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.id,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition, // FLIP slide for the displaced rows
+    opacity: isDragging ? 0 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="pk-sortable-row" {...attributes} {...listeners}>
+      <PortfolioRow color={group.color} name={group.name} subtitle={subtitle} onClick={() => onEdit(group)} />
+    </div>
+  );
+}
+
 export function GroupManager({
   groups,
   loading,
@@ -34,6 +86,7 @@ export function GroupManager({
   basis,
   accountTypes,
   onClose,
+  onReorder,
   onCreate,
   onUpdate,
   onDelete,
@@ -46,8 +99,33 @@ export function GroupManager({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [activeDrag, setActiveDrag] = useState<PocketGroup | null>(null);
 
   const editing = editingId !== null;
+
+  // TouchSensor (long-press 200ms = pick up; its non-passive window touchmove is
+  // what actually suppresses iOS scroll during a drag) + MouseSensor (desktop).
+  // Deliberately NO PointerSensor: Pointer+Touch together races on iOS and the
+  // pointermove-preventDefault path cannot stop iOS scroll → the sheet scrolls
+  // under the lifted row. KeyboardSensor is wired for a11y.
+  const sensors = useSensors(
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 12 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function onDragStart(e: DragStartEvent) {
+    setActiveDrag(groups.find((g) => g.id === e.active.id) ?? null);
+  }
+  function onDragEnd(e: DragEndEvent) {
+    setActiveDrag(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIndex = groups.findIndex((g) => g.id === active.id);
+    const newIndex = groups.findIndex((g) => g.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    onReorder(arrayMove(groups, oldIndex, newIndex).map((g) => g.id));
+  }
 
   // Play the slide-down/fade-out before actually unmounting (parent drops us on
   // onClose). 220ms matches the pk-slide-down / pk-fade-out keyframe duration.
@@ -167,18 +245,44 @@ export function GroupManager({
             ) : groups.length === 0 ? (
               <p className="pk-note">No portfolios yet. Create one below.</p>
             ) : (
-              <div className="pk-pf-list">
-                {groups.map((g) => (
-                  <PortfolioRow
-                    key={g.id}
-                    color={g.color}
-                    name={g.name}
-                    subtitle={`${acctSummary(g)} · ${g.tickers.length} ticker${g.tickers.length === 1 ? "" : "s"}`}
-                    onClick={() => startEdit(g)}
-                  />
-                ))}
-              </div>
+              // Long-press a row to drag it into a new order; a plain tap edits it.
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragCancel={() => setActiveDrag(null)}
+              >
+                <div className="pk-pf-list">
+                  <SortableContext items={groups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                    {groups.map((g) => (
+                      <SortableGroupRow
+                        key={g.id}
+                        group={g}
+                        subtitle={`${acctSummary(g)} · ${g.tickers.length} ticker${g.tickers.length === 1 ? "" : "s"}`}
+                        onEdit={startEdit}
+                      />
+                    ))}
+                  </SortableContext>
+                </div>
+                <DragOverlay>
+                  {activeDrag ? (
+                    <div className="pk-sortable-row pk-lifted">
+                      <PortfolioRow
+                        color={activeDrag.color}
+                        name={activeDrag.name}
+                        subtitle={`${acctSummary(activeDrag)} · ${activeDrag.tickers.length} ticker${
+                          activeDrag.tickers.length === 1 ? "" : "s"
+                        }`}
+                        onClick={() => {}}
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
+
+            {groups.length > 1 && <p className="pk-note">Tap to edit · hold to drag and reorder.</p>}
 
             <button type="button" className="pk-action" onClick={startNew}>
               + New portfolio

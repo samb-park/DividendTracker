@@ -1,16 +1,13 @@
 "use client";
 
-import type { Basis, PocketGroup, PortfolioOption, ThemePref } from "@/lib/pocket-types";
-import { DraggablePortfolioList } from "./draggable-portfolio-list";
+import type { Basis, PortfolioOption, ThemePref } from "@/lib/pocket-types";
+import { PortfolioRow } from "./portfolio-row";
 import { NotifySettings } from "./notify-settings";
 import { AnimatedSegment } from "./animated-segment";
 
 interface Props {
-  groups: PocketGroup[];
-  accountPortfolios: PortfolioOption[];
-  activeId: string | null;
-  onSelect: (id: string | null) => void;
-  onReorder: (orderedIds: string[]) => void;
+  activePortfolio: PortfolioOption; // the current selection (shown as a single row)
+  onOpenPicker: () => void; // opens the shared PortfolioPicker sheet
   onEdit: () => void;
   basis: Basis;
   setBasis: (b: Basis) => void;
@@ -30,11 +27,8 @@ const BASIS_OPTS: { value: Basis; label: string }[] = [
 ];
 
 export function PocketSettings({
-  groups,
-  accountPortfolios,
-  activeId,
-  onSelect,
-  onReorder,
+  activePortfolio,
+  onOpenPicker,
   onEdit,
   basis,
   setBasis,
@@ -47,18 +41,15 @@ export function PocketSettings({
 
       <section>
         <div className="pk-section-label">Portfolio</div>
-        {/* Selection + ordering live here (not on Dividends). Tap selects; a
-            long-press lifts a portfolio to drag-reorder it (also reorders the
-            swipe pager, which derives its order from this list). */}
-        <DraggablePortfolioList
-          groups={groups}
-          accountPortfolios={accountPortfolios}
-          activeId={activeId}
-          onSelect={onSelect}
-          onReorder={onReorder}
+        {/* Selection now lives in every screen's header picker; Settings shows the
+            current one as a single row that opens the same sheet. Reordering moved
+            into "Manage portfolios". */}
+        <PortfolioRow
+          color={activePortfolio.color}
+          name={activePortfolio.name}
+          subtitle={activePortfolio.kind === "account" ? "Account" : undefined}
+          onClick={onOpenPicker}
         />
-        {groups.length > 1 && <p className="pk-note">Hold a portfolio to drag and reorder.</p>}
-
         <button type="button" className="pk-action pk-navrow" onClick={onEdit}>
           Manage portfolios
         </button>
