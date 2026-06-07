@@ -100,7 +100,7 @@ export function PocketHero({
 
   const numText = (div: number) => {
     if (loading) return "—";
-    return `$${money(showZero ? 0 : annualUSD / div)}`; // $-prefixed to match every other money figure in the app
+    return money(showZero ? 0 : annualUSD / div); // bare figure — no $ on the big run-rate numbers (per /pocket request)
   };
 
   return (
