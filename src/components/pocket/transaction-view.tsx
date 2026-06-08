@@ -17,13 +17,12 @@ const qtyFmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDi
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Month + day only — the selected year is already shown in the period picker,
+// and the 52px date column can't fit a year (it overflows onto the ticker).
 const fmtDate = (iso: string) => {
   const d = new Date(`${iso}T12:00:00Z`);
   if (isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
-  if (d.getUTCFullYear() !== now.getUTCFullYear()) opts.year = "2-digit";
-  return new Intl.DateTimeFormat("en-US", opts).format(d);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(d);
 };
 
 const FILTER_OPTS: { value: TxnFilter; label: string }[] = [
