@@ -20,12 +20,22 @@
    :has() is supported on iOS Safari 15.4+ / modern Chrome (the target). */
 body:has(.pocket-root)::before { display: none !important; }
 
-/* Paint the html/body behind the surface so iOS rubber-band overscroll reveals
-   the pocket background (white/black) instead of the global dark body. */
+/* Paint the html/body behind the surface (kept as a fallback for any residual
+   overscroll, e.g. a focused-input keyboard nudge): pocket background, not the
+   global dark body. */
 html:has(.pocket-root),
 body:has(.pocket-root) { background: #ffffff; }
 html:has(.pocket-root[data-pocket-mode="dark"]),
 body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
+
+/* Document-level backstop: lock the viewport scroller so a downward drag on the
+   (often short, non-scrollable) default Dividends screen can't rubber-band the
+   whole viewport — which slid the position:fixed tab bar down and exposed the
+   painted background. body already has overscroll-behavior:none globally, but the
+   document scroller is governed by html (which was `auto`), and `body` doesn't
+   reliably propagate it. The nested scrollers (.pk-screen, .pk-paged-page) also
+   `contain` below, so the chain is stopped at its source too. Scoped to /pocket. */
+html:has(.pocket-root) { overscroll-behavior-y: none; }
 
 .pocket-root {
   /* Light (reference default) */
@@ -92,6 +102,7 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain; /* don't chain a top/bottom overpull to the viewport */
   -webkit-overflow-scrolling: touch;
   /* bottom pad clears the floating tab bar (which is fixed over this content) */
   padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
@@ -701,6 +712,10 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* contain = a downward overpull on a short/at-top page stops here instead of
+     chaining up to the viewport and rubber-banding the whole surface (which moved
+     the fixed tab bar). The horizontal pager is a separate axis, unaffected. */
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   scroll-snap-stop: always;
