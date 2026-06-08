@@ -318,11 +318,11 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 0 var(--pk-hairline) inset;
 }
 /* In the installed PWA (no toolbar) the bottom safe-area is stable. Sit the pill
-   LOWER — closer to the bottom edge — by trimming most of the home-indicator
-   inset instead of adding a float gap on top of it (the +14px gap made the bar
-   feel too high). max(8px, …) keeps a floor on devices with no safe-area inset. */
+   LOW — close to the bottom edge — by trimming most of the home-indicator inset
+   (≈34px on a modern iPhone → ≈12px gap). max(6px, …) keeps a floor on devices
+   with no safe-area inset so it never sits flush against the very edge. */
 @media (display-mode: standalone) {
-  .pk-tabbar { bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) - 6px)); }
+  .pk-tabbar { bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)); }
 }
 .pk-tab {
   appearance: none;
