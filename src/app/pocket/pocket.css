@@ -305,7 +305,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 14px;
+  bottom: 10px;
   z-index: 50;
   max-width: calc(100vw - 16px);
   display: flex;
@@ -317,9 +317,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 0 var(--pk-hairline) inset;
 }
-/* In the installed PWA (no toolbar) the bottom safe-area is stable, so honor it. */
+/* In the installed PWA (no toolbar) the bottom safe-area is stable. Sit the pill
+   LOWER — closer to the bottom edge — by trimming most of the home-indicator
+   inset instead of adding a float gap on top of it (the +14px gap made the bar
+   feel too high). max(8px, …) keeps a floor on devices with no safe-area inset. */
 @media (display-mode: standalone) {
-  .pk-tabbar { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
+  .pk-tabbar { bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) - 6px)); }
 }
 .pk-tab {
   appearance: none;
