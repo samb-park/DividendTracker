@@ -4,6 +4,7 @@ import { getPrice, getFxRate } from "@/lib/price";
 import { netFactor } from "@/lib/dividend-withholding";
 import {
   getForwardAnnualPerShare,
+  isDateConfirmed,
   nextFutureDate,
   nextPayFromEx,
   type DivInfo,
@@ -107,7 +108,9 @@ export async function GET() {
         currency: nativeCurrency,
         nextExDate: nextEx,
         nextPayDate: nextPay,
-        dateConfirmed: div?.dateUpcoming ?? false,
+        // Source-estimated future rows count as UNconfirmed (clock icon + no
+        // same-day cron alert), same gate the cron uses via computeTickerDates.
+        dateConfirmed: div ? isDateConfirmed(div) : false,
       });
     }
   }

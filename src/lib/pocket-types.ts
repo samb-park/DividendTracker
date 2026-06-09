@@ -17,7 +17,9 @@ export interface PositionRunRate {
   currency: string; // native listing currency (USD/CAD)
   nextExDate: string | null; // YYYY-MM-DD, next (future) ex-dividend date
   nextPayDate: string | null; // YYYY-MM-DD, next (future) payment date
-  dateConfirmed: boolean; // true = confirmed upcoming date; false = rolled-forward estimate
+  // true = source-DECLARED upcoming date; false = an estimate (either rolled
+  // forward by the app or published by the source as its own "estimated" row).
+  dateConfirmed: boolean;
 }
 
 export interface RunRateResponse {

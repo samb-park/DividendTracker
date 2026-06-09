@@ -17,11 +17,27 @@ const OTHER_COLOR = "hsl(220, 9%, 55%)";
 /** Whole-dollar USD (no cents) — distribution figures don't need cent precision. */
 const usd0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
-/** Percent of total — a positive-but-sub-1% slice shows "<1%" instead of a misleading "0%". */
-const pct = (f: number) => {
-  const p = f * 100;
-  return p > 0 && Math.round(p) < 1 ? "<1%" : `${Math.round(p)}%`;
-};
+/**
+ * Integer percents for a fraction list (must sum to ≤1 each, ~1 total) that sum
+ * to exactly 100 — largest-remainder method. Independent per-slice rounding can
+ * total 99 or 101; here each slice gets its floor, then the leftover points go
+ * to the slices with the largest fractional remainders.
+ */
+export function roundPercentsTo100(fractions: number[]): number[] {
+  const raw = fractions.map((f) => f * 100);
+  const out = raw.map(Math.floor);
+  let leftover = 100 - out.reduce((a, b) => a + b, 0);
+  const byRemainder = raw
+    .map((v, i) => ({ i, rem: v - Math.floor(v) }))
+    .sort((a, b) => b.rem - a.rem);
+  for (let k = 0; k < byRemainder.length && leftover > 0; k++, leftover--) {
+    out[byRemainder[k].i]++;
+  }
+  return out;
+}
+
+/** A positive-but-rounded-to-0 slice shows "<1%" instead of a misleading "0%". */
+const pctLabel = (p: number, value: number) => (value > 0 && p < 1 ? "<1%" : `${p}%`);
 
 /**
  * Fold a slice list to the top N + a single "Other" so the ring/legend stay
@@ -76,6 +92,8 @@ export function PocketDonut({
   const c = size / 2;
   const C = 2 * Math.PI * r;
 
+  const pcts = roundPercentsTo100(folded.map((s) => s.value / sum));
+
   let acc = 0; // cumulative fraction
   const arcs = folded.map((s) => {
     const f = s.value / sum;
@@ -115,7 +133,7 @@ export function PocketDonut({
             <span className="pk-legend-dot" style={{ background: s.color }} />
             <span className="pk-legend-label">{s.label}</span>
             <span className="pk-legend-val">{usd0(s.value)}</span>
-            <span className="pk-legend-pct">{pct(s.value / sum)}</span>
+            <span className="pk-legend-pct">{pctLabel(pcts[i], s.value)}</span>
           </div>
         ))}
       </div>
