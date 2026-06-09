@@ -292,7 +292,7 @@ export function GroupManager({
                 onDragEnd={onDragEnd}
                 onDragCancel={() => setActiveDrag(null)}
               >
-                <div className="pk-pf-list">
+                <div className="pk-pf-list pk-card">
                   <SortableContext items={groups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
                     {groups.map((g) => (
                       <SortableGroupRow

@@ -46,7 +46,7 @@ export function PortfolioPicker({
             Done
           </button>
         </div>
-        <div className="pk-pf-list" role="listbox" aria-label="Select portfolio">
+        <div className="pk-pf-list pk-card" role="listbox" aria-label="Select portfolio">
           {options.map((o) => (
             <PortfolioRow
               key={o.id ?? "all"}

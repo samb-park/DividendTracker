@@ -18,7 +18,7 @@ export function TickerPicker({ tickers, selected, basis, onToggle }: Props) {
   }
 
   return (
-    <div className="pk-picker">
+    <div className="pk-picker pk-card">
       {tickers.map((t) => {
         const on = selected.has(t.ticker);
         const annual = basis === "net" ? t.netAnnualUSD : t.grossAnnualUSD;

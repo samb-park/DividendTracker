@@ -94,7 +94,7 @@ export function UpcomingEvents({
           <EstClock /> estimated date
         </p>
       )}
-      <div className="pk-picker">
+      <div className="pk-picker pk-card">
         {events.map((e) => (
           <div className="pk-event-row" key={`${e.ticker}-${e.type}`}>
             <span className="pk-event-date">

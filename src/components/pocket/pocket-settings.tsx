@@ -43,26 +43,32 @@ export function PocketSettings({
         <div className="pk-section-label">Portfolio</div>
         {/* Selection now lives in every screen's header picker; Settings shows the
             current one as a single row that opens the same sheet. Reordering moved
-            into "Manage portfolios". */}
-        <PortfolioRow
-          color={activePortfolio.color}
-          name={activePortfolio.name}
-          subtitle={activePortfolio.kind === "account" ? "Account" : undefined}
-          onClick={onOpenPicker}
-        />
-        <button type="button" className="pk-action pk-navrow" onClick={onEdit}>
-          Manage portfolios
-        </button>
+            into "Manage portfolios". Both rows share one iOS grouped card. */}
+        <div className="pk-card">
+          <PortfolioRow
+            color={activePortfolio.color}
+            name={activePortfolio.name}
+            subtitle={activePortfolio.kind === "account" ? "Account" : undefined}
+            onClick={onOpenPicker}
+          />
+          <button type="button" className="pk-action pk-navrow" onClick={onEdit}>
+            Manage portfolios
+          </button>
+        </div>
       </section>
 
       <section>
         <div className="pk-section-label">Amount basis</div>
-        <AnimatedSegment options={BASIS_OPTS} value={basis} onChange={setBasis} ariaLabel="Amount basis" />
+        <div className="pk-card pk-card-pad">
+          <AnimatedSegment options={BASIS_OPTS} value={basis} onChange={setBasis} ariaLabel="Amount basis" />
+        </div>
       </section>
 
       <section>
         <div className="pk-section-label">Theme</div>
-        <AnimatedSegment options={THEME_OPTS} value={themePref} onChange={setThemePref} ariaLabel="Theme" />
+        <div className="pk-card pk-card-pad">
+          <AnimatedSegment options={THEME_OPTS} value={themePref} onChange={setThemePref} ariaLabel="Theme" />
+        </div>
       </section>
 
       <NotifySettings />

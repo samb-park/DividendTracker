@@ -93,7 +93,7 @@ export function PeriodPicker({
         {loading ? (
           <p className="pk-note">Loading…</p>
         ) : (
-          <div className="pk-pf-list" role="listbox" aria-label="Select period">
+          <div className="pk-pf-list pk-card" role="listbox" aria-label="Select period">
             {periods.map((p) => (
               <button
                 key={p.key}

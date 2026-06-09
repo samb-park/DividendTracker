@@ -176,40 +176,44 @@ export function NotifySettings() {
       <div className="pk-section-label">Dividend alerts</div>
 
       {!supported ? (
-        <p className="pk-note">
-          Add this app to your Home Screen and open it from there to enable alerts (iOS 16.4+).
-        </p>
+        <div className="pk-card">
+          <p className="pk-note pk-card-note">
+            Add this app to your Home Screen and open it from there to enable alerts (iOS 16.4+).
+          </p>
+        </div>
       ) : (
         <>
-          <div className="pk-switch-row">
-            <span className="pk-switch-label">Ex-dividend day</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={exEnabled}
-              aria-label="Ex-dividend day alerts"
-              className="pk-switch"
-              data-on={exEnabled}
-              disabled={busy || !ready}
-              onClick={() => handleToggle("ex", !exEnabled)}
-            >
-              <span className="pk-switch-knob" aria-hidden />
-            </button>
-          </div>
-          <div className="pk-switch-row">
-            <span className="pk-switch-label">Dividend pay day</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={payEnabled}
-              aria-label="Dividend pay day alerts"
-              className="pk-switch"
-              data-on={payEnabled}
-              disabled={busy || !ready}
-              onClick={() => handleToggle("pay", !payEnabled)}
-            >
-              <span className="pk-switch-knob" aria-hidden />
-            </button>
+          <div className="pk-card">
+            <div className="pk-switch-row">
+              <span className="pk-switch-label">Ex-dividend day</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={exEnabled}
+                aria-label="Ex-dividend day alerts"
+                className="pk-switch"
+                data-on={exEnabled}
+                disabled={busy || !ready}
+                onClick={() => handleToggle("ex", !exEnabled)}
+              >
+                <span className="pk-switch-knob" aria-hidden />
+              </button>
+            </div>
+            <div className="pk-switch-row">
+              <span className="pk-switch-label">Dividend pay day</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={payEnabled}
+                aria-label="Dividend pay day alerts"
+                className="pk-switch"
+                data-on={payEnabled}
+                disabled={busy || !ready}
+                onClick={() => handleToggle("pay", !payEnabled)}
+              >
+                <span className="pk-switch-knob" aria-hidden />
+              </button>
+            </div>
           </div>
 
           {permission === "denied" && (

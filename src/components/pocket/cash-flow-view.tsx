@@ -67,7 +67,7 @@ function AccountRows({
   if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No contributions in this period.</p>;
   return (
-    <div className="pk-picker">
+    <div className="pk-picker pk-card">
       {rows.map((r) => (
         <div className="pk-hist-row" key={r.id}>
           <span className="pk-event-ticker pk-cf-acct">{r.name}</span>

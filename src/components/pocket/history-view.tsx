@@ -35,7 +35,7 @@ const incomeCache = new Map<string, number[] | IncomeMonth[]>();
 /** Shared row-shaped loading skeleton for the Activity lists (M7). */
 export function SkeletonRows() {
   return (
-    <div className="pk-picker" aria-hidden>
+    <div className="pk-picker pk-card" aria-hidden>
       {[72, 56, 64, 48, 60].map((w, i) => (
         <div className="pk-skel-row" key={i}>
           <span className="pk-skel-bar" style={{ width: w }} />
@@ -89,7 +89,7 @@ function PeriodRows({
   if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No dividends received in this period.</p>;
   return (
-    <div className="pk-picker">
+    <div className="pk-picker pk-card">
       {rows.map((r) => (
         <div className="pk-hist-row" key={r.ticker}>
           <span className="pk-event-ticker">{r.ticker}</span>

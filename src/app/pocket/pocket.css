@@ -1,8 +1,9 @@
 /* ===========================================================================
    /pocket — mobile dividend run-rate surface.
    Fully scoped to .pocket-root so it never inherits the global IBM Plex Mono
-   font, retro scanline, or 600-weight body. Mirrors the iOS reference: white
-   bg, gray single-letter labels, ultra-bold hero numbers, floating tab bar.
+   font, retro scanline, or 600-weight body. Mirrors the iOS reference: grouped
+   bg (#F2F2F7 light / #000 dark) with inset cards (.pk-card), gray single-letter
+   labels, ultra-bold hero numbers, floating icon+label tab bar.
 
    DESIGN SYSTEM (keep values consistent with these scales):
    · Spacing (4-based):  4 · 8 · 12 · 16 · 24 · 32
@@ -24,7 +25,7 @@ body:has(.pocket-root)::before { display: none !important; }
    overscroll, e.g. a focused-input keyboard nudge): pocket background, not the
    global dark body. */
 html:has(.pocket-root),
-body:has(.pocket-root) { background: #ffffff; }
+body:has(.pocket-root) { background: #f2f2f7; }
 html:has(.pocket-root[data-pocket-mode="dark"]),
 body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 
@@ -38,9 +39,12 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
 html:has(.pocket-root) { overscroll-behavior-y: none; }
 
 .pocket-root {
-  /* Light (reference default) */
-  --pk-bg: #ffffff;
-  --pk-elevated: #ffffff; /* raised surfaces (sheet, active segment pill) */
+  /* Light (iOS grouped: systemGroupedBackground + white inset cards) */
+  --pk-bg: #f2f2f7;
+  --pk-card: #ffffff; /* inset grouped card (lists, settings groups) */
+  --pk-elevated: #ffffff; /* active segment pill */
+  --pk-sheet: #f2f2f7; /* bottom sheets — grouped gray so white cards read inside */
+  --pk-card-sheet: #ffffff; /* card fill INSIDE a sheet (one step above --pk-sheet) */
   --pk-ink: #0a0a0a;
   --pk-muted: #6e6e73; /* secondary text — 5.08:1 on #fff, AA (was #8a8a8f, only 3.44:1) */
   --pk-badge-ink: #6b6b70; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
@@ -83,8 +87,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 }
 
 .pocket-root[data-pocket-mode="dark"] {
+  /* Dark layering: bg #000 (OLED) < card #1C1C1E < sheet/seg-pill #2C2C2E < card-in-sheet #3A3A3C */
   --pk-bg: #000000;
-  --pk-elevated: #2c2c2e; /* raised surfaces (sheet, active seg pill) — a real step above #000 (was #1c1c1e, ~flat) */
+  --pk-card: #1c1c1e; /* inset grouped card — one step above the OLED black bg */
+  --pk-elevated: #2c2c2e; /* active seg pill — a real step above the card/track */
+  --pk-sheet: #2c2c2e;
+  --pk-card-sheet: #3a3a3c; /* card fill INSIDE a sheet (one step above --pk-sheet) */
   --pk-ink: #ffffff;
   --pk-muted: #8e8e93; /* Apple systemGray, ~4.6:1 (was #6e6e73) */
   --pk-badge-ink: #b0b0b5;
@@ -337,18 +345,21 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   background: transparent;
   color: var(--pk-muted);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 10px; /* iOS tab-bar grammar: icon above, small label below */
   font-weight: 600;
-  padding: 11px 8px; /* ≥44px tall hit target; 8px horiz so all 5 tabs fit ≤360px */
+  padding: 5px 13px; /* ≥44px tall hit target; 13px horiz so 4 icon+label tabs fit ≤360px */
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   min-height: 44px;
   white-space: nowrap;
 }
+.pk-tab-ico { display: block; flex: 0 0 auto; }
 .pk-tab[data-active="true"] {
   color: var(--pk-ink);
   font-weight: 700;
@@ -356,6 +367,45 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 }
 /* clear the floating bar at the bottom of scrollable content */
 .pk-bottom-clearance { height: calc(env(safe-area-inset-bottom, 0px) + 92px); }
+
+/* iOS grouped inset card ------------------------------------------------- */
+/* The white/dark-gray rounded container that grouped lists sit in. Sits INSIDE
+   the existing 24px edge gutter (the host screen/sheet padding provides it); the
+   16px internal padding turns each row's own bottom hairline into an iOS inset
+   separator automatically (rows already drop the hairline on :last-child). */
+.pk-card {
+  background: var(--pk-card);
+  border-radius: 12px;
+  padding: 0 16px;
+}
+.pk-sheet .pk-card { background: var(--pk-card-sheet); }
+/* non-list card content (a segmented control, a lone note) needs its own vertical pad */
+.pk-card-pad { padding: 12px 16px; }
+.pk-card-note { margin-top: 0; padding: 12px 0; }
+/* portfolio/period option rows inside a card: full-width separator rows, not
+   free-floating rounded pills. Selection reads from the checkmark (iOS), not a fill. */
+.pk-pf-list.pk-card { gap: 0; }
+.pk-card .pk-pfrow { padding-left: 0; padding-right: 0; border-radius: 0; }
+.pk-card .pk-pfrow[data-active="true"] { background: transparent; }
+.pk-card .pk-pfrow + .pk-pfrow,
+.pk-card .pk-sortable-row + .pk-sortable-row,
+.pk-card .pk-pfrow + .pk-action { border-top: 1px solid var(--pk-hairline); }
+/* settings action row inside a card = a plain tappable list row (chevron stays) */
+.pk-card .pk-action {
+  background: transparent;
+  border-radius: 0;
+  padding: 12px 0;
+}
+.pk-card .pk-action:active { background: transparent; opacity: 0.55; }
+/* Dark: inside a #1C1C1E card the white-12% seg track composites LIGHTER (~#38)
+   than the #2C2C2E pill, inverting the raised-pill read. Recess the track with a
+   black tint instead so the pill stays a clear step above. Light is unaffected
+   (white card + 6% black track + white pill = the stock iOS look). */
+.pocket-root[data-pocket-mode="dark"] .pk-card .pk-seg { background: rgba(0, 0, 0, 0.4); }
+/* 5-col grid rows lose 32px to the card padding — re-tuned columns/gaps so the
+   minmax(0,1fr) days/qty cell keeps usable width on ≥375px screens. */
+.pk-card .pk-event-row { grid-template-columns: 52px 54px 42px minmax(0, 1fr) 78px; column-gap: 5px; }
+.pk-card .pk-txn-row { grid-template-columns: 52px 54px 46px minmax(0, 1fr) 78px; column-gap: 5px; }
 
 /* list rows: shared edge (flush with screen padding), shared divider -------
    Applies to ticker-picker / upcoming / history rows. */
@@ -458,11 +508,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   color: var(--pk-muted);
 }
 .pk-est-ico { display: block; }
-/* "[clock] estimated date" legend above the list. */
+/* "[clock] estimated date" legend above the list (card needs breathing room below). */
 .pk-est-legend {
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-bottom: 12px;
 }
 .pk-event-ticker {
   font-size: 17px;
@@ -516,7 +567,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   right: 0;
   bottom: 0;
   z-index: 61;
-  background: var(--pk-elevated); /* raised above the page (correct in dark) */
+  background: var(--pk-sheet); /* grouped sheet bg — cards inside use --pk-card-sheet */
   border-top: 1px solid var(--pk-hairline);
   border-top-left-radius: 22px;
   border-top-right-radius: 22px;
@@ -896,8 +947,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   appearance: none;
   flex: 0 0 auto;
   position: relative;
-  width: 48px;
-  height: 30px;
+  width: 51px; /* UISwitch metrics: 51×31, 27px knob with a 2px inset */
+  height: 31px;
   border: none;
   border-radius: 999px;
   background: var(--pk-faint);
@@ -905,20 +956,20 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   padding: 0;
   transition: background 0.18s ease;
 }
-.pk-switch[data-on="true"] { background: #0a8043; } /* brand green */
+.pk-switch[data-on="true"] { background: #0a8043; } /* brand green (NOT systemBlue/green) */
 .pk-switch:disabled { opacity: 0.5; cursor: default; }
 .pk-switch-knob {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 24px;
-  height: 24px;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   transition: transform 0.18s ease;
 }
-.pk-switch[data-on="true"] .pk-switch-knob { transform: translateX(18px); }
+.pk-switch[data-on="true"] .pk-switch-knob { transform: translateX(20px); }
 
 /* drag-to-reorder (Manage portfolios sheet) ----------------------------- */
 /* Keep the sheet scrollable on the rows before a drag starts. dnd-kit's
@@ -934,7 +985,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
    the two compose without lag. */
 .pk-lifted {
   border-radius: 12px;
-  background: var(--pk-bg);
+  background: var(--pk-card-sheet); /* matches the card the row was lifted from */
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
   transform: scale(1.03);
   animation: pk-pickup 160ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -975,7 +1026,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   cursor: pointer;
   padding: 0;
 }
-.pk-swatch[data-active="true"] { border-color: var(--pk-ink); box-shadow: 0 0 0 2px var(--pk-bg) inset; }
+.pk-swatch[data-active="true"] { border-color: var(--pk-ink); box-shadow: 0 0 0 2px var(--pk-sheet) inset; } /* swatches live in sheets */
 .pk-danger {
   appearance: none;
   width: 100%;
@@ -1254,7 +1305,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   .pk-dividends {
     gap: 12px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 64px);
+    /* 70 (was 64): the icon+label tab bar is ~4px taller than the text-only one */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
   }
   .pk-hero { gap: 6px; }
 }

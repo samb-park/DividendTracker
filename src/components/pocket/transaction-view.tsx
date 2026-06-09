@@ -92,7 +92,7 @@ function TxnPeriodRows({
   if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No transactions in this period.</p>;
   return (
-    <div className="pk-picker">
+    <div className="pk-picker pk-card">
       {rows.map((t) => (
         <div className="pk-txn-row" key={t.id}>
           <span className="pk-event-date">{fmtDate(t.date)}</span>
