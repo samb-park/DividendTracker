@@ -157,9 +157,10 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     if (lastSync > oneYearAgo) startTime = lastSync;
   }
 
-  for (const account of accounts) {
-    if (account.status !== "Active") continue;
-
+  // Accounts sync concurrently: with a slow/hanging QT activities endpoint, a
+  // serial loop multiplies the timeout by the account count (3 × 20s pinned the
+  // /pocket "Syncing Questrade…" banner for a full minute).
+  const syncAccount = async (account: (typeof accounts)[number]) => {
     const name = portfolioName(account.type, account.number);
     const portfolio = await prisma.portfolio.upsert({
       where: { id: `qt-${account.number}` },
@@ -306,7 +307,9 @@ export async function runQuestradeSync(userId?: string): Promise<SyncResult> {
     } catch (e: unknown) {
       result.errors.push(`activities ${account.number}: ${e instanceof Error ? e.message : e}`);
     }
-  }
+  };
+
+  await Promise.all(accounts.filter((a) => a.status === "Active").map(syncAccount));
 
     const now = new Date().toISOString();
     await prisma.setting.upsert({
