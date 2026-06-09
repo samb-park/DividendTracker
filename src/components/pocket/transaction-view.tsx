@@ -10,6 +10,7 @@ import { PeriodPicker } from "./period-picker";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { AnimatedSegment } from "./animated-segment";
 import { PageDots, setActiveDots } from "./page-dots";
+import { SkeletonRows } from "./history-view";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -41,9 +42,21 @@ const BADGE: Record<TransactionRow["action"], { label: string; type: string }> =
   SELL: { label: "SELL", type: "sell" },
   DIVIDEND: { label: "DIV", type: "div" },
 };
+// L5: cash-flow sign per action for the "All" NET total — money OUT on a buy,
+// money IN on a sell or dividend.
+const FLOW_SIGN: Record<TransactionRow["action"], 1 | -1> = {
+  BUY: -1,
+  SELL: 1,
+  DIVIDEND: 1,
+};
+
+// M7: module-level stale-while-revalidate cache (one full calendar fetch).
+let txnCache: TransactionRow[] | null = null;
 
 interface Props {
   fxRate: number | null;
+  fxFallback: boolean; // the server rate is a fallback — flag converted figures (L1)
+  groupScope: boolean; // ticker-group portfolio active — this mode is account-scoped (L2)
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
   activeAccounts: string[]; // portfolio account scope ([] = all)
@@ -76,7 +89,7 @@ function TxnPeriodRows({
   );
 
   if (error) return <p className="pk-note warn">Couldn’t load transactions.</p>;
-  if (loading) return <p className="pk-note">Loading…</p>;
+  if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No transactions in this period.</p>;
   return (
     <div className="pk-picker">
@@ -95,7 +108,7 @@ function TxnPeriodRows({
   );
 }
 
-export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
+export function TransactionView({ fxRate, fxFallback, groupScope, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [txns, setTxns] = useState<TransactionRow[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [month, setMonth] = useState<string>("all"); // "all" | "YYYY-MM"
@@ -107,22 +120,38 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
   const periodLabelRef = useRef<HTMLSpanElement>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
 
+  // Stale-while-revalidate (M7): a cached calendar shows instantly on re-entry;
+  // the network result reconciles in the background.
   useEffect(() => {
+    let cancelled = false;
+    const cached = txnCache;
+    if (cached) {
+      setTxns(cached);
+      setLoading(false);
+    }
     (async () => {
       try {
         const res = await fetch("/api/transactions/calendar", { cache: "no-store" });
         if (!res.ok) throw new Error();
-        setTxns((await res.json()) as TransactionRow[]);
+        const rows = (await res.json()) as TransactionRow[];
+        if (cancelled) return;
+        txnCache = rows;
+        setTxns(rows);
       } catch {
-        setError(true);
+        if (!cancelled && !cached) setError(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // L1: fallback matches the server's DEFAULT_FX_RATE (1.35) — with the rate
+  // coming from the run-rate response this only triggers when data is absent.
   const toUSD = useCallback(
-    (v: number, currency: string) => (currency === "CAD" ? v / (fxRate ?? 1.39) : v),
+    (v: number, currency: string) => (currency === "CAD" ? v / (fxRate ?? 1.35) : v),
     [fxRate]
   );
 
@@ -164,12 +193,15 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
     [periodSeq]
   );
 
-  // Header USD total = current period × current action filter.
+  // Header USD total = current period × current action filter. With "All"
+  // selected the mixed actions are summed as SIGNED net flow (BUY=−, SELL/DIV=+)
+  // — an unsigned sum of buys+sells+divs means nothing (L5). Single-action
+  // filters keep the plain magnitude sum.
   const total = useMemo(() => {
     return yearTxns
       .filter((t) => month === "all" || t.date.slice(0, 7) === month)
       .filter((t) => filter === "all" || t.action === FILTER_ACTION[filter as Exclude<TxnFilter, "all">])
-      .reduce((s, t) => s + toUSD(t.total, t.currency), 0);
+      .reduce((s, t) => s + (filter === "all" ? FLOW_SIGN[t.action] : 1) * toUSD(t.total, t.currency), 0);
   }, [yearTxns, month, filter, toUSD]);
 
   return (
@@ -177,7 +209,7 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
       <div className="pk-summary">
         <PortfolioPickerButton name={portfolioName} onOpen={onOpenPicker} />
         <div className="pk-summary-cell right">
-          <span className="pk-summary-label">USD</span>
+          <span className="pk-summary-label">{filter === "all" ? "NET USD" : "USD"}</span>
           <span className="pk-summary-value">{loading ? "—" : money(total)}</span>
         </div>
       </div>
@@ -196,6 +228,10 @@ export function TransactionView({ fxRate, mode, setMode, activeAccounts, portfol
           periodLabel={periodLabels[periodIdx]}
           onOpen={() => setPeriodOpen(true)}
         />
+        {/* L2: this mode filters by ACCOUNT only — say so when a ticker group is active. */}
+        {groupScope && <span className="pk-scope-note">All tickers · account scope</span>}
+        {/* L1: converted figures rest on a default FX rate — tiny inline warning. */}
+        {(fxFallback || fxRate == null) && <span className="pk-scope-note warn">default FX</span>}
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}

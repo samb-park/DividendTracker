@@ -20,8 +20,9 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // No maximumScale/userScalable: pinch-zoom must stay available (WCAG 1.4.4).
+  // Double-tap-zoom side effects are blocked by `touch-action: manipulation`
+  // on .pocket-root instead (pocket.css).
   viewportFit: "cover",
 };
 

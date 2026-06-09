@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PortfolioOption } from "@/lib/pocket-types";
 import { PortfolioRow } from "./portfolio-row";
+import { useSheetBack } from "./use-sheet-back";
 
 /**
  * Bottom-sheet portfolio picker (reuses the .pk-sheet shell that GroupManager
@@ -28,6 +29,7 @@ export function PortfolioPicker({
     setClosing(true);
     window.setTimeout(onClose, 220); // matches the slide-down/fade-out keyframes
   };
+  useSheetBack(requestClose); // system back closes the sheet instead of leaving /pocket
   const pick = (id: string | null) => {
     onSelect(id);
     requestClose();

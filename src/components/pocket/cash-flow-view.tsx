@@ -9,6 +9,7 @@ import { PeriodPickerButton } from "./period-picker-button";
 import { PeriodPicker } from "./period-picker";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
+import { SkeletonRows } from "./history-view";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -16,8 +17,13 @@ const cad = (n: number) => `C$${money(n)}`;
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// M7: module-level stale-while-revalidate cache, keyed by year.
+const cashCache = new Map<number, { items: CashFlowRow[]; years: number[] }>();
+
 interface Props {
   fxRate: number | null; // USDCAD; USD → CAD = amount * fxRate
+  fxFallback: boolean; // the server rate is a fallback — flag converted figures (L1)
+  groupScope: boolean; // ticker-group portfolio active — this mode is account-scoped (L2)
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
   activeAccounts: string[]; // portfolio account scope ([] = all)
@@ -58,7 +64,7 @@ function AccountRows({
   }, [items, period, toCAD]);
 
   if (error) return <p className="pk-note warn">Couldn’t load cash flow.</p>;
-  if (loading) return <p className="pk-note">Loading…</p>;
+  if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No contributions in this period.</p>;
   return (
     <div className="pk-picker">
@@ -72,7 +78,7 @@ function AccountRows({
   );
 }
 
-export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
+export function CashFlowView({ fxRate, fxFallback, groupScope, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [year, setYear] = useState<number>(() => new Date().getFullYear());
   const [years, setYears] = useState<number[]>([]);
   const [items, setItems] = useState<CashFlowRow[]>([]);
@@ -87,11 +93,20 @@ export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioN
   // One fetch per year returns BOTH the year's deposits/withdrawals AND the full
   // list of years that have data (the API always includes the current year).
   // Resets the period to "Year" and snaps the pager to index 0 on every year change.
+  // Stale-while-revalidate (M7): a cached year shows instantly on re-entry; the
+  // network result reconciles in the background.
   useEffect(() => {
-    setLoading(true);
+    const cached = cashCache.get(year);
     setError(false);
     setMonth("all");
     pagerRef.current?.scrollToIndex(0);
+    if (cached) {
+      setItems(cached.items);
+      if (cached.years.length) setYears(cached.years);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -99,10 +114,11 @@ export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioN
         if (!res.ok) throw new Error();
         const json = (await res.json()) as { items: CashFlowRow[]; years: number[] };
         if (cancelled) return;
+        cashCache.set(year, { items: json.items ?? [], years: json.years ?? [] });
         setItems(json.items ?? []);
         if (json.years?.length) setYears(json.years);
       } catch {
-        if (!cancelled) setError(true);
+        if (!cancelled && !cached) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -112,8 +128,10 @@ export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioN
     };
   }, [year]);
 
+  // L1: fallback matches the server's DEFAULT_FX_RATE (1.35) — with the rate
+  // coming from the run-rate response this only triggers when data is absent.
   const toCAD = useCallback(
-    (v: number, currency: string) => (currency === "USD" ? v * (fxRate ?? 1.39) : v),
+    (v: number, currency: string) => (currency === "USD" ? v * (fxRate ?? 1.35) : v),
     [fxRate]
   );
 
@@ -165,6 +183,10 @@ export function CashFlowView({ fxRate, mode, setMode, activeAccounts, portfolioN
           periodLabel={periodLabels[periodIdx]}
           onOpen={() => setPeriodOpen(true)}
         />
+        {/* L2: this mode filters by ACCOUNT only — say so when a ticker group is active. */}
+        {groupScope && <span className="pk-scope-note">All tickers · account scope</span>}
+        {/* L1: converted figures rest on a default FX rate — tiny inline warning. */}
+        {(fxFallback || fxRate == null) && <span className="pk-scope-note warn">default FX</span>}
       </div>
 
       {/* Period pager: swipe Year ↔ months; per-account net contributions show. */}

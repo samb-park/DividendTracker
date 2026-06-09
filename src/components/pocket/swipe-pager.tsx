@@ -7,6 +7,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useState,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
@@ -63,6 +64,11 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
   const didInit = useRef(false);
   const prevLen = useRef(items.length);
   const drag = useRef<{ x: number; y: number; sl: number; t: number; axis: "h" | "v" | null } | null>(null);
+  // Lazy-mount window center (M4): only pages within ±1 of this index actually
+  // render; the rest stay as width-keeping empty placeholders (so scrollLeft
+  // geometry is untouched). Updated live while scrolling (rounded midpoint), so a
+  // neighbor is always mounted before it becomes visible.
+  const [center, setCenter] = useState(() => Math.max(0, activeIndex));
 
   const clearTimer = () => {
     if (settleTimer.current) {
@@ -76,7 +82,10 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
   const onScroll = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
-    onProgress?.(el.scrollLeft / (el.clientWidth || 1)); // live, every frame
+    const f = el.scrollLeft / (el.clientWidth || 1);
+    onProgress?.(f); // live, every frame
+    // Slide the lazy-mount window with the scroll (React bails when unchanged).
+    setCenter(Math.max(0, Math.min(items.length - 1, Math.round(f))));
     clearTimer();
     settleTimer.current = window.setTimeout(() => {
       const w = el.clientWidth || 1;
@@ -93,8 +102,9 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
     const i = Math.max(0, activeIndex);
     el.scrollLeft = i * el.clientWidth;
     onProgress?.(i); // set the pill's initial position before paint (no flash)
+    setCenter(Math.min(items.length - 1, i));
     didInit.current = true;
-  }, [ready, activeIndex, onProgress]);
+  }, [ready, activeIndex, items.length, onProgress]);
 
   // Re-init on item-count change: clamp the current page into the new range so a
   // shrinking period set never leaves the pager scrolled past the end.
@@ -113,6 +123,7 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
       if (!el) return;
       clearTimer(); // imperative jump wins over any pending swipe-settle
       const clamped = Math.max(0, Math.min(items.length - 1, i));
+      setCenter(clamped); // mount the target page in the same commit as the jump
       el.scrollLeft = clamped * el.clientWidth;
       onProgress?.(clamped);
     },
@@ -120,7 +131,28 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
   );
   useImperativeHandle(ref, () => ({ scrollToIndex }), [scrollToIndex]);
 
+  // Keep the lazy-mount window pinned to external selection changes and clamped
+  // when the item set shrinks (mirrors the scroll-position clamp above).
+  useEffect(() => {
+    setCenter(Math.max(0, Math.min(items.length - 1, activeIndex)));
+  }, [activeIndex, items.length]);
+
   useEffect(() => clearTimer, []);
+
+  // M10: once a drag locks to the HORIZONTAL axis, eat the default touch action
+  // so the page underneath can't co-scroll vertically with a diagonal finger.
+  // Must be a NATIVE non-passive listener — React's synthetic touchmove is
+  // registered passive, so preventDefault() there is ignored. Vertical (or
+  // unlocked) gestures pass through untouched: native pan-y scroll stays native.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!dragSwipe || !el) return;
+    const blockWhenHorizontal = (e: globalThis.TouchEvent) => {
+      if (drag.current?.axis === "h" && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener("touchmove", blockWhenHorizontal, { passive: false });
+    return () => el.removeEventListener("touchmove", blockWhenHorizontal);
+  }, [dragSwipe]);
 
   // JS drag handlers (only wired when dragSwipe). Horizontal-dominant drag drives
   // scrollLeft 1:1; a vertical gesture is left to the page's native pan-y scroll.
@@ -198,7 +230,12 @@ export const SwipePager = forwardRef<SwipePagerHandle, Props>(function SwipePage
     >
       {items.map((it, i) => (
         <div className={pageClassName} key={it}>
-          {renderPage(it, i)}
+          {/* Lazy mount (M4): only active±1 render; the rest are width-keeping
+              placeholders (the page div itself IS the placeholder — flex-basis
+              100% keeps the track geometry, so scrollLeft math is unchanged).
+              A far page re-mounts fresh when scrolled back into the window
+              (scroll position resets to top — acceptable for these lists). */}
+          {Math.abs(i - center) <= 1 ? renderPage(it, i) : null}
         </div>
       ))}
     </div>

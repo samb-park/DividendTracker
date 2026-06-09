@@ -27,9 +27,30 @@ interface IncomeMonth {
   items: IncomeItem[];
 }
 
+// M7: module-level stale-while-revalidate cache. Re-entering the tab shows the
+// last response instantly (no loading flash / layout shift) while a background
+// refetch reconciles. Lives for the page session; keys: "years" | "past:<year>".
+const incomeCache = new Map<string, number[] | IncomeMonth[]>();
+
+/** Shared row-shaped loading skeleton for the Activity lists (M7). */
+export function SkeletonRows() {
+  return (
+    <div className="pk-picker" aria-hidden>
+      {[72, 56, 64, 48, 60].map((w, i) => (
+        <div className="pk-skel-row" key={i}>
+          <span className="pk-skel-bar" style={{ width: w }} />
+          <span className="pk-skel-bar right" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface Props {
   basis: Basis;
   fxRate: number | null; // USDCAD; CAD → USD = amount / fxRate
+  fxFallback: boolean; // the server rate is a fallback — flag converted figures (L1)
+  groupScope: boolean; // ticker-group portfolio active — this mode is account-scoped (L2)
   mode: HistoryMode;
   setMode: (m: HistoryMode) => void;
   activeAccounts: string[]; // portfolio account scope ([] = all)
@@ -65,7 +86,7 @@ function PeriodRows({
   }, [period, months, basis, toUSD]);
 
   if (error) return <p className="pk-note warn">Couldn’t load history.</p>;
-  if (loading) return <p className="pk-note">Loading…</p>;
+  if (loading) return <SkeletonRows />;
   if (rows.length === 0) return <p className="pk-note">No dividends received in this period.</p>;
   return (
     <div className="pk-picker">
@@ -79,7 +100,7 @@ function PeriodRows({
   );
 }
 
-export function HistoryView({ basis, fxRate, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
+export function HistoryView({ basis, fxRate, fxFallback, groupScope, mode, setMode, activeAccounts, portfolioName, onOpenPicker }: Props) {
   const [years, setYears] = useState<number[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [months, setMonths] = useState<IncomeMonth[]>([]);
@@ -91,48 +112,80 @@ export function HistoryView({ basis, fxRate, mode, setMode, activeAccounts, port
   const periodLabelRef = useRef<HTMLSpanElement>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
 
-  // Load the list of years that have received dividends.
+  // Load the list of years that have received dividends. Stale-while-revalidate
+  // (M7): a cached list applies instantly; the network result reconciles after.
   useEffect(() => {
+    let cancelled = false;
+    const apply = (ys: number[]) => {
+      setYears(ys);
+      // keep the user's pick if it's still valid (a background refresh must not yank it)
+      setYear((y) => (y != null && ys.includes(y) ? y : ys[0] ?? null));
+      if (ys.length === 0) setLoading(false);
+    };
+    const cached = incomeCache.get("years") as number[] | undefined;
+    if (cached) apply(cached);
     (async () => {
       try {
         const res = await fetch("/api/dividend-income?mode=years", { cache: "no-store" });
         if (!res.ok) throw new Error();
         const json = (await res.json()) as { years: number[] };
+        if (cancelled) return;
         const ys = json.years ?? [];
-        setYears(ys);
-        setYear(ys[0] ?? null);
-        if (ys.length === 0) setLoading(false);
+        incomeCache.set("years", ys);
+        apply(ys);
       } catch {
-        setError(true);
-        setLoading(false);
+        if (!cancelled && !cached) {
+          setError(true);
+          setLoading(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load received dividends for the selected year. Resets the period to "Year" and
   // snaps the pager back to index 0 (unconditional — even between equal-month years).
+  // Stale-while-revalidate (M7): a cached year shows instantly, then refreshes.
   useEffect(() => {
     if (year == null) return;
-    setLoading(true);
+    const key = `past:${year}`;
+    const cached = incomeCache.get(key) as IncomeMonth[] | undefined;
     setError(false);
     setMonth("all");
     pagerRef.current?.scrollToIndex(0);
+    if (cached) {
+      setMonths(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/dividend-income?mode=past&year=${year}`, { cache: "no-store" });
         if (!res.ok) throw new Error();
         const json = (await res.json()) as { months: IncomeMonth[] };
-        setMonths(json.months ?? []);
+        if (cancelled) return;
+        const ms = json.months ?? [];
+        incomeCache.set(key, ms);
+        setMonths(ms);
       } catch {
-        setError(true);
+        if (!cancelled && !cached) setError(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [year]);
 
+  // L1: fallback matches the server's DEFAULT_FX_RATE (1.35) — with the rate
+  // coming from the run-rate response this only triggers when data is absent.
   const toUSD = useCallback(
-    (v: number, currency: string) => (currency === "CAD" ? v / (fxRate ?? 1.39) : v),
+    (v: number, currency: string) => (currency === "CAD" ? v / (fxRate ?? 1.35) : v),
     [fxRate]
   );
 
@@ -182,6 +235,10 @@ export function HistoryView({ basis, fxRate, mode, setMode, activeAccounts, port
           periodLabel={periodLabels[periodIdx]}
           onOpen={() => setPeriodOpen(true)}
         />
+        {/* L2: this mode filters by ACCOUNT only — say so when a ticker group is active. */}
+        {groupScope && <span className="pk-scope-note">All tickers · account scope</span>}
+        {/* L1: converted figures rest on a default FX rate — tiny inline warning. */}
+        {(fxFallback || fxRate == null) && <span className="pk-scope-note warn">default FX</span>}
       </div>
 
       {/* Period pager: swipe Year ↔ months; only the current period's rows show. */}

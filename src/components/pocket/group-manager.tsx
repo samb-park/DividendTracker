@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +24,41 @@ import { CSS } from "@dnd-kit/utilities";
 import { ACCT_LABELS, POCKET_GROUP_COLORS, type Basis, type PocketGroup, type TickerAgg } from "@/lib/pocket-types";
 import { TickerPicker } from "./ticker-picker";
 import { PortfolioRow } from "./portfolio-row";
+import { useSheetBack } from "./use-sheet-back";
+
+/**
+ * M2: when the iOS keyboard opens for the name field, the visual viewport
+ * shrinks but the position:fixed sheet doesn't — its bottom half (Save area,
+ * ticker list) ends up hidden behind the keyboard. Track visualViewport and
+ * (a) cap the sheet's max-height to the VISIBLE height and (b) lift its bottom
+ * above the keyboard, restoring both when the keyboard goes away.
+ */
+function useKeyboardSheetFit(sheetRef: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      const el = sheetRef.current;
+      if (!el) return;
+      const obscured = window.innerHeight - vv.height - vv.offsetTop;
+      if (obscured > 50) {
+        // keyboard (or similar) is up
+        el.style.bottom = `${obscured}px`;
+        el.style.maxHeight = `${Math.max(160, vv.height - 10)}px`;
+      } else {
+        el.style.bottom = "";
+        el.style.maxHeight = "";
+      }
+    };
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    apply();
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
+  }, [sheetRef]);
+}
 
 interface Props {
   groups: PocketGroup[];
@@ -100,8 +135,10 @@ export function GroupManager({
   const [err, setErr] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [activeDrag, setActiveDrag] = useState<PocketGroup | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   const editing = editingId !== null;
+  useKeyboardSheetFit(sheetRef);
 
   // TouchSensor (long-press 200ms = pick up; its non-passive window touchmove is
   // what actually suppresses iOS scroll during a drag) + MouseSensor (desktop).
@@ -134,6 +171,7 @@ export function GroupManager({
     setClosing(true);
     window.setTimeout(onClose, 220);
   };
+  useSheetBack(requestClose); // system back closes the sheet instead of leaving /pocket
 
   const startNew = () => {
     setEditingId(NEW);
@@ -223,6 +261,7 @@ export function GroupManager({
         onClick={editing ? backToList : requestClose}
       />
       <div
+        ref={sheetRef}
         className="pk-sheet"
         data-closing={closing || undefined}
         role="dialog"
@@ -304,6 +343,9 @@ export function GroupManager({
               </button>
             </div>
 
+            {/* No autoFocus (M2): on iOS it summoned the keyboard the instant the
+                editor opened, hiding the bottom half of the sheet. The user taps
+                the field when they actually want to type. */}
             <input
               className="pk-input"
               type="text"
@@ -311,7 +353,6 @@ export function GroupManager({
               placeholder="Name (e.g. A)"
               onChange={(e) => setDraftName(e.target.value)}
               maxLength={40}
-              autoFocus
             />
 
             {err && <p className="pk-note warn">{err}</p>}

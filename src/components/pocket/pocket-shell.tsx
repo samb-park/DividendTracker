@@ -250,6 +250,47 @@ export function PocketShell() {
   // Opportunistic Questrade sync on open; silently refresh once fresh data lands.
   const { syncing } = usePocketSync(useCallback(() => load({ silent: true }), [load]));
 
+  // M5: manual refresh for the installed PWA (document pull-to-refresh is blocked
+  // by design — overscroll containment). A deliberate downward pull that STARTS on
+  // the fixed header band triggers a silent reload; a small "Refreshing…" status
+  // (the existing syncbar pattern) is the only visible feedback. The header band
+  // is outside every scroll region, so this can't collide with list scrolling or
+  // the horizontal pagers (vertical-dominant + threshold guards the rest).
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshBusy = useRef(false);
+  const manualRefresh = useCallback(async () => {
+    if (refreshBusy.current) return;
+    refreshBusy.current = true;
+    setRefreshing(true);
+    try {
+      await load({ silent: true });
+    } finally {
+      refreshBusy.current = false;
+      setRefreshing(false);
+    }
+  }, [load]);
+  const pullStart = useRef<{ x: number; y: number } | null>(null);
+  const onPullStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    // Only arms when the touch starts in the header band (≈ safe-area + title row).
+    pullStart.current = t.clientY < 140 ? { x: t.clientX, y: t.clientY } : null;
+  }, []);
+  const onPullMove = useCallback(
+    (e: React.TouchEvent) => {
+      const s = pullStart.current;
+      if (!s) return;
+      const t = e.touches[0];
+      if (t.clientY - s.y > 70 && Math.abs(t.clientX - s.x) < 40) {
+        pullStart.current = null; // one trigger per gesture
+        manualRefresh();
+      }
+    },
+    [manualRefresh]
+  );
+  const onPullEnd = useCallback(() => {
+    pullStart.current = null;
+  }, []);
+
   const positions = useMemo(() => data?.positions ?? [], [data]);
   const accountTypes = useMemo(() => data?.accountTypes ?? [], [data]);
 
@@ -348,8 +389,15 @@ export function PocketShell() {
           a DEFINITE height (height:100%), so the Dividends hero spacers (direct children)
           still center via the explicit-size path — NOT flex-grow across a scroll boundary.
           Settings keeps the plain scrolling .pk-screen (base rule, no data-tab match). */}
-      <div className="pk-screen" data-tab={tab}>
-        {syncing && (
+      <div
+        className="pk-screen"
+        data-tab={tab}
+        onTouchStart={onPullStart}
+        onTouchMove={onPullMove}
+        onTouchEnd={onPullEnd}
+        onTouchCancel={onPullEnd}
+      >
+        {(syncing || refreshing) && (
           <div
             className="pk-syncbar"
             role="status"
@@ -358,7 +406,7 @@ export function PocketShell() {
             <span className="pk-sync-spin" aria-hidden>
               ⟳
             </span>
-            Syncing Questrade…
+            {syncing ? "Syncing Questrade…" : "Refreshing…"}
           </div>
         )}
 
@@ -403,6 +451,12 @@ export function PocketShell() {
           <HistoryTab
             basis={basis}
             fxRate={data?.fx?.usdcad ?? null}
+            // L1: only flag a REAL fallback (server said so) — while data is still
+            // loading the views show their own loading state, not a warning.
+            fxFallback={data?.fx?.fallback ?? false}
+            // L2: a ticker-group portfolio is selected → the history modes
+            // (account-scoped by design) show a tiny scope caption.
+            groupScope={activeId != null && !activeId.startsWith(ACCT_PORTFOLIO_PREFIX)}
             upcomingIncluded={activeDerived?.included ?? []}
             loading={loading}
             eventFilter={eventFilter}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSheetBack } from "./use-sheet-back";
 
 interface PeriodOption {
   key: string; // "all" | "YYYY-MM"
@@ -41,6 +42,7 @@ export function PeriodPicker({
     setClosing(true);
     window.setTimeout(onClose, 220); // matches the slide-down/fade-out keyframes
   };
+  useSheetBack(requestClose); // system back closes the sheet instead of leaving /pocket
   const pickPeriod = (key: string) => {
     onPeriod(key);
     requestClose();

@@ -1,23 +1,24 @@
-// PUSH-ONLY SERVICE WORKER (replaces the 2026-05-21 kill switch).
+// PUSH + OFFLINE-NOTICE SERVICE WORKER (replaces the 2026-05-21 kill switch).
 //
 // CACHE-SAFETY GUARANTEE — why this cannot reintroduce the stale-asset bug:
 //   The prior regression came from a `fetch` handler that did event.respondWith()
 //   reading from a FIXED-NAME Cache Storage entry, so after a deploy the browser
-//   was served OLD chart JS out of that cache. This SW has NO 'fetch' listener,
-//   NO caches.open(), NO cache.put(), NO event.respondWith() anywhere. With no
-//   fetch handler, navigations and subresources (HTML, /_next/static hashed
-//   chunks, CSS) are NEVER routed through this worker — they hit the network /
-//   HTTP disk cache exactly as if no SW existed. Cache Storage is never
-//   populated, so there is physically nothing stale to serve. The ABSENCE of a
-//   fetch handler IS the safety mechanism. clients.claim() only takes control of
-//   open pages for push delivery; it does not touch asset delivery.
+//   was served OLD chart JS out of that cache. This SW still has NO caches.open(),
+//   NO cache.put(), and Cache Storage is NEVER populated — there is physically
+//   nothing stale to serve. The one 'fetch' listener below handles NAVIGATION
+//   requests ONLY, and is strictly network-first with NO cache read: it either
+//   returns the live network response untouched, or — only when the network
+//   itself fails (offline) — an offline notice built INLINE from a string
+//   constant baked into this file. Subresources (/_next/static hashed chunks,
+//   CSS, images, API calls) are never routed through respondWith(): the handler
+//   returns early without calling it, so they hit the network / HTTP disk cache
+//   exactly as if no SW existed.
 //
 // TRANSITION: same path (/sw.js) AND same scope ('/') as the old kill switch, so
 //   the browser performs a normal byte-diff UPDATE of the existing registration
-//   rather than creating a second coexisting one. Even mid-transition there is no
-//   stale-asset path: old kill switch = network-only, new SW = no fetch handler.
+//   rather than creating a second coexisting one.
 //
-// To force a future update (e.g. payload format change), bump this marker: v2
+// To force a future update (e.g. payload format change), bump this marker: v3
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -25,6 +26,47 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// Minimal offline notice for NAVIGATIONS only (the installed /pocket PWA used to
+// show a blank browser error page when launched offline). Inline constant — not
+// cached, not fetched — so it can never go stale relative to the app.
+const OFFLINE_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offline</title>
+<style>
+  html,body{margin:0;height:100%;background:#f2f2f7;color:#0a0a0a;
+    font-family:-apple-system,"SF Pro Display",system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+  @media (prefers-color-scheme: dark){html,body{background:#000;color:#fff}}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center}
+  h1{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0}
+  p{font-size:13px;font-weight:600;color:#6e6e73;margin:0}
+  @media (prefers-color-scheme: dark){p{color:#8e8e93}}
+  button{appearance:none;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;
+    font:inherit;font-size:15px;font-weight:700;padding:12px 16px;border-radius:12px;margin-top:8px}
+</style></head>
+<body><div class="wrap">
+  <h1>You&rsquo;re offline</h1>
+  <p>Dividends needs a connection to load. Try again when you&rsquo;re back online.</p>
+  <button onclick="location.reload()">Retry</button>
+</div></body></html>`;
+
+self.addEventListener("fetch", (event) => {
+  // NAVIGATIONS ONLY — every other request returns here without respondWith()
+  // and is handled by the browser as if no SW existed (see safety note above).
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(
+    // Strictly network-first, no cache lookup: pass the live response through
+    // untouched; only a genuine network failure gets the inline offline notice.
+    fetch(event.request).catch(
+      () =>
+        new Response(OFFLINE_HTML, {
+          status: 503,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        })
+    )
+  );
 });
 
 // Incoming web push from /api/cron/dividend-events.

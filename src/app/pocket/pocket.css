@@ -76,6 +76,10 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  /* Pinch-zoom is allowed again (WCAG 1.4.4 — maximumScale/userScalable were
+     dropped from the viewport meta); `manipulation` only disables DOUBLE-TAP
+     zoom so taps stay instant and a fast double tap on a control can't zoom. */
+  touch-action: manipulation;
 }
 
 .pocket-root[data-pocket-mode="dark"] {
@@ -187,8 +191,11 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   font: inherit;
   color: var(--pk-ink);
   cursor: pointer;
-  padding: 4px 2px;
-  margin: -4px 0;
+  /* ≥44px hit target (M1): generous padding, fully refunded by negative margins
+     so the outer box (and the flex baseline) is pixel-identical to the old
+     `padding: 4px 2px; margin: -4px 0` (net: 0 vertical, +2px horizontal). */
+  padding: 15px 8px;
+  margin: -15px -6px;
   -webkit-tap-highlight-color: transparent;
 }
 .pk-pf-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -585,6 +592,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 .pk-seg-btn {
   appearance: none;
   flex: 1; /* equal-width, evenly distributed across the row */
+  position: relative; /* anchors the ::after hit-area extender (M14) */
   border: none;
   background: transparent;
   color: var(--pk-muted);
@@ -598,6 +606,18 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   min-height: 30px;
   /* match the pill's glide so the label color settles AS the pill arrives (was 0.15s ease) */
   transition: color 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* ≥44px hit target (M14): invisible overlay extends the 30px segment buttons by
+   7px above/below (30+14=44) with ZERO visual/layout change. Vertical only —
+   segments sit side-by-side, so a horizontal extension would overlap neighbors.
+   (Distinct from .pk-navrow::after, which is a chevron on .pk-action rows.) */
+.pk-seg-btn::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  left: 0;
+  right: 0;
 }
 .pk-seg-btn[data-active="true"] {
   background: var(--pk-elevated); /* raised above the track (correct in dark too) */
@@ -1072,8 +1092,10 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   align-items: baseline;
   gap: 3px;
   max-width: 52vw;
-  padding: 6px 2px;
-  margin: -6px 0; /* keep the baseline put while enlarging the hit area */
+  /* ≥44px hit target (M1): padding refunded by negative margins — outer box and
+     baseline identical to the old `padding: 6px 2px; margin: -6px 0`. */
+  padding: 16px 8px;
+  margin: -16px -6px;
   border: 0;
   background: none;
   font: inherit;
@@ -1166,6 +1188,76 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 }
 /* donut empty/degenerate note — centered in the page */
 .pk-donut-empty { display: flex; align-items: center; justify-content: center; min-height: 100%; }
+
+/* Copyable money (M13): the root disables selection app-wide; re-allow it on the
+   main AMOUNT cells only, so a long-press can select/copy a figure without making
+   whole rows/labels selectable (keeps the app-like feel elsewhere). */
+.pk-event-amt,
+.pk-summary-value,
+.pk-picker-amt,
+.pk-legend-val,
+.pk-donut-value,
+.pk-row-num {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Row-shaped loading skeleton (M7): mirrors .pk-hist-row metrics so the list
+   doesn't layout-shift when real rows replace it. Soft pulse, no shimmer. */
+.pk-skel-row {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  align-items: center;
+  column-gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--pk-hairline);
+  animation: pk-skel-pulse 1.1s ease-in-out infinite alternate;
+}
+.pk-skel-row:last-child { border-bottom: none; }
+.pk-skel-bar {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--pk-fill);
+}
+.pk-skel-bar.right { justify-self: end; width: 64px; }
+@keyframes pk-skel-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+/* Tiny scope caption (L2): sits beside the period trigger in the Activity history
+   modes when a TICKER-GROUP portfolio is selected — these modes filter by account
+   only, so the caption states the actual scope. Deliberately minimal. */
+.pk-scope-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* warn variant: the tiny inline "default FX" flag (L1) */
+.pk-scope-note.warn { color: var(--pk-warn); }
+
+/* Landscape phones (M12): compress the fixed header chrome (34px title, header
+   paddings, hero gaps) so the content region keeps usable height. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .pk-title { font-size: 22px; letter-spacing: -0.4px; }
+  .pk-summary .pk-pf-pick { font-size: 17px; }
+  .pk-screen {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  }
+  .pk-history,
+  .pk-upcoming,
+  .pk-charts,
+  .pk-dividends {
+    gap: 12px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 64px);
+  }
+  .pk-hero { gap: 6px; }
+}
 
 /* Respect the OS reduced-motion preference: drop pager/pill/sheet/spinner motion. */
 @media (prefers-reduced-motion: reduce) {

@@ -17,6 +17,8 @@ import { UpcomingView } from "./upcoming-view";
 export function HistoryTab({
   basis,
   fxRate,
+  fxFallback,
+  groupScope,
   upcomingIncluded,
   loading,
   eventFilter,
@@ -28,6 +30,8 @@ export function HistoryTab({
 }: {
   basis: Basis;
   fxRate: number | null;
+  fxFallback: boolean; // server FX rate is a fallback (L1) — views show a small warning
+  groupScope: boolean; // a ticker-group portfolio is active (L2) — history modes are account-scoped
   upcomingIncluded: TickerAgg[];
   loading: boolean;
   eventFilter: EventFilter;
@@ -39,6 +43,7 @@ export function HistoryTab({
 }) {
   const [mode, setMode] = useState<HistoryMode>("upcoming");
   const picker = { portfolioName, onOpenPicker };
+  const scoped = { activeAccounts, fxFallback, groupScope };
   if (mode === "upcoming")
     return (
       <UpcomingView
@@ -54,8 +59,8 @@ export function HistoryTab({
       />
     );
   if (mode === "transactions")
-    return <TransactionView fxRate={fxRate} mode={mode} setMode={setMode} activeAccounts={activeAccounts} {...picker} />;
+    return <TransactionView fxRate={fxRate} mode={mode} setMode={setMode} {...scoped} {...picker} />;
   if (mode === "cashflow")
-    return <CashFlowView fxRate={fxRate} mode={mode} setMode={setMode} activeAccounts={activeAccounts} {...picker} />;
-  return <HistoryView basis={basis} fxRate={fxRate} mode={mode} setMode={setMode} activeAccounts={activeAccounts} {...picker} />;
+    return <CashFlowView fxRate={fxRate} mode={mode} setMode={setMode} {...scoped} {...picker} />;
+  return <HistoryView basis={basis} fxRate={fxRate} mode={mode} setMode={setMode} {...scoped} {...picker} />;
 }
