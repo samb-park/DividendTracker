@@ -27,7 +27,7 @@ body:has(.pocket-root)::before { display: none !important; }
 html:has(.pocket-root),
 body:has(.pocket-root) { background: #f2f2f7; }
 html:has(.pocket-root[data-pocket-mode="dark"]),
-body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
+body:has(.pocket-root[data-pocket-mode="dark"]) { background: #0c1220; }
 
 /* Document-level backstop: lock the viewport scroller so a downward drag on the
    (often short, non-scrollable) default Dividends screen can't rubber-band the
@@ -102,30 +102,30 @@ body:has(.pocket-root) {
 }
 
 .pocket-root[data-pocket-mode="dark"] {
-  /* Dark layering: bg #000 (OLED) < card #1C1C1E < sheet/seg-pill #2C2C2E < card-in-sheet #3A3A3C */
-  --pk-bg: #000000;
-  --pk-card: #1c1c1e; /* inset grouped card — one step above the OLED black bg */
-  --pk-elevated: #2c2c2e; /* active seg pill — a real step above the card/track */
-  --pk-sheet: #2c2c2e;
-  --pk-card-sheet: #3a3a3c; /* card fill INSIDE a sheet (one step above --pk-sheet) */
-  --pk-ink: #ffffff;
-  --pk-muted: #8e8e93; /* Apple systemGray, ~4.6:1 (was #6e6e73) */
-  --pk-badge-ink: #b0b0b5;
-  --pk-faint: #48484a;
+  /* Dark NAVY palette (reference app): bg #0C1220 < card #161E2F < elevated #232E44 */
+  --pk-bg: #0c1220;
+  --pk-card: #161e2f; /* inset card / inputs — one step above the navy bg */
+  --pk-elevated: #232e44; /* active seg pill — a real step above the card/track */
+  --pk-sheet: #182134;
+  --pk-card-sheet: #222c42; /* card fill INSIDE a sheet (one step above --pk-sheet) */
+  --pk-ink: #f2f6fb;
+  --pk-muted: #8a97ad; /* slate muted — ≥4.5:1 on the navy bg */
+  --pk-badge-ink: #a8b4c8;
+  --pk-faint: #3a4660;
   --pk-pill-bg: #ffffff;
-  --pk-pill-ink: #000000;
-  --pk-hairline: rgba(255, 255, 255, 0.16);
-  --pk-tabbar-bg: rgba(28, 28, 30, 0.86);
-  --pk-tabbar-active: rgba(255, 255, 255, 0.12);
-  --pk-warn: #e08a3c;
+  --pk-pill-ink: #0c1220;
+  --pk-hairline: rgba(151, 170, 200, 0.14);
+  --pk-tabbar-bg: rgba(18, 26, 42, 0.88);
+  --pk-tabbar-active: rgba(151, 170, 200, 0.14);
+  --pk-warn: #e8a33c;
   --pk-fill: var(--pk-tabbar-active);
   --pk-danger: #f87171;
-  --pk-green: #30d158; /* iOS systemGreen (dark) — #0a8043 is too dim on #000 */
-  --pk-green-fill: rgba(48, 209, 88, 0.16);
+  --pk-green: #21d07a; /* reference bright green (amounts / received badges) */
+  --pk-green-fill: rgba(33, 208, 122, 0.14);
   --pk-danger-fill: rgba(248, 113, 113, 0.14);
-  --pk-banner-bg: rgba(224, 138, 60, 0.12);
-  --pk-banner-border: rgba(224, 138, 60, 0.3);
-  --pk-banner-ink: var(--pk-warn); /* #e08a3c is already ~7:1 on the dark tint */
+  --pk-banner-bg: rgba(232, 163, 60, 0.1);
+  --pk-banner-border: rgba(232, 163, 60, 0.32);
+  --pk-banner-ink: var(--pk-warn); /* amber, ~7:1 on the dark tint */
 }
 
 /* layout shell ---------------------------------------------------------- */
