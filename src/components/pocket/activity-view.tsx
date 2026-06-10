@@ -6,11 +6,11 @@ import type {
   Basis,
   CashFlowRow,
   HistoryMode,
-  PortfolioOption,
+  PositionRunRate,
   TickerAgg,
   TransactionRow,
 } from "@/lib/pocket-types";
-import { ACCT_LABELS, inAccountScope } from "@/lib/pocket-types";
+import { ACCT_LABELS, inAccountScope, rollupTickers } from "@/lib/pocket-types";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -63,8 +63,10 @@ const SECTION_LABEL: Record<HistoryMode, string> = {
 // last response instantly while a background refetch reconciles.
 let calCache: TransactionRow[] | null = null;
 const cashCache = new Map<number, { items: CashFlowRow[]; years: number[] }>();
-// The chosen view survives leaving/re-entering the tab (the component remounts).
+// The chosen view + account filter survive leaving/re-entering the tab (the
+// component remounts on every entry).
 let lastMode: HistoryMode = "dividends";
+let lastAcct = "all"; // "all" | an account type (TFSA/RRSP/…)
 
 /** Row-shaped loading skeleton — mirrors the two-line .pk-act-row metrics so the
  *  list doesn't layout-shift when real rows replace it. */
@@ -88,13 +90,9 @@ interface Props {
   basis: Basis;
   fxRate: number | null; // USDCAD
   fxFallback: boolean; // the server rate is a fallback — flag converted figures (L1)
-  groupScope: boolean; // ticker-group portfolio active — history modes are account-scoped (L2)
-  upcomingIncluded: TickerAgg[]; // active portfolio's per-ticker aggregates (upcoming + banner)
+  positions: PositionRunRate[]; // run-rate positions (upcoming + banner rollup)
+  accountTypes: string[]; // distinct REAL account types held (the account dropdown)
   loading: boolean; // run-rate (upcoming) load state
-  activeAccounts: string[]; // portfolio account scope ([] = all)
-  portfolioOptions: PortfolioOption[]; // All + built-in accounts + groups (the account dropdown)
-  activeId: string | null;
-  setActiveId: (id: string | null) => void;
 }
 
 /**
@@ -105,26 +103,34 @@ interface Props {
  * Received/Trades read /api/transactions/calendar (real per-payment dates);
  * Cash reads /api/cash-transactions; Upcoming uses the run-rate aggregates.
  */
-export function ActivityView({
-  basis,
-  fxRate,
-  fxFallback,
-  groupScope,
-  upcomingIncluded,
-  loading,
-  activeAccounts,
-  portfolioOptions,
-  activeId,
-  setActiveId,
-}: Props) {
+export function ActivityView({ basis, fxRate, fxFallback, positions, accountTypes, loading }: Props) {
   const [mode, setModeState] = useState<HistoryMode>(lastMode);
   const setMode = useCallback((m: HistoryMode) => {
     lastMode = m;
     setModeState(m);
   }, []);
+  // LOCAL account filter — real accounts only ("all" | TFSA/RRSP/…), decoupled
+  // from the shared Dividends/Charts portfolio selection.
+  const [acct, setAcctState] = useState<string>(lastAcct);
+  const setAcct = useCallback((a: string) => {
+    lastAcct = a;
+    setAcctState(a);
+  }, []);
   const [year, setYear] = useState<number>(() => new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Scope: [] = all accounts, else the single selected account type.
+  const activeAccounts = useMemo<string[]>(() => (acct === "all" ? [] : [acct]), [acct]);
+  // A stored account selection that is no longer held falls back to "All".
+  useEffect(() => {
+    if (acct !== "all" && accountTypes.length && !accountTypes.includes(acct)) setAcct("all");
+  }, [acct, accountTypes, setAcct]);
+  // Upcoming/banner aggregates for the selected account scope.
+  const upcomingIncluded = useMemo<TickerAgg[]>(
+    () => rollupTickers(acct === "all" ? positions : positions.filter((p) => p.accountType === acct)),
+    [positions, acct]
+  );
 
   // -- calendar (received + trades + years) --------------------------------
   const [txns, setTxns] = useState<TransactionRow[]>(() => calCache ?? []);
@@ -333,14 +339,11 @@ export function ActivityView({
       {/* Account + Year dropdowns — native selects (iOS wheel) styled as cards. */}
       <div className="pk-act-controls">
         <div className="pk-select">
-          <select
-            aria-label="Account"
-            value={activeId ?? "all"}
-            onChange={(e) => setActiveId(e.target.value === "all" ? null : e.target.value)}
-          >
-            {portfolioOptions.map((o) => (
-              <option key={o.id ?? "all"} value={o.id ?? "all"}>
-                {o.id == null ? "All Accounts" : o.name}
+          <select aria-label="Account" value={acct} onChange={(e) => setAcct(e.target.value)}>
+            <option value="all">All Accounts</option>
+            {accountTypes.map((a) => (
+              <option key={a} value={a}>
+                {ACCT_LABELS[a] ?? a}
               </option>
             ))}
           </select>
@@ -467,7 +470,6 @@ export function ActivityView({
       {/* Section header + honesty captions (account-only scope / fallback FX). */}
       <div className="pk-act-section">
         <span className="pk-section-label">{SECTION_LABEL[mode]}</span>
-        {groupScope && mode !== "upcoming" && <span className="pk-scope-note">All tickers · account scope</span>}
         {(fxFallback || fxRate == null) && mode !== "upcoming" && (
           <span className="pk-scope-note warn">default FX</span>
         )}

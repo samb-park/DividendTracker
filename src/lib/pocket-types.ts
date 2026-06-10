@@ -47,6 +47,50 @@ export interface TickerAgg {
   perPaymentGrossUSD: number; // expected GROSS amount of the next single payment (USD)
 }
 
+/** Roll (account × ticker) positions up to per-ticker USD aggregates. */
+export function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
+  const map = new Map<string, TickerAgg>();
+  for (const p of list) {
+    const lowConf = p.hasDividendData && !p.frequencyConfident;
+    const freq = p.frequency || 0;
+    const ppNet = freq > 0 ? p.netAnnualUSD / freq : 0;
+    const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
+    const e = map.get(p.ticker);
+    if (e) {
+      e.shares += p.shares;
+      e.grossAnnualUSD += p.grossAnnualUSD;
+      e.netAnnualUSD += p.netAnnualUSD;
+      if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
+      e.hasDividendData = e.hasDividendData || p.hasDividendData;
+      e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
+      e.lowConfidence = e.lowConfidence || lowConf;
+      e.perPaymentNetUSD += ppNet;
+      e.perPaymentGrossUSD += ppGross;
+      if (!e.nextExDate && p.nextExDate) e.nextExDate = p.nextExDate;
+      if (!e.nextPayDate && p.nextPayDate) e.nextPayDate = p.nextPayDate;
+      e.dateConfirmed = e.dateConfirmed || p.dateConfirmed;
+    } else {
+      map.set(p.ticker, {
+        ticker: p.ticker,
+        name: p.name,
+        shares: p.shares,
+        grossAnnualUSD: p.grossAnnualUSD,
+        netAnnualUSD: p.netAnnualUSD,
+        marketValueUSD: p.marketValueUSD,
+        hasDividendData: p.hasDividendData,
+        priceUnavailable: p.priceUnavailable,
+        lowConfidence: lowConf,
+        nextExDate: p.nextExDate,
+        nextPayDate: p.nextPayDate,
+        dateConfirmed: p.dateConfirmed,
+        perPaymentNetUSD: ppNet,
+        perPaymentGrossUSD: ppGross,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
+}
+
 export type Basis = "net" | "gross";
 // The "Activity" tab's modes — "upcoming" (future ex/pay) plus the three past-activity
 // views. (Named HistoryMode for historical reasons; it now drives the merged tab.)

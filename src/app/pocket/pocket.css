@@ -1186,6 +1186,11 @@ body:has(.pocket-root) {
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
+  /* pan-y: iOS WebKit can still touch-pan an overflow-x:hidden box sideways when
+     content overflows (the "space on the right" drag) — lock the axis outright.
+     The banner cards row re-allows pan-x locally (it's its own scroller, so this
+     ancestor restriction doesn't apply to pans IT handles). */
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
@@ -1317,22 +1322,17 @@ body:has(.pocket-root) {
   color: var(--pk-ink);
 }
 
-/* Expandable view panel (behind the filter icon): "View:" + mode chips on ONE
-   line (reference layout) — overflow scrolls horizontally instead of wrapping. */
+/* Expandable view panel (behind the filter icon): "View:" + mode chips. STATIC —
+   no horizontal scroll/drag (user request); narrow screens wrap instead. */
 .pk-filter-panel {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  margin: 0 -24px; /* chips can scroll edge-to-edge past the screen gutter */
-  padding: 0 24px;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+  overflow: hidden;
 }
-.pk-filter-panel::-webkit-scrollbar { display: none; }
 .pk-filter-label { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--pk-muted); }
-.pk-chips-flat { margin-bottom: 0; flex: 0 0 auto; flex-wrap: nowrap; }
+.pk-chips-flat { margin-bottom: 0; flex: 0 1 auto; gap: 8px; }
 .pk-filter-panel .pk-chip {
   display: inline-flex;
   align-items: center;
@@ -1379,6 +1379,8 @@ body:has(.pocket-root) {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y; /* the ONE deliberate horizontal scroller */
+  overscroll-behavior-x: contain; /* its overpull never chains to the page */
 }
 .pk-banner-cards::-webkit-scrollbar { display: none; }
 .pk-bcard {

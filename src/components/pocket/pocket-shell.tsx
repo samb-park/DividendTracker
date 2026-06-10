@@ -7,8 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RunRateResponse, TickerAgg, PositionRunRate, Basis } from "@/lib/pocket-types";
-import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, type PortfolioOption } from "@/lib/pocket-types";
+import type { RunRateResponse, TickerAgg, Basis } from "@/lib/pocket-types";
+import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, rollupTickers, type PortfolioOption } from "@/lib/pocket-types";
 import { useBasis, usePocketTheme } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
@@ -23,50 +23,6 @@ import { PortfolioPicker } from "./portfolio-picker";
 import { PortfolioPickerButton } from "./portfolio-picker-button";
 import { ActivityView } from "./activity-view";
 import { PwaRegister } from "@/components/pwa-register";
-
-/** Roll (account × ticker) positions up to per-ticker USD aggregates. */
-function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
-  const map = new Map<string, TickerAgg>();
-  for (const p of list) {
-    const lowConf = p.hasDividendData && !p.frequencyConfident;
-    const freq = p.frequency || 0;
-    const ppNet = freq > 0 ? p.netAnnualUSD / freq : 0;
-    const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
-    const e = map.get(p.ticker);
-    if (e) {
-      e.shares += p.shares;
-      e.grossAnnualUSD += p.grossAnnualUSD;
-      e.netAnnualUSD += p.netAnnualUSD;
-      if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
-      e.hasDividendData = e.hasDividendData || p.hasDividendData;
-      e.priceUnavailable = e.priceUnavailable || p.priceUnavailable;
-      e.lowConfidence = e.lowConfidence || lowConf;
-      e.perPaymentNetUSD += ppNet;
-      e.perPaymentGrossUSD += ppGross;
-      if (!e.nextExDate && p.nextExDate) e.nextExDate = p.nextExDate;
-      if (!e.nextPayDate && p.nextPayDate) e.nextPayDate = p.nextPayDate;
-      e.dateConfirmed = e.dateConfirmed || p.dateConfirmed;
-    } else {
-      map.set(p.ticker, {
-        ticker: p.ticker,
-        name: p.name,
-        shares: p.shares,
-        grossAnnualUSD: p.grossAnnualUSD,
-        netAnnualUSD: p.netAnnualUSD,
-        marketValueUSD: p.marketValueUSD,
-        hasDividendData: p.hasDividendData,
-        priceUnavailable: p.priceUnavailable,
-        lowConfidence: lowConf,
-        nextExDate: p.nextExDate,
-        nextPayDate: p.nextPayDate,
-        dateConfirmed: p.dateConfirmed,
-        perPaymentNetUSD: ppNet,
-        perPaymentGrossUSD: ppGross,
-      });
-    }
-  }
-  return [...map.values()].sort((a, b) => b.netAnnualUSD - a.netAnnualUSD);
-}
 
 /** Per-portfolio figures — one set per page in the pager. */
 type Derived = {
@@ -376,17 +332,9 @@ export function PocketShell() {
   // back to "All" if a stored group id no longer resolves).
   const activePortfolio = portfolioOptions.find((o) => o.id === activeId) ?? portfolioOptions[0];
 
-  // The portfolio currently selected on Dividends (shared with Charts + Activity).
+  // The portfolio currently selected on Dividends (shared with Charts).
   const activeIdx = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeDerived = derivedByPortfolio[activeIdx];
-  // Account scope of the active selection for filtering Activity's history modes:
-  // [] = all accounts (the "All" portfolio, or a group with no account scope), else
-  // the held account type(s). Account-only (no ticker filter) keeps past-sold holdings.
-  const activeAccounts = useMemo<string[]>(() => {
-    if (activeId == null) return [];
-    if (activeId.startsWith(ACCT_PORTFOLIO_PREFIX)) return [activeId.slice(ACCT_PORTFOLIO_PREFIX.length)];
-    return groups.find((g) => g.id === activeId)?.accounts ?? [];
-  }, [activeId, groups]);
 
   return (
     <>
@@ -455,7 +403,8 @@ export function PocketShell() {
 
         {/* Activity — single reference-style surface: Account/Year dropdowns, search +
             filter-icon view chips (Upcoming / Received / Trades / Cash), the upcoming
-            banner, a summary card, and the section list. Remounts on entry. */}
+            banner, a summary card, and the section list. Its account filter is LOCAL
+            (real accounts only — decoupled from the shared portfolio selection). */}
         {tab === "activity" && (
           <ActivityView
             basis={basis}
@@ -463,15 +412,9 @@ export function PocketShell() {
             // L1: only flag a REAL fallback (server said so) — while data is still
             // loading the views show their own loading state, not a warning.
             fxFallback={data?.fx?.fallback ?? false}
-            // L2: a ticker-group portfolio is selected → the history modes
-            // (account-scoped by design) show a tiny scope caption.
-            groupScope={activeId != null && !activeId.startsWith(ACCT_PORTFOLIO_PREFIX)}
-            upcomingIncluded={activeDerived?.included ?? []}
+            positions={positions}
+            accountTypes={accountTypes}
             loading={loading}
-            activeAccounts={activeAccounts}
-            portfolioOptions={portfolioOptions}
-            activeId={activeId}
-            setActiveId={setActiveId}
           />
         )}
 
