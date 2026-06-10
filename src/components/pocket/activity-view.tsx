@@ -1,17 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowLeftRight,
-  CalendarClock,
-  ChevronDown,
-  Clock,
-  HandCoins,
-  Search,
-  SlidersHorizontal,
-  Wallet,
-  X,
-} from "lucide-react";
+import { ChevronDown, Clock, Search, SlidersHorizontal, X } from "lucide-react";
 import type {
   Basis,
   CashFlowRow,
@@ -55,11 +45,11 @@ const inChip = (iso: string): string => {
   return d <= 0 ? "TODAY" : `IN ${d}d`;
 };
 
-const MODE_OPTS: { value: HistoryMode; label: string; icon: typeof Clock }[] = [
-  { value: "upcoming", label: "Upcoming", icon: CalendarClock },
-  { value: "dividends", label: "Received", icon: HandCoins },
-  { value: "transactions", label: "Trades", icon: ArrowLeftRight },
-  { value: "cashflow", label: "Cash", icon: Wallet },
+const MODE_OPTS: { value: HistoryMode; label: string }[] = [
+  { value: "upcoming", label: "Upcoming" },
+  { value: "dividends", label: "Received" },
+  { value: "transactions", label: "Trades" },
+  { value: "cashflow", label: "Cash" },
 ];
 
 const SECTION_LABEL: Record<HistoryMode, string> = {
@@ -80,7 +70,7 @@ let lastMode: HistoryMode = "dividends";
  *  list doesn't layout-shift when real rows replace it. */
 function SkeletonRows() {
   return (
-    <div className="pk-picker pk-card" aria-hidden>
+    <div className="pk-picker" aria-hidden>
       {[72, 56, 64, 48, 60].map((w, i) => (
         <div className="pk-skel-row pk-skel-act" key={i}>
           <span className="pk-skel-main">
@@ -373,26 +363,24 @@ export function ActivityView({
         </div>
       </div>
 
-      {/* Search + the filter toggle (opens the View chips). */}
-      <div className="pk-search-row">
-        <div className="pk-search">
-          <Search className="pk-search-ico" size={17} strokeWidth={2.2} aria-hidden focusable="false" />
-          <input
-            type="search"
-            placeholder={mode === "cashflow" ? "Search account..." : "Search symbol..."}
-            aria-label={mode === "cashflow" ? "Search account" : "Search symbol"}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoCapitalize="characters"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          {search !== "" && (
-            <button type="button" className="pk-search-clear" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X size={15} strokeWidth={2.4} aria-hidden focusable="false" />
-            </button>
-          )}
-        </div>
+      {/* Search with the filter toggle INSIDE the field (reference layout). */}
+      <div className="pk-search">
+        <Search className="pk-search-ico" size={17} strokeWidth={2.2} aria-hidden focusable="false" />
+        <input
+          type="search"
+          placeholder={mode === "cashflow" ? "Search account..." : "Search symbol..."}
+          aria-label={mode === "cashflow" ? "Search account" : "Search symbol"}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+        {search !== "" && (
+          <button type="button" className="pk-search-clear" aria-label="Clear search" onClick={() => setSearch("")}>
+            <X size={15} strokeWidth={2.4} aria-hidden focusable="false" />
+          </button>
+        )}
         <button
           type="button"
           className="pk-filterbtn"
@@ -401,7 +389,7 @@ export function ActivityView({
           data-active={filtersOpen}
           onClick={() => setFiltersOpen((v) => !v)}
         >
-          <SlidersHorizontal size={18} strokeWidth={2.2} aria-hidden focusable="false" />
+          <SlidersHorizontal size={17} strokeWidth={2.2} aria-hidden focusable="false" />
         </button>
       </div>
 
@@ -409,22 +397,18 @@ export function ActivityView({
         <div className="pk-filter-panel">
           <span className="pk-filter-label">View:</span>
           <div className="pk-chips pk-chips-flat" role="group" aria-label="Activity view">
-            {MODE_OPTS.map((o) => {
-              const Icon = o.icon;
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  className="pk-chip"
-                  data-active={mode === o.value}
-                  aria-pressed={mode === o.value}
-                  onClick={() => setMode(o.value)}
-                >
-                  <Icon size={13} strokeWidth={2.4} aria-hidden focusable="false" />
-                  {o.label}
-                </button>
-              );
-            })}
+            {MODE_OPTS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className="pk-chip"
+                data-active={mode === o.value}
+                aria-pressed={mode === o.value}
+                onClick={() => setMode(o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -496,7 +480,7 @@ export function ActivityView({
             <p className="pk-note">No upcoming dividends for the selected holdings.</p>
           )}
           {!loading && upEvents.length > 0 && (
-            <div className="pk-picker pk-card">
+            <div className="pk-picker">
               {upEvents.map((e) => (
                 <div className="pk-act-row" key={`${e.ticker}-${e.type}`}>
                   <div className="pk-act-main">
@@ -534,7 +518,7 @@ export function ActivityView({
             <p className="pk-note">No dividends received in {year}.</p>
           )}
           {!histError && !histLoading && divRows.length > 0 && (
-            <div className="pk-picker pk-card">
+            <div className="pk-picker">
               {divRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">
@@ -567,7 +551,7 @@ export function ActivityView({
             <p className="pk-note">No transactions in {year}.</p>
           )}
           {!histError && !histLoading && tradeRows.length > 0 && (
-            <div className="pk-picker pk-card">
+            <div className="pk-picker">
               {tradeRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">
@@ -604,7 +588,7 @@ export function ActivityView({
             <p className="pk-note">No cash activity in {year}.</p>
           )}
           {!histError && !histLoading && cashRows.length > 0 && (
-            <div className="pk-picker pk-card">
+            <div className="pk-picker">
               {cashRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">

@@ -1172,7 +1172,11 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  /* explicit: with only overflow-y set, overflow-x computes to auto and any 1px
+     of horizontal overflow lets a sideways drag pull the WHOLE surface */
+  overflow-x: hidden;
   overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
@@ -1183,6 +1187,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 }
 /* children keep intrinsic height inside the scroll column */
 .pk-activity > * { flex: 0 0 auto; }
+/* reference proportions: a compact nav-bar-sized title, not the 34px display title */
+.pk-activity .pk-title { font-size: 26px; letter-spacing: -0.5px; }
 
 /* Account + Year dropdown row: two card-styled native selects (iOS wheel UX). */
 .pk-act-controls {
@@ -1220,9 +1226,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 }
 .pk-select[data-disabled="true"] { opacity: 0.45; }
 
-/* Search + filter-toggle row. */
-.pk-search-row { display: flex; gap: 10px; }
-.pk-search { position: relative; flex: 1 1 auto; min-width: 0; }
+/* Search field — the filter toggle and clear (×) live INSIDE it (reference layout). */
+.pk-search { position: relative; min-width: 0; }
 .pk-search-ico {
   position: absolute;
   left: 13px;
@@ -1254,7 +1259,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
    + the input's 44px height give an adequate hit area at the field edge */
 .pk-search-clear {
   position: absolute;
-  right: 4px;
+  right: 38px; /* left of the in-field filter toggle */
   top: 50%;
   transform: translateY(-50%);
   appearance: none;
@@ -1264,19 +1269,24 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 10px;
+  padding: 12px 8px;
   cursor: pointer;
 }
 .pk-search-clear:active { opacity: 0.5; }
-.pk-search input { padding-right: 40px; }
+/* room for the in-field filter toggle (and the clear × when present) */
+.pk-search input { padding-right: 76px; }
+/* the filter toggle sits inside the search field's right edge */
 .pk-filterbtn {
-  flex: 0 0 auto;
-  width: 44px;
-  min-height: 44px;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
   appearance: none;
-  border: 1px solid var(--pk-hairline);
-  border-radius: 12px;
-  background: var(--pk-card);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
   color: var(--pk-muted);
   display: inline-flex;
   align-items: center;
@@ -1284,21 +1294,33 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
+/* ≥44px hit target without growing the visual 34px square */
+.pk-filterbtn::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
 .pk-filterbtn[data-active="true"] {
-  background: var(--pk-pill-bg);
-  border-color: var(--pk-pill-bg);
-  color: var(--pk-pill-ink);
+  background: var(--pk-fill);
+  color: var(--pk-ink);
 }
 
-/* Expandable view panel (behind the filter icon): "View:" + mode chips. */
+/* Expandable view panel (behind the filter icon): "View:" + mode chips on ONE
+   line (reference layout) — overflow scrolls horizontally instead of wrapping. */
 .pk-filter-panel {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -24px; /* chips can scroll edge-to-edge past the screen gutter */
+  padding: 0 24px;
 }
+.pk-filter-panel::-webkit-scrollbar { display: none; }
 .pk-filter-label { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--pk-muted); }
-.pk-chips-flat { margin-bottom: 0; flex: 1 1 auto; }
+.pk-chips-flat { margin-bottom: 0; flex: 0 0 auto; flex-wrap: nowrap; }
 .pk-filter-panel .pk-chip {
   display: inline-flex;
   align-items: center;
