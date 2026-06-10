@@ -1148,9 +1148,10 @@ body:has(.pocket-root) {
   background: var(--pk-fill);
 }
 .pk-skel-bar.right { justify-self: end; width: 64px; }
-/* two-line variant matching .pk-act-row (17px ticker line + 13px date line) */
-.pk-skel-act .pk-skel-main { display: flex; flex-direction: column; gap: 7px; }
-.pk-skel-bar.thin { height: 11px; }
+/* two-line variant matching .pk-act-row (16px ticker line + 12px date line) */
+.pk-skel-act { padding: 8px 0; }
+.pk-skel-act .pk-skel-main { display: flex; flex-direction: column; gap: 6px; }
+.pk-skel-bar.thin { height: 10px; }
 @keyframes pk-skel-pulse {
   from { opacity: 1; }
   to { opacity: 0.45; }
@@ -1194,15 +1195,15 @@ body:has(.pocket-root) {
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 14px) 24px calc(env(safe-area-inset-bottom, 0px) + 92px);
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 24px calc(env(safe-area-inset-bottom, 0px) + 92px);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
 /* children keep intrinsic height inside the scroll column */
 .pk-activity > * { flex: 0 0 auto; }
 /* reference proportions: a compact nav-bar-sized title, not the 34px display title */
-.pk-activity .pk-title { font-size: 22px; letter-spacing: -0.4px; }
+.pk-activity .pk-title { font-size: 20px; letter-spacing: -0.4px; }
 .pk-activity .pk-section-label { font-size: 12px; }
 
 /* Account + Year dropdown row: two card-styled native selects (iOS wheel UX). */
@@ -1218,16 +1219,16 @@ body:has(.pocket-root) {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   border: 1px solid var(--pk-hairline);
-  border-radius: 11px;
+  border-radius: 10px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
   font-size: 16px; /* ≥16px — iOS Safari zooms focused controls below 16px */
   font-weight: 700;
   letter-spacing: -0.2px;
-  padding: 0 30px 0 12px;
+  padding: 0 28px 0 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1255,11 +1256,11 @@ body:has(.pocket-root) {
 }
 .pk-search input {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--pk-hairline);
-  border-radius: 11px;
+  border-radius: 10px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
@@ -1276,7 +1277,7 @@ body:has(.pocket-root) {
    + the input's 44px height give an adequate hit area at the field edge */
 .pk-search-clear {
   position: absolute;
-  right: 38px; /* left of the in-field filter toggle */
+  right: 32px; /* left of the in-field filter toggle */
   top: 50%;
   transform: translateY(-50%);
   appearance: none;
@@ -1295,14 +1296,14 @@ body:has(.pocket-root) {
 /* the filter toggle sits inside the search field's right edge */
 .pk-filterbtn {
   position: absolute;
-  right: 5px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   appearance: none;
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--pk-muted);
   display: inline-flex;
@@ -1311,43 +1312,45 @@ body:has(.pocket-root) {
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-/* ≥44px hit target without growing the visual 30px square */
+/* ≥44px hit target without growing the visual 28px square */
 .pk-filterbtn::after {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: -8px;
 }
 .pk-filterbtn[data-active="true"] {
   background: var(--pk-fill);
   color: var(--pk-ink);
 }
 
-/* Expandable view panel (behind the filter icon): "View:" + mode chips. STATIC —
-   no horizontal scroll/drag (user request); narrow screens wrap instead. */
+/* Expandable view panel (behind the filter icon): 4 mode chips on ONE fixed row,
+   equal widths filling the screen — no label, no scroll, no wrap. */
 .pk-filter-panel {
   display: flex;
   align-items: center;
-  gap: 8px 10px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   overflow: hidden;
 }
-.pk-filter-label { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--pk-muted); }
-.pk-chips-flat { margin-bottom: 0; flex: 0 1 auto; gap: 8px; }
 .pk-filter-panel .pk-chip {
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  padding: 4px 11px;
-  min-height: 28px;
+  justify-content: center;
+  font-size: 11px;
+  padding: 3px 6px;
+  min-height: 26px;
+  white-space: nowrap;
   position: relative; /* anchors the ::after hit-area extender (M14) */
 }
-/* ≥44px hit target: these chips are the ONLY mode switcher — extend the 28px pill
-   by 8px above/below (28+16=44) with zero visual change (same pattern as .pk-seg-btn). */
+/* ≥44px hit target: these chips are the ONLY mode switcher — extend the 26px pill
+   by 9px above/below (26+18=44) with zero visual change (same pattern as .pk-seg-btn). */
 .pk-filter-panel .pk-chip::after {
   content: "";
   position: absolute;
-  top: -8px;
-  bottom: -8px;
+  top: -9px;
+  bottom: -9px;
   left: 0;
   right: 0;
 }
@@ -1356,11 +1359,11 @@ body:has(.pocket-root) {
 .pk-banner {
   border: 1px solid var(--pk-banner-border);
   background: var(--pk-banner-bg);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 11px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .pk-banner-head {
   display: flex;
@@ -1390,12 +1393,12 @@ body:has(.pocket-root) {
   min-width: 126px;
   background: var(--pk-card);
   border: 1px solid var(--pk-hairline);
-  border-radius: 10px;
-  padding: 8px 10px;
+  border-radius: 9px;
+  padding: 6px 9px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 2px;
 }
 .pk-bcard-chip {
   font-size: 10px;
@@ -1426,7 +1429,7 @@ body:has(.pocket-root) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 8px 12px;
 }
 .pk-total-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pk-total-label {
@@ -1437,7 +1440,7 @@ body:has(.pocket-root) {
   color: var(--pk-muted);
 }
 .pk-total-value {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.05;
@@ -1472,11 +1475,11 @@ body:has(.pocket-root) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
 .pk-act-row:last-child { border-bottom: none; }
-.pk-act-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pk-act-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pk-act-line1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .pk-act-ticker {
   font-size: 16px;

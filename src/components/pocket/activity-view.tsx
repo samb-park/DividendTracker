@@ -397,22 +397,19 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
       </div>
 
       {filtersOpen && (
-        <div className="pk-filter-panel">
-          <span className="pk-filter-label">View:</span>
-          <div className="pk-chips pk-chips-flat" role="group" aria-label="Activity view">
-            {MODE_OPTS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                className="pk-chip"
-                data-active={mode === o.value}
-                aria-pressed={mode === o.value}
-                onClick={() => setMode(o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+        <div className="pk-filter-panel" role="group" aria-label="Activity view">
+          {MODE_OPTS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="pk-chip"
+              data-active={mode === o.value}
+              aria-pressed={mode === o.value}
+              onClick={() => setMode(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
 
