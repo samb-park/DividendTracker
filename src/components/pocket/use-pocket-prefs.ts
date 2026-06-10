@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Basis, ThemePref, EventFilter } from "@/lib/pocket-types";
+import type { Basis, ThemePref } from "@/lib/pocket-types";
 
 const EXCLUDED_KEY = "dt-pocket-excluded-v1";
 const EXCLUDED_ACCOUNTS_KEY = "dt-pocket-accounts-excluded-v1";
 const BASIS_KEY = "dt-pocket-basis-v1";
 const THEME_KEY = "dt-pocket-theme";
-const EVENT_FILTER_KEY = "dt-pocket-eventfilter-v1";
 
 /**
  * Persisted EXCLUSION set (not inclusion): default empty → everything is shown,
@@ -60,34 +59,6 @@ export function useExcluded() {
 /** Excluded account types (e.g. exclude TFSA to view RRSP-only). */
 export function useExcludedAccounts() {
   return useExcludedSet(EXCLUDED_ACCOUNTS_KEY);
-}
-
-export function useEventFilter(): [EventFilter, (f: EventFilter) => void, boolean] {
-  const [filter, setFilterState] = useState<EventFilter>("all");
-  // `hydrated` lets the Upcoming pager defer its once-per-mount align until the
-  // persisted filter has loaded (else a deep-link to Upcoming snaps to "all").
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(EVENT_FILTER_KEY);
-      if (raw === "all" || raw === "ex" || raw === "pay") setFilterState(raw);
-    } catch {
-      /* ignore */
-    }
-    setHydrated(true);
-  }, []);
-
-  const setFilter = useCallback((f: EventFilter) => {
-    setFilterState(f);
-    try {
-      localStorage.setItem(EVENT_FILTER_KEY, f);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  return [filter, setFilter, hydrated];
 }
 
 export function useBasis(): [Basis, (b: Basis) => void] {

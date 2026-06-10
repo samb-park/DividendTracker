@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { RunRateResponse, TickerAgg, PositionRunRate, Basis } from "@/lib/pocket-types";
 import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, type PortfolioOption } from "@/lib/pocket-types";
-import { useBasis, useEventFilter, usePocketTheme } from "./use-pocket-prefs";
+import { useBasis, usePocketTheme } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
 import { usePocketGroups } from "./use-pocket-groups";
@@ -21,7 +21,7 @@ import { GroupManager } from "./group-manager";
 import { ChartsView } from "./charts-view";
 import { PortfolioPicker } from "./portfolio-picker";
 import { PortfolioPickerButton } from "./portfolio-picker-button";
-import { HistoryTab } from "./history-tab";
+import { ActivityView } from "./activity-view";
 import { PwaRegister } from "@/components/pwa-register";
 
 /** Roll (account × ticker) positions up to per-ticker USD aggregates. */
@@ -34,6 +34,7 @@ function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
     const ppGross = freq > 0 ? p.grossAnnualUSD / freq : 0;
     const e = map.get(p.ticker);
     if (e) {
+      e.shares += p.shares;
       e.grossAnnualUSD += p.grossAnnualUSD;
       e.netAnnualUSD += p.netAnnualUSD;
       if (p.marketValueUSD != null) e.marketValueUSD = (e.marketValueUSD ?? 0) + p.marketValueUSD;
@@ -49,6 +50,7 @@ function rollupTickers(list: PositionRunRate[]): TickerAgg[] {
       map.set(p.ticker, {
         ticker: p.ticker,
         name: p.name,
+        shares: p.shares,
         grossAnnualUSD: p.grossAnnualUSD,
         netAnnualUSD: p.netAnnualUSD,
         marketValueUSD: p.marketValueUSD,
@@ -221,7 +223,6 @@ export function PocketShell() {
   const [tab, setTab] = useState<PocketTab>("dividends");
   const [managing, setManaging] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [eventFilter, setEventFilter, eventFilterHydrated] = useEventFilter();
 
   const [basis, setBasis] = useBasis();
   const [themePref, setThemePref] = usePocketTheme();
@@ -272,6 +273,15 @@ export function PocketShell() {
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const onPullStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
+    // Never arm when the touched scroll region is mid-scroll: the Activity surface
+    // (and Settings) scroll their own title under the header band, so a normal
+    // scroll-back-up gesture there must not fire a refresh. At scrollTop 0 the
+    // deliberate pull still works everywhere.
+    const scroller = (e.target as HTMLElement).closest?.(".pk-activity, .pk-paged-page, .pk-screen");
+    if (scroller && scroller.scrollTop > 0) {
+      pullStart.current = null;
+      return;
+    }
     // Only arms when the touch starts in the header band (≈ safe-area + title row).
     pullStart.current = t.clientY < 140 ? { x: t.clientX, y: t.clientY } : null;
   }, []);
@@ -369,7 +379,6 @@ export function PocketShell() {
   // The portfolio currently selected on Dividends (shared with Charts + Activity).
   const activeIdx = Math.max(0, portfolioOrder.indexOf(activeId));
   const activeDerived = derivedByPortfolio[activeIdx];
-  const activeName = activeDerived?.portfolioName ?? "All";
   // Account scope of the active selection for filtering Activity's history modes:
   // [] = all accounts (the "All" portfolio, or a group with no account scope), else
   // the held account type(s). Account-only (no ticker filter) keeps past-sold holdings.
@@ -444,11 +453,11 @@ export function PocketShell() {
           />
         )}
 
-        {/* Activity — merged Upcoming + History. A 4-way switch (Upcoming / Received /
-            Trades / Cash) picks the mode; each renders its own self-contained surface.
-            Remounts on entry. Upcoming uses the active portfolio's events. */}
+        {/* Activity — single reference-style surface: Account/Year dropdowns, search +
+            filter-icon view chips (Upcoming / Received / Trades / Cash), the upcoming
+            banner, a summary card, and the section list. Remounts on entry. */}
         {tab === "activity" && (
-          <HistoryTab
+          <ActivityView
             basis={basis}
             fxRate={data?.fx?.usdcad ?? null}
             // L1: only flag a REAL fallback (server said so) — while data is still
@@ -459,12 +468,10 @@ export function PocketShell() {
             groupScope={activeId != null && !activeId.startsWith(ACCT_PORTFOLIO_PREFIX)}
             upcomingIncluded={activeDerived?.included ?? []}
             loading={loading}
-            eventFilter={eventFilter}
-            setEventFilter={setEventFilter}
-            eventFilterHydrated={eventFilterHydrated}
-            portfolioName={activeName}
             activeAccounts={activeAccounts}
-            onOpenPicker={() => setPickerOpen(true)}
+            portfolioOptions={portfolioOptions}
+            activeId={activeId}
+            setActiveId={setActiveId}
           />
         )}
 

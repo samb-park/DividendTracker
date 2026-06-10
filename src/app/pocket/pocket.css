@@ -57,6 +57,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   --pk-warn: #b4530a;
   --pk-fill: var(--pk-tabbar-active); /* neutral subtle fill (semantic alias) */
   --pk-danger: #dc2626;
+  --pk-green: #0a8043; /* brand green — positive amounts / received badges */
+  --pk-green-fill: rgba(10, 128, 67, 0.12);
+  --pk-danger-fill: rgba(220, 38, 38, 0.1);
+  --pk-banner-bg: rgba(180, 83, 10, 0.08); /* amber upcoming banner (Activity) */
+  --pk-banner-border: rgba(180, 83, 10, 0.22);
+  --pk-banner-ink: #9a4708; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
 
   font-family: -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -105,6 +111,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   --pk-warn: #e08a3c;
   --pk-fill: var(--pk-tabbar-active);
   --pk-danger: #f87171;
+  --pk-green: #30d158; /* iOS systemGreen (dark) — #0a8043 is too dim on #000 */
+  --pk-green-fill: rgba(48, 209, 88, 0.16);
+  --pk-danger-fill: rgba(248, 113, 113, 0.14);
+  --pk-banner-bg: rgba(224, 138, 60, 0.12);
+  --pk-banner-border: rgba(224, 138, 60, 0.3);
+  --pk-banner-ink: var(--pk-warn); /* #e08a3c is already ~7:1 on the dark tint */
 }
 
 /* layout shell ---------------------------------------------------------- */
@@ -186,9 +198,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   justify-content: space-between;
   gap: 12px;
 }
-/* Tappable portfolio picker button — shared by Dividends + the Activity views
-   (opens the root PortfolioPicker). Size is set by context: a small muted caption
-   on the Dividends header right, the header identity in the Activity .pk-summary. */
+/* Tappable portfolio picker button (opens the root PortfolioPicker) — a small
+   muted caption on the Dividends header right. */
 .pk-pf-pick {
   display: inline-flex;
   align-items: baseline;
@@ -211,14 +222,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 .pk-pf-pick:active { opacity: 0.55; }
 /* Dividends header: small muted caption on the right (replaces the old .pk-hero-pf). */
 .pk-dividends-head .pk-pf-pick { font-size: 13px; font-weight: 600; color: var(--pk-muted); max-width: 55%; }
-/* Activity views: the picker IS the header identity (the "Activity" h1 was dropped). */
-.pk-summary .pk-pf-pick { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; max-width: 64%; }
-/* Activity period trigger "2026 · Jun ▾" — tappable, opens the PeriodPicker sheet
-   (replaces the old year stepper + sliding PeriodStrip). */
-.pk-period-pick { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
-.pk-period-pick-year { color: var(--pk-ink); }
-.pk-period-pick-sep { margin: 0 6px; color: var(--pk-muted); font-weight: 600; }
-.pk-period-pick-period { color: var(--pk-ink); }
 .pk-summary {
   display: flex;
   align-items: baseline;
@@ -365,8 +368,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   font-weight: 700;
   background: var(--pk-tabbar-active);
 }
-/* clear the floating bar at the bottom of scrollable content */
-.pk-bottom-clearance { height: calc(env(safe-area-inset-bottom, 0px) + 92px); }
 
 /* iOS grouped inset card ------------------------------------------------- */
 /* The white/dark-gray rounded container that grouped lists sit in. Sits INSIDE
@@ -402,10 +403,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
    black tint instead so the pill stays a clear step above. Light is unaffected
    (white card + 6% black track + white pill = the stock iOS look). */
 .pocket-root[data-pocket-mode="dark"] .pk-card .pk-seg { background: rgba(0, 0, 0, 0.4); }
-/* 5-col grid rows lose 32px to the card padding — re-tuned columns/gaps so the
-   minmax(0,1fr) days/qty cell keeps usable width on ≥375px screens. */
-.pk-card .pk-event-row { grid-template-columns: 52px 54px 42px minmax(0, 1fr) 78px; column-gap: 5px; }
-.pk-card .pk-txn-row { grid-template-columns: 52px 54px 46px minmax(0, 1fr) 78px; column-gap: 5px; }
 
 /* list rows: shared edge (flush with screen padding), shared divider -------
    Applies to ticker-picker / upcoming / history rows. */
@@ -467,91 +464,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   border-color: var(--pk-pill-bg);
 }
 
-/* upcoming events list -------------------------------------------------- */
-.pk-upcoming-head { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
-/* The column is align-items:flex-start (legacy left-aligned title), so its children
-   shrink-to-fit. Force the picker row full-width or the picker's %-max-width collapses
-   the name to "R…". (The segments below are already width:100%.) */
-.pk-upcoming-head .pk-summary { width: 100%; }
-
-/* aligned columns: date | ticker | EX/PAY | days-left | amount */
-.pk-event-row {
-  display: grid;
-  /* fits narrow phones: fixed cols + 8px gaps sum well under the content width;
-     the qty/days col is minmax(0,1fr) so it shrinks instead of forcing overflow */
-  grid-template-columns: 52px 54px 42px minmax(0, 1fr) 82px;
-  align-items: center;
-  column-gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--pk-hairline);
-}
-.pk-event-row:last-child { border-bottom: none; }
-.pk-event-date {
-  position: relative; /* anchor the hung est-clock so the month glyph keeps the column edge */
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--pk-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-/* Hang the estimated-date clock into the left gutter so "Jul"/"Jun" stay
-   left-aligned down the column (a prefix glyph can't align inline with
-   tabular-nums). top/bottom:0 + flex centers the small icon against the date. */
-.pk-event-date .est {
-  position: absolute;
-  right: 100%;
-  margin-right: 3px;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  color: var(--pk-muted);
-}
-.pk-est-ico { display: block; }
-/* "[clock] estimated date" legend above the list (card needs breathing room below). */
-.pk-est-legend {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 12px;
-}
-.pk-event-ticker {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--pk-ink);
-  letter-spacing: -0.3px;
-  white-space: nowrap;
-}
-.pk-event-tag {
-  justify-self: start;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 2px 7px;
-  border-radius: 8px;
-  background: var(--pk-tabbar-active);
-  color: var(--pk-badge-ink); /* readable EX/BUY/DIV (was --pk-muted, ~2.4:1) */
-}
-/* EX and PAY both use the base light tint (distinguished by their text); the dark
-   solid fill is reserved for the genuine exception — a SELL in the transaction log. */
-.pk-event-tag[data-type="sell"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
-.pk-event-days {
-  justify-self: end;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pk-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.pk-event-amt {
-  justify-self: end;
-  text-align: right;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--pk-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+/* estimated-date clock icon (lucide Clock) — inherits the muted row color */
+.pk-est-ico { display: block; flex: 0 0 auto; color: var(--pk-muted); }
 
 /* bottom sheet overlay (Edit) ------------------------------------------- */
 .pk-sheet-scrim {
@@ -739,13 +653,12 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   line-height: 1;
 }
 
-/* fixed header + horizontally-paging sub-region (History + Upcoming) ---- */
-/* AIRTIGHT iOS-WebKit HEIGHT CHAIN — the proven Dividends chain one flex level
-   deeper, with the growing flex item (.pk-paged-region, overflow:hidden)
-   DELIBERATELY NOT the scroll boundary:
+/* fixed header + horizontally-paging sub-region (Charts + Dividends) ---- */
+/* AIRTIGHT iOS-WebKit HEIGHT CHAIN — the growing flex item (.pk-paged-region,
+   overflow:hidden) is DELIBERATELY NOT the scroll boundary:
      .pocket-root            height:100dvh; flex column        (root, definite)
-     .pk-screen[history/up]  flex:1 1 0; min-height:0; overflow:hidden
-     .pk-history/.pk-upcoming flex:1 1 0; min-height:0; flex column
+     .pk-screen[charts/div]  flex:1 1 0; min-height:0; overflow:hidden
+     .pk-charts/.pk-dividends flex:1 1 0; min-height:0; flex column
        header rows           flex:0 0 auto                     (intrinsic height)
        .pk-paged-region      flex:1 1 0; min-height:0; position:relative; overflow:hidden
                              → DEFINITE used height = screen − header
@@ -755,8 +668,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
    The flex-grow-through-scroll spacer-collapse cannot recur: the box that grows
    is overflow:hidden and is not itself the scroll boundary. */
 /* Shared host for the fixed-header + sub-region pager layout. */
-.pk-history,
-.pk-upcoming,
 .pk-charts,
 .pk-dividends {
   display: flex;
@@ -801,38 +712,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   padding-right: max(24px, env(safe-area-inset-right));
 }
 
-/* holds the tappable "year · period ▾" trigger (opens the PeriodPicker sheet) */
-.pk-year-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.pk-hist-row {
-  display: grid;
-  grid-template-columns: 1fr 92px;
-  align-items: center;
-  column-gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--pk-hairline);
-}
-.pk-hist-row:last-child { border-bottom: none; }
-/* cash-flow account name: truncate long custom names instead of overflowing the 1fr cell */
-.pk-cf-acct { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-
-/* transaction log row: date · ticker · action badge · qty · amount
-   (reuses pk-event-* cell classes; wider badge track so "SELL" fits) */
-.pk-txn-row {
-  display: grid;
-  /* date/ticker/amount match .pk-event-row; only the badge cell differs (46 fits SELL).
-     qty col is minmax(0,1fr) so a wide "× 1.2694" can't push the row past the screen. */
-  grid-template-columns: 52px 54px 46px minmax(0, 1fr) 82px;
-  align-items: center;
-  column-gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--pk-hairline);
-}
-.pk-txn-row:last-child { border-bottom: none; }
-
 /* account filter chips ------------------------------------------------- */
 .pk-chips {
   display: flex;
@@ -840,19 +719,6 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   gap: 8px;
   margin-bottom: 16px;
 }
-/* single-line horizontally-scrollable chip row (month selector) */
-.pk-chips.pk-scroll {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  /* let the row scroll edge-to-edge past the screen padding (must equal screen 24) */
-  margin: 0 -24px;
-  padding: 0 24px 2px;
-}
-.pk-chips.pk-scroll::-webkit-scrollbar { display: none; }
-.pk-chips.pk-scroll .pk-chip { flex: 0 0 auto; }
-
 .pk-chip {
   appearance: none;
   border: 1px solid var(--pk-hairline);
@@ -924,7 +790,7 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   white-space: nowrap;
 }
 .pk-pfrow-count {
-  font-size: 13px; /* Caption — matches .pk-event-days (was 12) */
+  font-size: 13px; /* Caption */
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
@@ -1243,7 +1109,9 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 /* Copyable money (M13): the root disables selection app-wide; re-allow it on the
    main AMOUNT cells only, so a long-press can select/copy a figure without making
    whole rows/labels selectable (keeps the app-like feel elsewhere). */
-.pk-event-amt,
+.pk-act-amt,
+.pk-total-value,
+.pk-bcard-amt,
 .pk-summary-value,
 .pk-picker-amt,
 .pk-legend-val,
@@ -1253,8 +1121,8 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   user-select: text;
 }
 
-/* Row-shaped loading skeleton (M7): mirrors .pk-hist-row metrics so the list
-   doesn't layout-shift when real rows replace it. Soft pulse, no shimmer. */
+/* Row-shaped loading skeleton (M7): mirrors the Activity list metrics so rows
+   don't layout-shift when real rows replace them. Soft pulse, no shimmer. */
 .pk-skel-row {
   display: grid;
   grid-template-columns: 1fr 92px;
@@ -1271,6 +1139,9 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   background: var(--pk-fill);
 }
 .pk-skel-bar.right { justify-self: end; width: 64px; }
+/* two-line variant matching .pk-act-row (17px ticker line + 13px date line) */
+.pk-skel-act .pk-skel-main { display: flex; flex-direction: column; gap: 7px; }
+.pk-skel-bar.thin { height: 11px; }
 @keyframes pk-skel-pulse {
   from { opacity: 1; }
   to { opacity: 0.45; }
@@ -1291,18 +1162,350 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
 /* warn variant: the tiny inline "default FX" flag (L1) */
 .pk-scope-note.warn { color: var(--pk-warn); }
 
+/* ===========================================================================
+   Activity tab — reference-style single scrolling surface:
+   Account/Year dropdowns → search + filter icon → (expandable) View chips →
+   amber upcoming banner with horizontal next-payment cards → summary card →
+   section list of two-line rows. All icons are lucide.
+   =========================================================================== */
+.pk-activity {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 92px);
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+/* children keep intrinsic height inside the scroll column */
+.pk-activity > * { flex: 0 0 auto; }
+
+/* Account + Year dropdown row: two card-styled native selects (iOS wheel UX). */
+.pk-act-controls {
+  display: grid;
+  grid-template-columns: 1fr 108px;
+  gap: 10px;
+}
+.pk-select { position: relative; }
+.pk-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--pk-hairline);
+  border-radius: 12px;
+  background: var(--pk-card);
+  color: var(--pk-ink);
+  font-family: inherit;
+  font-size: 16px; /* ≥16px — iOS Safari zooms focused controls below 16px */
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  padding: 0 34px 0 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.pk-select-caret {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--pk-muted);
+  pointer-events: none;
+}
+.pk-select[data-disabled="true"] { opacity: 0.45; }
+
+/* Search + filter-toggle row. */
+.pk-search-row { display: flex; gap: 10px; }
+.pk-search { position: relative; flex: 1 1 auto; min-width: 0; }
+.pk-search-ico {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--pk-muted);
+  pointer-events: none;
+}
+.pk-search input {
+  width: 100%;
+  min-height: 44px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--pk-hairline);
+  border-radius: 12px;
+  background: var(--pk-card);
+  color: var(--pk-ink);
+  font-family: inherit;
+  font-size: 16px; /* ≥16px — no iOS focus zoom */
+  font-weight: 600;
+  padding: 0 14px 0 38px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.pk-search input::placeholder { color: var(--pk-muted); font-weight: 600; }
+.pk-search input:focus { outline: none; border-color: var(--pk-pill-bg); }
+.pk-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+/* custom clear (×) — replaces the suppressed native cancel button; the 8px padding
+   + the input's 44px height give an adequate hit area at the field edge */
+.pk-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--pk-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 10px;
+  cursor: pointer;
+}
+.pk-search-clear:active { opacity: 0.5; }
+.pk-search input { padding-right: 40px; }
+.pk-filterbtn {
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 44px;
+  appearance: none;
+  border: 1px solid var(--pk-hairline);
+  border-radius: 12px;
+  background: var(--pk-card);
+  color: var(--pk-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pk-filterbtn[data-active="true"] {
+  background: var(--pk-pill-bg);
+  border-color: var(--pk-pill-bg);
+  color: var(--pk-pill-ink);
+}
+
+/* Expandable view panel (behind the filter icon): "View:" + mode chips. */
+.pk-filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pk-filter-label { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--pk-muted); }
+.pk-chips-flat { margin-bottom: 0; flex: 1 1 auto; }
+.pk-filter-panel .pk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  position: relative; /* anchors the ::after hit-area extender (M14) */
+}
+/* ≥44px hit target: these chips are the ONLY mode switcher — extend the 30px pill
+   by 7px above/below (30+14=44) with zero visual change (same pattern as .pk-seg-btn). */
+.pk-filter-panel .pk-chip::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  left: 0;
+  right: 0;
+}
+
+/* Amber upcoming banner with horizontally-scrolling next-payment cards. */
+.pk-banner {
+  border: 1px solid var(--pk-banner-border);
+  background: var(--pk-banner-bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pk-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pk-banner-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pk-banner-head svg { flex: 0 0 auto; }
+.pk-banner-cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* bleed to the banner edge so cards can scroll under the rounded corner */
+  margin: 0 -14px;
+  padding: 0 14px;
+}
+.pk-banner-cards::-webkit-scrollbar { display: none; }
+.pk-bcard {
+  flex: 0 0 auto;
+  /* 138 (not 124): can't tile evenly into a ~270px track on 320px screens, so a
+     cropped card always peeks and signals the horizontal scroll. */
+  min-width: 138px;
+  background: var(--pk-card);
+  border: 1px solid var(--pk-hairline);
+  border-radius: 10px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.pk-bcard-chip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--pk-banner-ink);
+  background: var(--pk-banner-bg);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.pk-bcard-ticker { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; color: var(--pk-ink); }
+.pk-bcard-amt { font-size: 15px; font-weight: 800; color: var(--pk-green); font-variant-numeric: tabular-nums; }
+.pk-bcard-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Mode summary card (TOTAL 2026 / N payments · Avg $X). */
+.pk-total-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.pk-total-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pk-total-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pk-muted);
+}
+.pk-total-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pk-total-value[data-green="true"] { color: var(--pk-green); }
+.pk-total-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Section header row: label + honesty captions (account scope / default FX). */
+.pk-act-section {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: -8px; /* tighten to the list card (column gap is 16) */
+}
+.pk-act-section .pk-section-label { margin-bottom: 0; flex: 1 1 auto; }
+
+/* Two-line activity rows: [ticker + badge / date · details + acct] · amount. */
+.pk-act-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--pk-hairline);
+}
+.pk-act-row:last-child { border-bottom: none; }
+.pk-act-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pk-act-line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pk-act-ticker {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--pk-ink);
+  white-space: nowrap;
+}
+.pk-act-trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pk-act-line2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pk-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* the date/detail text shrinks + ellipsizes so the trailing account badge always
+   stays visible on narrow screens (a bare text run would clip the badge instead) */
+.pk-act-line2-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pk-act-amt {
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pk-act-amt[data-tone="green"] { color: var(--pk-green); }
+
+/* Status badges (Received / Ex / Pay / Buy / Sell / Div / Deposit / Withdrawal)
+   + the small account-type badge (TFSA/RRSP/…) on line 2. */
+.pk-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: var(--pk-fill);
+  color: var(--pk-badge-ink);
+  white-space: nowrap;
+}
+.pk-badge[data-kind="received"],
+.pk-badge[data-kind="pay"],
+.pk-badge[data-kind="deposit"] { background: var(--pk-green-fill); color: var(--pk-green); }
+.pk-badge[data-kind="sell"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
+.pk-badge[data-kind="withdrawal"] { background: var(--pk-danger-fill); color: var(--pk-danger); }
+.pk-badge-acct { font-size: 10px; padding: 1px 6px; }
+
 /* Landscape phones (M12): compress the fixed header chrome (34px title, header
    paddings, hero gaps) so the content region keeps usable height. */
 @media (orientation: landscape) and (max-height: 480px) {
   .pk-title { font-size: 22px; letter-spacing: -0.4px; }
-  .pk-summary .pk-pf-pick { font-size: 17px; }
   .pk-screen {
     padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   }
-  .pk-history,
-  .pk-upcoming,
   .pk-charts,
-  .pk-dividends {
+  .pk-dividends,
+  .pk-activity {
     gap: 12px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
     /* 70 (was 64): the icon+label tab bar is ~4px taller than the text-only one */

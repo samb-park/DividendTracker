@@ -33,6 +33,7 @@ export interface RunRateResponse {
 export interface TickerAgg {
   ticker: string;
   name: string;
+  shares: number; // total shares across the selected accounts (banner "N sh × $rate")
   grossAnnualUSD: number;
   netAnnualUSD: number;
   marketValueUSD: number | null;
@@ -47,11 +48,9 @@ export interface TickerAgg {
 }
 
 export type Basis = "net" | "gross";
-export type EventFilter = "all" | "ex" | "pay";
 // The "Activity" tab's modes — "upcoming" (future ex/pay) plus the three past-activity
 // views. (Named HistoryMode for historical reasons; it now drives the merged tab.)
 export type HistoryMode = "upcoming" | "dividends" | "transactions" | "cashflow";
-export type TxnFilter = "all" | "buy" | "sell" | "div";
 
 /** A row from GET /api/cash-transactions?year=YYYY — a deposit/withdrawal tied to
  *  a brokerage account (portfolio). Used by the History → Cash Flow view to show
