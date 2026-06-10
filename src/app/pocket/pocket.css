@@ -38,6 +38,14 @@ body:has(.pocket-root[data-pocket-mode="dark"]) { background: #000000; }
    `contain` below, so the chain is stopped at its source too. Scoped to /pocket. */
 html:has(.pocket-root) { overscroll-behavior-y: none; }
 
+/* No document-level horizontal scroll, ever: even if some box overflows the
+   viewport width, the page itself must stay horizontally fixed. */
+html:has(.pocket-root),
+body:has(.pocket-root) {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 .pocket-root {
   /* Light (iOS grouped: systemGroupedBackground + white inset cards) */
   --pk-bg: #f2f2f7;
@@ -86,10 +94,11 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-  /* Pinch-zoom is allowed again (WCAG 1.4.4 — maximumScale/userScalable were
-     dropped from the viewport meta); `manipulation` only disables DOUBLE-TAP
-     zoom so taps stay instant and a fast double tap on a control can't zoom. */
-  touch-action: manipulation;
+  /* pan-x pan-y: panning/scrolling stays native but PINCH-ZOOM and double-tap
+     zoom are blocked at the touch layer (user request — an accidental pinch
+     scaled the surface and every drag panned the whole screen). Pairs with the
+     maximumScale/userScalable lock in the viewport meta (layout.tsx). */
+  touch-action: pan-x pan-y;
 }
 
 .pocket-root[data-pocket-mode="dark"] {
@@ -1196,7 +1205,9 @@ html:has(.pocket-root) { overscroll-behavior-y: none; }
   grid-template-columns: 1fr 108px;
   gap: 10px;
 }
-.pk-select { position: relative; }
+/* min-width:0 — a grid item's min-content floor is the select's WIDEST OPTION
+   text, which would silently blow the 1fr column past the screen width. */
+.pk-select { position: relative; min-width: 0; }
 .pk-select select {
   appearance: none;
   -webkit-appearance: none;

@@ -20,9 +20,11 @@ export const viewport: Viewport = {
   themeColor: "#f2f2f7",
   width: "device-width",
   initialScale: 1,
-  // No maximumScale/userScalable: pinch-zoom must stay available (WCAG 1.4.4).
-  // Double-tap-zoom side effects are blocked by `touch-action: manipulation`
-  // on .pocket-root instead (pocket.css).
+  // Zoom is LOCKED (user request): an accidental pinch left the surface scaled
+  // up, so every drag panned the whole screen sideways. The installed PWA
+  // respects maximumScale/userScalable; the app must stay fixed at 1:1.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
