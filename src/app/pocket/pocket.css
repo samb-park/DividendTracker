@@ -1189,21 +1189,22 @@ body:has(.pocket-root) {
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 92px);
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 24px calc(env(safe-area-inset-bottom, 0px) + 92px);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
 /* children keep intrinsic height inside the scroll column */
 .pk-activity > * { flex: 0 0 auto; }
 /* reference proportions: a compact nav-bar-sized title, not the 34px display title */
-.pk-activity .pk-title { font-size: 26px; letter-spacing: -0.5px; }
+.pk-activity .pk-title { font-size: 22px; letter-spacing: -0.4px; }
+.pk-activity .pk-section-label { font-size: 12px; }
 
 /* Account + Year dropdown row: two card-styled native selects (iOS wheel UX). */
 .pk-act-controls {
   display: grid;
-  grid-template-columns: 1fr 108px;
-  gap: 10px;
+  grid-template-columns: 1fr 96px;
+  gap: 8px;
 }
 /* min-width:0 — a grid item's min-content floor is the select's WIDEST OPTION
    text, which would silently blow the 1fr column past the screen width. */
@@ -1212,16 +1213,16 @@ body:has(.pocket-root) {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid var(--pk-hairline);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
   font-size: 16px; /* ≥16px — iOS Safari zooms focused controls below 16px */
   font-weight: 700;
   letter-spacing: -0.2px;
-  padding: 0 34px 0 14px;
+  padding: 0 30px 0 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1229,7 +1230,7 @@ body:has(.pocket-root) {
 }
 .pk-select-caret {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--pk-muted);
@@ -1241,7 +1242,7 @@ body:has(.pocket-root) {
 .pk-search { position: relative; min-width: 0; }
 .pk-search-ico {
   position: absolute;
-  left: 13px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--pk-muted);
@@ -1249,17 +1250,17 @@ body:has(.pocket-root) {
 }
 .pk-search input {
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--pk-hairline);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
   font-size: 16px; /* ≥16px — no iOS focus zoom */
   font-weight: 600;
-  padding: 0 14px 0 38px;
+  padding: 0 14px 0 36px;
   -webkit-user-select: text;
   user-select: text;
 }
@@ -1292,8 +1293,8 @@ body:has(.pocket-root) {
   right: 5px;
   top: 50%;
   transform: translateY(-50%);
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   appearance: none;
   border: none;
   border-radius: 9px;
@@ -1305,11 +1306,11 @@ body:has(.pocket-root) {
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-/* ≥44px hit target without growing the visual 34px square */
+/* ≥44px hit target without growing the visual 30px square */
 .pk-filterbtn::after {
   content: "";
   position: absolute;
-  inset: -5px;
+  inset: -7px;
 }
 .pk-filterbtn[data-active="true"] {
   background: var(--pk-fill);
@@ -1335,16 +1336,18 @@ body:has(.pocket-root) {
 .pk-filter-panel .pk-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  font-size: 12px;
+  padding: 4px 11px;
+  min-height: 28px;
   position: relative; /* anchors the ::after hit-area extender (M14) */
 }
-/* ≥44px hit target: these chips are the ONLY mode switcher — extend the 30px pill
-   by 7px above/below (30+14=44) with zero visual change (same pattern as .pk-seg-btn). */
+/* ≥44px hit target: these chips are the ONLY mode switcher — extend the 28px pill
+   by 8px above/below (28+16=44) with zero visual change (same pattern as .pk-seg-btn). */
 .pk-filter-panel .pk-chip::after {
   content: "";
   position: absolute;
-  top: -7px;
-  bottom: -7px;
+  top: -8px;
+  bottom: -8px;
   left: 0;
   right: 0;
 }
@@ -1354,41 +1357,39 @@ body:has(.pocket-root) {
   border: 1px solid var(--pk-banner-border);
   background: var(--pk-banner-bg);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .pk-banner-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--pk-banner-ink);
   font-variant-numeric: tabular-nums;
 }
 .pk-banner-head svg { flex: 0 0 auto; }
+/* cards stay INSIDE the banner's 12px padding (no edge bleed) */
 .pk-banner-cards {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  /* bleed to the banner edge so cards can scroll under the rounded corner */
-  margin: 0 -14px;
-  padding: 0 14px;
 }
 .pk-banner-cards::-webkit-scrollbar { display: none; }
 .pk-bcard {
   flex: 0 0 auto;
-  /* 138 (not 124): can't tile evenly into a ~270px track on 320px screens, so a
-     cropped card always peeks and signals the horizontal scroll. */
-  min-width: 138px;
+  /* doesn't tile evenly into narrow viewports — a cropped card always peeks
+     and signals the horizontal scroll */
+  min-width: 126px;
   background: var(--pk-card);
   border: 1px solid var(--pk-hairline);
   border-radius: 10px;
-  padding: 9px 11px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1404,13 +1405,13 @@ body:has(.pocket-root) {
   padding: 2px 6px;
   font-variant-numeric: tabular-nums;
 }
-.pk-bcard-ticker { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; color: var(--pk-ink); }
-.pk-bcard-amt { font-size: 15px; font-weight: 800; color: var(--pk-green); font-variant-numeric: tabular-nums; }
+.pk-bcard-ticker { font-size: 14px; font-weight: 800; letter-spacing: -0.2px; color: var(--pk-ink); }
+.pk-bcard-amt { font-size: 14px; font-weight: 800; color: var(--pk-green); font-variant-numeric: tabular-nums; }
 .pk-bcard-sub {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
@@ -1423,20 +1424,20 @@ body:has(.pocket-root) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 11px 14px;
 }
-.pk-total-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pk-total-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pk-total-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--pk-muted);
 }
 .pk-total-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
   line-height: 1.05;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
@@ -1447,8 +1448,8 @@ body:has(.pocket-root) {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
-  font-size: 13px;
+  gap: 2px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
@@ -1460,7 +1461,7 @@ body:has(.pocket-root) {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: -8px; /* tighten to the list card (column gap is 16) */
+  margin-bottom: -4px; /* tighten to the list (column gap is 12) */
 }
 .pk-act-section .pk-section-label { margin-bottom: 0; flex: 1 1 auto; }
 
@@ -1468,15 +1469,15 @@ body:has(.pocket-root) {
 .pk-act-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  gap: 10px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--pk-hairline);
 }
 .pk-act-row:last-child { border-bottom: none; }
-.pk-act-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.pk-act-line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pk-act-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pk-act-line1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .pk-act-ticker {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.3px;
   color: var(--pk-ink);
@@ -1486,8 +1487,8 @@ body:has(.pocket-root) {
 .pk-act-line2 {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pk-muted);
   font-variant-numeric: tabular-nums;
@@ -1500,7 +1501,7 @@ body:has(.pocket-root) {
 .pk-act-amt {
   flex: 0 0 auto;
   text-align: right;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
@@ -1512,12 +1513,12 @@ body:has(.pocket-root) {
    + the small account-type badge (TFSA/RRSP/…) on line 2. */
 .pk-badge {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 7px;
+  padding: 2px 6px;
+  border-radius: 6px;
   background: var(--pk-fill);
   color: var(--pk-badge-ink);
   white-space: nowrap;
@@ -1527,7 +1528,7 @@ body:has(.pocket-root) {
 .pk-badge[data-kind="deposit"] { background: var(--pk-green-fill); color: var(--pk-green); }
 .pk-badge[data-kind="sell"] { background: var(--pk-pill-bg); color: var(--pk-pill-ink); }
 .pk-badge[data-kind="withdrawal"] { background: var(--pk-danger-fill); color: var(--pk-danger); }
-.pk-badge-acct { font-size: 10px; padding: 1px 6px; }
+.pk-badge-acct { font-size: 9px; padding: 1px 5px; }
 
 /* Landscape phones (M12): compress the fixed header chrome (34px title, header
    paddings, hero gaps) so the content region keeps usable height. */
