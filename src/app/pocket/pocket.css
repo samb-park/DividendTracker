@@ -1,20 +1,24 @@
 /* ===========================================================================
-   /pocket — mobile dividend run-rate surface.
-   Fully scoped to .pocket-root so it never inherits the global IBM Plex Mono
-   font, retro scanline, or 600-weight body. Mirrors the iOS reference: grouped
-   bg (#F2F2F7 light / #000 dark) with inset cards (.pk-card), gray single-letter
-   labels, ultra-bold hero numbers, floating icon+label tab bar.
+   /pocket — mobile dividend run-rate surface, BLOOMBERG TERMINAL style.
+   Scoped to .pocket-root (the global retro scanline + 600-weight body stay
+   killed), but deliberately ALIGNED with the app's terminal language
+   (/terminal, globals.css): IBM Plex Mono everywhere, near-black bg with
+   hairline-bordered panels, amber accent for titles/active states, green/red
+   for money, square-ish radii, dense compact layout. Light mode is the same
+   terminal re-skinned on the global warm-paper palette (theme toggle kept).
 
    DESIGN SYSTEM (keep values consistent with these scales):
    · Spacing (4-based):  4 · 8 · 12 · 16 · 24 · 32
        12 = list-row vertical padding · 16 = inter-block gap · 24 = edge + section
        (control-internal padding 2/5/7/11 is a separate, calibrated subsystem)
    · Edge padding: 24px (screen + sheet + chip-bleed) — all content shares this left edge.
-   · Type:  Caption 13/600 · Body 15/700 · Row-emphasis 17/700 · Heading 20/800 ·
-            Title 34/800 · Display(hero) fluid 26–58/800 · Micro 12/600
-   · Letter-spacing:  negative (−0.3…−0.6px) only on bold ≥17px ·
-                      positive (+0.4/+0.5px) only on ALL-CAPS labels · none elsewhere
-   · Radius:  pills 999 · segmented 9/7 · rounded controls 12 · badge 8
+   · Type (IBM Plex Mono, max weight 700):  Caption 13/600 · Body 15/700 ·
+            Row-emphasis 17/700 · Heading 20/700 · Title 20/700 CAPS ·
+            Display(hero) fluid 26–58/700 · Micro 12/600
+   · Letter-spacing:  NONE on mono body/figures · positive (+0.4…0.08em) on
+            ALL-CAPS labels/titles only
+   · Radius:  controls 3-4 · segmented 3/2 · badge/chip 2-3 · sheet top 10
+              (switch knob / dots / swatches stay round — they're affordances)
    =========================================================================== */
 
 /* Kill the global retro scanline overlay + body chrome on this surface only.
@@ -25,9 +29,9 @@ body:has(.pocket-root)::before { display: none !important; }
    overscroll, e.g. a focused-input keyboard nudge): pocket background, not the
    global dark body. */
 html:has(.pocket-root),
-body:has(.pocket-root) { background: #f2f2f7; }
+body:has(.pocket-root) { background: #f3f0e8; }
 html:has(.pocket-root[data-pocket-mode="dark"]),
-body:has(.pocket-root[data-pocket-mode="dark"]) { background: #0c1220; }
+body:has(.pocket-root[data-pocket-mode="dark"]) { background: #0d0d0d; }
 
 /* Document-level backstop: lock the viewport scroller so a downward drag on the
    (often short, non-scrollable) default Dividends screen can't rubber-band the
@@ -47,33 +51,35 @@ body:has(.pocket-root) {
 }
 
 .pocket-root {
-  /* Light (iOS grouped: systemGroupedBackground + white inset cards) */
-  --pk-bg: #f2f2f7;
-  --pk-card: #ffffff; /* inset grouped card (lists, settings groups) */
+  /* Light terminal (global warm-paper palette: hsl 42° tints, dark warm ink) */
+  --pk-bg: #f3f0e8;
+  --pk-card: #faf8f3; /* inset panel (lists, settings groups) */
   --pk-elevated: #ffffff; /* active segment pill */
-  --pk-sheet: #f2f2f7; /* bottom sheets — grouped gray so white cards read inside */
-  --pk-card-sheet: #ffffff; /* card fill INSIDE a sheet (one step above --pk-sheet) */
-  --pk-ink: #0a0a0a;
-  --pk-muted: #6e6e73; /* secondary text — 5.08:1 on #fff, AA (was #8a8a8f, only 3.44:1) */
-  --pk-badge-ink: #6b6b70; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
-  --pk-faint: #c9c9ce;
-  --pk-pill-bg: #0a0a0a;
-  --pk-pill-ink: #ffffff;
-  --pk-hairline: rgba(0, 0, 0, 0.08);
-  --pk-tabbar-bg: rgba(247, 247, 248, 0.86);
-  --pk-tabbar-active: rgba(0, 0, 0, 0.06);
-  --pk-warn: #b4530a;
-  --pk-fill: var(--pk-tabbar-active); /* neutral subtle fill (semantic alias) */
-  --pk-danger: #dc2626;
-  --pk-green: #0a8043; /* brand green — positive amounts / received badges */
-  --pk-green-fill: rgba(10, 128, 67, 0.12);
-  --pk-danger-fill: rgba(220, 38, 38, 0.1);
-  --pk-banner-bg: rgba(180, 83, 10, 0.08); /* amber upcoming banner (Activity) */
-  --pk-banner-border: rgba(180, 83, 10, 0.22);
-  --pk-banner-ink: #9a4708; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
+  --pk-sheet: #efece3; /* bottom sheets — paper so panels read inside */
+  --pk-card-sheet: #faf8f3; /* card fill INSIDE a sheet (one step above --pk-sheet) */
+  --pk-ink: #29251c;
+  --pk-muted: #6b6457; /* secondary text — ≥4.5:1 on the paper bg */
+  --pk-badge-ink: #5f5949; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
+  --pk-faint: #c9c3b4;
+  --pk-accent: #9a5410; /* terminal amber (dark variant for light bg, ≥4.5:1) */
+  --pk-pill-bg: #9a5410; /* selected chip/check fill = amber */
+  --pk-pill-ink: #faf8f3;
+  --pk-hairline: rgba(60, 52, 32, 0.16);
+  --pk-tabbar-bg: rgba(243, 240, 232, 0.92);
+  --pk-tabbar-active: rgba(154, 84, 16, 0.12); /* amber tint behind the active tab */
+  --pk-warn: #9a5410;
+  --pk-fill: rgba(60, 52, 32, 0.07); /* neutral subtle fill */
+  --pk-danger: #c03434;
+  --pk-green: #1e7a3f; /* positive amounts / received badges */
+  --pk-green-fill: rgba(30, 122, 63, 0.12);
+  --pk-danger-fill: rgba(192, 52, 52, 0.1);
+  --pk-banner-bg: rgba(154, 84, 16, 0.08); /* amber upcoming banner (Activity) */
+  --pk-banner-border: rgba(154, 84, 16, 0.28);
+  --pk-banner-ink: #8a4a0c; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
 
-  font-family: -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  /* Terminal mono — same family as /terminal + globals (loaded app-wide) */
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Courier New", monospace;
   font-weight: 400;
   background: var(--pk-bg);
   color: var(--pk-ink);
@@ -102,29 +108,31 @@ body:has(.pocket-root) {
 }
 
 .pocket-root[data-pocket-mode="dark"] {
-  /* Dark NAVY palette (reference app): bg #0C1220 < card #161E2F < elevated #232E44 */
-  --pk-bg: #0c1220;
-  --pk-card: #161e2f; /* inset card / inputs — one step above the navy bg */
-  --pk-elevated: #232e44; /* active seg pill — a real step above the card/track */
-  --pk-sheet: #182134;
-  --pk-card-sheet: #222c42; /* card fill INSIDE a sheet (one step above --pk-sheet) */
-  --pk-ink: #f2f6fb;
-  --pk-muted: #8a97ad; /* slate muted — ≥4.5:1 on the navy bg */
-  --pk-badge-ink: #a8b4c8;
-  --pk-faint: #3a4660;
-  --pk-pill-bg: #ffffff;
-  --pk-pill-ink: #0c1220;
-  --pk-hairline: rgba(151, 170, 200, 0.14);
-  --pk-tabbar-bg: rgba(18, 26, 42, 0.88);
-  --pk-tabbar-active: rgba(151, 170, 200, 0.14);
-  --pk-warn: #e8a33c;
-  --pk-fill: var(--pk-tabbar-active);
+  /* Dark TERMINAL palette (Bloomberg): near-black bg, hairline panels, amber
+     accent, bright green/red money. Matches globals.css (#0d0d0d ≈ 0 0% 5%). */
+  --pk-bg: #0d0d0d;
+  --pk-card: #141414; /* inset panel / inputs — one step above the black bg */
+  --pk-elevated: #232323; /* active seg pill — a real step above the card/track */
+  --pk-sheet: #111111;
+  --pk-card-sheet: #1c1c1c; /* card fill INSIDE a sheet (one step above --pk-sheet) */
+  --pk-ink: #e8e2d4; /* warm off-white (45° 20% 88%) — the terminal text tone */
+  --pk-muted: #8f8f8f; /* ≥4.5:1 on the black bg */
+  --pk-badge-ink: #a6a6a6;
+  --pk-faint: #3a3a3a;
+  --pk-accent: #f5a623; /* terminal amber — titles / hero keys / active states */
+  --pk-pill-bg: #f5a623; /* selected chip/check fill = amber, black text */
+  --pk-pill-ink: #0d0d0d;
+  --pk-hairline: rgba(232, 226, 212, 0.14);
+  --pk-tabbar-bg: rgba(13, 13, 13, 0.92);
+  --pk-tabbar-active: rgba(245, 166, 35, 0.14); /* amber tint behind the active tab */
+  --pk-warn: #f5a623;
+  --pk-fill: rgba(232, 226, 212, 0.08);
   --pk-danger: #f87171;
-  --pk-green: #21d07a; /* reference bright green (amounts / received badges) */
-  --pk-green-fill: rgba(33, 208, 122, 0.14);
+  --pk-green: #4ade80; /* terminal green (globals --positive) */
+  --pk-green-fill: rgba(74, 222, 128, 0.14);
   --pk-danger-fill: rgba(248, 113, 113, 0.14);
-  --pk-banner-bg: rgba(232, 163, 60, 0.1);
-  --pk-banner-border: rgba(232, 163, 60, 0.32);
+  --pk-banner-bg: rgba(245, 166, 35, 0.1);
+  --pk-banner-border: rgba(245, 166, 35, 0.35);
   --pk-banner-ink: var(--pk-warn); /* amber, ~7:1 on the dark tint */
 }
 
@@ -195,10 +203,13 @@ body:has(.pocket-root) {
    from ever starting a horizontal scroll, silently killing the pager. */
 /* header ---------------------------------------------------------------- */
 .pk-title {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.6px;
-  line-height: 1.05;
+  /* terminal panel header: compact ALL-CAPS amber, not an iOS display title */
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--pk-accent);
 }
 /* Dividends fixed header: title + active-portfolio name (dots sit above it). */
 .pk-dividends-head {
@@ -243,12 +254,12 @@ body:has(.pocket-root) {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px; /* unified ALL-CAPS tracking (was 0.4) */
-  color: var(--pk-muted);
+  color: var(--pk-accent); /* terminal field label — amber key, ink value */
 }
 .pk-summary-value {
   font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1.05;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
@@ -270,9 +281,9 @@ body:has(.pocket-root) {
 .pk-row-label {
   flex: 0 0 auto;
   width: 1.15em; /* fixed gutter so all numbers left-align regardless of letter */
-  color: var(--pk-muted);
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  color: var(--pk-accent); /* D/W/M/Y keys in terminal amber */
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1;
   font-size: 58px; /* size set imperatively by the fit effect (== number size) */
 }
@@ -283,8 +294,8 @@ body:has(.pocket-root) {
   overflow: hidden;
   text-align: left;
   color: var(--pk-ink);
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   font-size: 58px; /* set imperatively by the fit effect */
@@ -305,7 +316,7 @@ body:has(.pocket-root) {
 .pk-note.warn { color: var(--pk-warn); }
 .pk-skeleton {
   color: var(--pk-faint);
-  font-weight: 800;
+  font-weight: 700;
 }
 .pk-retry {
   appearance: none;
@@ -317,39 +328,33 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px; /* unified button metrics (matches .pk-action / .pk-danger) */
-  border-radius: 12px;
+  border-radius: 4px;
   cursor: pointer;
   transition: opacity 0.12s ease;
 }
 .pk-retry:active { opacity: 0.6; }
 
-/* floating tab bar ------------------------------------------------------ */
-/* Floating translucent pill, fixed over the content (content fills the full dvh
-   behind it → no dead gap below; the blurred pill just floats over the page).
-   Constant bottom (NOT env) so it tracks the viewport bottom smoothly without the
-   old env-flip jump. .pk-screen reserves bottom padding so rows clear the pill. */
+/* docked tab bar -------------------------------------------------------- */
+/* Terminal style: a flat FULL-WIDTH bar pinned to the bottom edge, hairline-
+   topped (no floating pill, no soft shadow). Still position:fixed over the
+   content — every screen already reserves ≥76px bottom clearance, which covers
+   the bar (4 + 44 + max(4, safe-area)). Safe-area: bottom inset padded in full,
+   left/right insets respected on notched landscape. */
 .pk-tabbar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 10px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 50;
-  max-width: calc(100vw - 16px);
   display: flex;
+  justify-content: center;
   gap: 2px;
-  padding: 5px;
-  border-radius: 999px;
+  padding: 4px max(10px, env(safe-area-inset-right))
+    max(4px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left));
+  border-top: 1px solid var(--pk-hairline);
   background: var(--pk-tabbar-bg);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 0 var(--pk-hairline) inset;
-}
-/* In the installed PWA (no toolbar) the bottom safe-area is stable. Sit the pill
-   LOW — close to the bottom edge — by trimming most of the home-indicator inset
-   (≈34px on a modern iPhone → ≈12px gap). max(6px, …) keeps a floor on devices
-   with no safe-area inset so it never sits flush against the very edge. */
-@media (display-mode: standalone) {
-  .pk-tabbar { bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)); }
 }
 .pk-tab {
   appearance: none;
@@ -357,10 +362,13 @@ body:has(.pocket-root) {
   background: transparent;
   color: var(--pk-muted);
   font-family: inherit;
-  font-size: 10px; /* iOS tab-bar grammar: icon above, small label below */
+  font-size: 10px; /* icon above, small CAPS-feel label below */
   font-weight: 600;
-  padding: 5px 13px; /* ≥44px tall hit target; 13px horiz so 4 icon+label tabs fit ≤360px */
-  border-radius: 999px;
+  padding: 5px 4px;
+  flex: 1 1 0; /* equal-width across the full bar */
+  min-width: 0;
+  max-width: 168px; /* don't balloon on wide/landscape screens */
+  border-radius: 3px;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
   display: inline-flex;
@@ -373,7 +381,7 @@ body:has(.pocket-root) {
 }
 .pk-tab-ico { display: block; flex: 0 0 auto; }
 .pk-tab[data-active="true"] {
-  color: var(--pk-ink);
+  color: var(--pk-accent); /* terminal: active section reads amber */
   font-weight: 700;
   background: var(--pk-tabbar-active);
 }
@@ -385,7 +393,8 @@ body:has(.pocket-root) {
    separator automatically (rows already drop the hairline on :last-child). */
 .pk-card {
   background: var(--pk-card);
-  border-radius: 12px;
+  border: 1px solid var(--pk-hairline); /* terminal panel: hairline-bordered */
+  border-radius: 4px;
   padding: 0 16px;
 }
 .pk-sheet .pk-card { background: var(--pk-card-sheet); }
@@ -433,7 +442,7 @@ body:has(.pocket-root) {
 .pk-picker-ticker {
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
   color: var(--pk-ink);
 }
 .pk-picker-ticker.off { color: var(--pk-muted); text-decoration: line-through; }
@@ -492,8 +501,8 @@ body:has(.pocket-root) {
   z-index: 61;
   background: var(--pk-sheet); /* grouped sheet bg — cards inside use --pk-card-sheet */
   border-top: 1px solid var(--pk-hairline);
-  border-top-left-radius: 22px;
-  border-top-right-radius: 22px;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
   padding: 10px 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
   max-height: 82dvh;
   overflow-y: auto;
@@ -514,16 +523,24 @@ body:has(.pocket-root) {
   justify-content: space-between;
   padding: 8px 0 12px;
 }
-.pk-sheet-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.05; }
+.pk-sheet-title {
+  /* sheet header = terminal panel header (matches .pk-title language) */
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--pk-accent);
+}
 .pk-textbtn {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--pk-ink);
+  color: var(--pk-accent); /* terminal function-key amber for sheet Back/Save/Done */
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.3px; /* Row-emphasis tracking (bold ≥17px) */
+  letter-spacing: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -559,8 +576,8 @@ body:has(.pocket-root) {
   display: flex;
   width: 100%;
   padding: 2px;
-  border-radius: 9px;
-  background: var(--pk-tabbar-active);
+  border-radius: 3px;
+  background: var(--pk-fill);
   gap: 2px;
 }
 .pk-seg-btn {
@@ -575,7 +592,7 @@ body:has(.pocket-root) {
   font-weight: 600;
   text-align: center;
   padding: 5px 8px; /* tightened so the 4-way Activity switch fits four labels at 390px */
-  border-radius: 7px;
+  border-radius: 2px;
   cursor: pointer;
   min-height: 30px;
   /* match the pill's glide so the label color settles AS the pill arrives (was 0.15s ease) */
@@ -597,7 +614,7 @@ body:has(.pocket-root) {
   background: var(--pk-elevated); /* raised above the track (correct in dark too) */
   color: var(--pk-ink);
   font-weight: 700;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 0 0 1px var(--pk-hairline); /* flat terminal: hairline, no soft shadow */
 }
 
 /* animated variant (Upcoming All/Ex/Pay): a single white pill slides 1:1 with the
@@ -621,14 +638,13 @@ body:has(.pocket-root) {
   left: 2px;
   bottom: 2px;
   width: calc((100% - 4px) / var(--seg-count, 3)); /* N segments, minus 2px L/R padding */
-  border-radius: 7px;
+  border-radius: 2px;
   background: var(--pk-elevated);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 0 0 1px var(--pk-hairline); /* flat terminal hairline */
   transform: translateX(calc(var(--seg-progress, 0) * 100%));
   z-index: 0;
   pointer-events: none;
 }
-.pocket-root[data-pocket-mode="dark"] .pk-seg-pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
 /* tap-only segments (Settings, History toggle/filter) glide the pill on tap;
    the swipe pager segment (Upcoming) drives --seg-progress live, so NO transition there. */
 .pk-seg-tap .pk-seg-pill { transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
@@ -647,7 +663,7 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: 4px;
   cursor: pointer;
   min-height: 44px;
   transition: background 0.12s ease;
@@ -737,7 +753,7 @@ body:has(.pocket-root) {
   font-size: 13px;
   font-weight: 600;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: 3px; /* square terminal chip (was a 999 pill) */
   cursor: pointer;
   min-height: 30px;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
@@ -774,10 +790,10 @@ body:has(.pocket-root) {
   font-family: inherit;
   font-size: 17px; /* Row-emphasis — unified with ticker rows (was 15/600) */
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
   text-align: left;
   padding: 12px 10px; /* taller hit target for the portfolio rows (was 10px) */
-  border-radius: 12px;
+  border-radius: 3px;
   cursor: pointer;
 }
 .pk-pfrow[data-active="true"] { background: var(--pk-fill); }
@@ -831,7 +847,7 @@ body:has(.pocket-root) {
   padding: 0;
   transition: background 0.18s ease;
 }
-.pk-switch[data-on="true"] { background: #0a8043; } /* brand green (NOT systemBlue/green) */
+.pk-switch[data-on="true"] { background: var(--pk-green); } /* terminal green per mode */
 .pk-switch:disabled { opacity: 0.5; cursor: default; }
 .pk-switch-knob {
   position: absolute;
@@ -859,7 +875,7 @@ body:has(.pocket-root) {
    overlay WRAPPER to follow the finger 1:1; this scale is on the inner node, so
    the two compose without lag. */
 .pk-lifted {
-  border-radius: 12px;
+  border-radius: 4px;
   background: var(--pk-card-sheet); /* matches the card the row was lifted from */
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
   transform: scale(1.03);
@@ -883,9 +899,9 @@ body:has(.pocket-root) {
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 4px;
   margin-bottom: 4px;
 }
 .pk-input:focus { outline: none; border-color: var(--pk-pill-bg); }
@@ -912,7 +928,7 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px; /* unified button metrics — differs from .pk-retry only by color */
-  border-radius: 12px;
+  border-radius: 4px;
   cursor: pointer;
   margin-top: 4px;
 }
@@ -970,7 +986,7 @@ body:has(.pocket-root) {
   background: var(--pk-faint);
   transition: background 0.18s ease, transform 0.18s ease;
 }
-.pk-dot-nav[data-active="true"]::before { background: var(--pk-ink); transform: scale(1.2); }
+.pk-dot-nav[data-active="true"]::before { background: var(--pk-accent); transform: scale(1.2); }
 
 /* Visually-hidden, screen-reader-only text (e.g. "estimated" before the ~ tilde). */
 .pk-sr-only {
@@ -989,9 +1005,9 @@ body:has(.pocket-root) {
    the calm app look is preserved. Covers every focusable control on the surface
    (the dnd-kit keyboard-reorder rows finally get a visible indicator). */
 .pocket-root :focus-visible {
-  outline: 2px solid var(--pk-ink);
+  outline: 2px solid var(--pk-accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 2px;
 }
 /* the name field already signals focus via its border-color — no double ring */
 .pk-input:focus-visible { outline: none; }
@@ -1063,8 +1079,8 @@ body:has(.pocket-root) {
 }
 .pk-donut-value {
   font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.6px;
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
@@ -1144,7 +1160,7 @@ body:has(.pocket-root) {
 .pk-skel-row:last-child { border-bottom: none; }
 .pk-skel-bar {
   height: 14px;
-  border-radius: 7px;
+  border-radius: 2px;
   background: var(--pk-fill);
 }
 .pk-skel-bar.right { justify-self: end; width: 64px; }
@@ -1203,8 +1219,8 @@ body:has(.pocket-root) {
 }
 /* children keep intrinsic height inside the scroll column */
 .pk-activity > * { flex: 0 0 auto; }
-/* reference proportions: a compact nav-bar-sized title, not the 34px display title */
-.pk-activity .pk-title { font-size: 18px; letter-spacing: -0.3px; }
+/* compact panel-header proportions on the dense Activity surface */
+.pk-activity .pk-title { font-size: 15px; }
 .pk-activity .pk-section-label { font-size: 11px; margin-bottom: 0; }
 
 /* Account + Year dropdown row: two card-styled native selects (iOS wheel UX). */
@@ -1222,14 +1238,14 @@ body:has(.pocket-root) {
   width: 100%;
   min-height: 32px;
   border: 1px solid var(--pk-hairline);
-  border-radius: 9px;
+  border-radius: 3px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
   /* sub-16px is safe: the viewport's maximumScale=1 already blocks focus zoom */
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: -0.2px;
+  letter-spacing: 0;
   padding: 0 26px 0 10px;
   white-space: nowrap;
   overflow: hidden;
@@ -1262,7 +1278,7 @@ body:has(.pocket-root) {
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--pk-hairline);
-  border-radius: 9px;
+  border-radius: 3px;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
@@ -1306,7 +1322,7 @@ body:has(.pocket-root) {
   height: 26px;
   appearance: none;
   border: none;
-  border-radius: 8px;
+  border-radius: 2px;
   background: transparent;
   color: var(--pk-muted);
   display: inline-flex;
@@ -1362,7 +1378,7 @@ body:has(.pocket-root) {
 .pk-banner {
   border: 1px solid var(--pk-banner-border);
   background: var(--pk-banner-bg);
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
@@ -1396,7 +1412,7 @@ body:has(.pocket-root) {
   min-width: 112px;
   background: var(--pk-card);
   border: 1px solid var(--pk-hairline);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 5px 8px;
   display: flex;
   flex-direction: column;
@@ -1409,12 +1425,12 @@ body:has(.pocket-root) {
   letter-spacing: 0.5px;
   color: var(--pk-banner-ink);
   background: var(--pk-banner-bg);
-  border-radius: 6px;
+  border-radius: 2px;
   padding: 2px 6px;
   font-variant-numeric: tabular-nums;
 }
-.pk-bcard-ticker { font-size: 13px; font-weight: 800; letter-spacing: -0.2px; color: var(--pk-ink); }
-.pk-bcard-amt { font-size: 13px; font-weight: 800; color: var(--pk-green); font-variant-numeric: tabular-nums; }
+.pk-bcard-ticker { font-size: 13px; font-weight: 700; letter-spacing: 0; color: var(--pk-ink); }
+.pk-bcard-amt { font-size: 13px; font-weight: 700; color: var(--pk-green); font-variant-numeric: tabular-nums; }
 .pk-bcard-sub {
   display: inline-flex;
   align-items: center;
@@ -1444,8 +1460,8 @@ body:has(.pocket-root) {
 }
 .pk-total-value {
   font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1.05;
   color: var(--pk-ink);
   font-variant-numeric: tabular-nums;
@@ -1487,7 +1503,7 @@ body:has(.pocket-root) {
 .pk-act-ticker {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
   color: var(--pk-ink);
   white-space: nowrap;
 }
@@ -1526,7 +1542,7 @@ body:has(.pocket-root) {
   letter-spacing: 0.4px;
   text-transform: uppercase;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 2px;
   background: var(--pk-fill);
   color: var(--pk-badge-ink);
   white-space: nowrap;
@@ -1538,10 +1554,11 @@ body:has(.pocket-root) {
 .pk-badge[data-kind="withdrawal"] { background: var(--pk-danger-fill); color: var(--pk-danger); }
 .pk-badge-acct { font-size: 9px; padding: 1px 5px; }
 
-/* Landscape phones (M12): compress the fixed header chrome (34px title, header
-   paddings, hero gaps) so the content region keeps usable height. */
+/* Landscape phones (M12): compress the fixed header chrome (title, header
+   paddings, hero gaps) so the content region keeps usable height, and USE the
+   extra width — hero goes 2-up, the donut ring scales to the short axis. */
 @media (orientation: landscape) and (max-height: 480px) {
-  .pk-title { font-size: 22px; letter-spacing: -0.4px; }
+  .pk-title { font-size: 16px; }
   .pk-screen {
     padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   }
@@ -1553,7 +1570,37 @@ body:has(.pocket-root) {
     /* 70 (was 64): the icon+label tab bar is ~4px taller than the text-only one */
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
   }
-  .pk-hero { gap: 6px; }
+  /* D/W on the first row, M/Y on the second: four giant rows don't fit a short
+     viewport. The hero auto-fit measures each row's clientWidth, so the numbers
+     simply re-fit to the half-width columns — same component, no JS change. */
+  .pk-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 32px;
+    row-gap: 10px;
+  }
+  /* the donut is height-bound in landscape — size it off the viewport height */
+  .pk-donut-ring { width: min(40vh, 200px); }
+  .pk-donut-page { gap: 12px; }
+}
+
+/* Wide mobile / phablets / small tablets: cap the content column so list rows
+   and the hero don't stretch into unreadably long lines. The fixed bottom bar
+   stays full-width (terminal status-bar feel); its tabs are width-capped. The
+   bottom sheets center to the same column. */
+@media (min-width: 700px) {
+  .pk-screen {
+    align-self: center;
+    width: 100%;
+    max-width: 680px;
+  }
+  .pk-sheet {
+    max-width: 680px;
+    margin: 0 auto; /* left/right:0 + auto margins center a fixed box — the
+                       slide-up transform animation is untouched */
+    border-left: 1px solid var(--pk-hairline);
+    border-right: 1px solid var(--pk-hairline);
+  }
 }
 
 /* Respect the OS reduced-motion preference: drop pager/pill/sheet/spinner motion. */

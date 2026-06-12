@@ -3,13 +3,15 @@
   "short_name": "Dividends",
   "description": "Forward dividend run-rate — D / W / M / Y",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "theme_color": "#0c1220",
-  "background_color": "#0c1220",
+  "orientation": "any",
+  "theme_color": "#0d0d0d",
+  "background_color": "#0d0d0d",
   "start_url": "/pocket",
   "scope": "/pocket",
   "lang": "en",
-  "categories": ["finance"],
+  "categories": [
+    "finance"
+  ],
   "icons": [
     {
       "src": "/icon-v3.png",

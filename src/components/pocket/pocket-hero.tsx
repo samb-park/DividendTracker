@@ -26,12 +26,12 @@ interface Props {
   onRetry: () => void;
 }
 
-// Cap-height-to-digit-height ratio of the actual rendered font, so the gray
+// Cap-height-to-digit-height ratio of the actual rendered font, so the amber
 // letters read at the SAME visual height as the digits. Measured at runtime
 // (fonts vary) instead of a guessed constant.
-// Explicit stack (matches .pocket-root) so canvas measures the real SF Pro on
-// iOS rather than silently falling back to the default font on a parse miss.
-const HERO_FONT = '800 200px -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+// Explicit stack (MUST match .pocket-root's terminal mono) so canvas measures
+// the same font the hero renders with — a mismatch breaks the width fit.
+const HERO_FONT = '700 200px "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace';
 
 function measureLabelRatio(): number {
   try {

@@ -14,10 +14,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Light default (grouped gray); the bootstrap script + theme handler flip this
-  // to the dark navy in dark mode so iOS Safari's overscroll (rubber-band) area
-  // matches the page, not the global dark theme-color.
-  themeColor: "#f2f2f7",
+  // Light default (warm terminal paper); the bootstrap script + theme handler
+  // flip this to the near-black terminal bg in dark mode so iOS Safari's
+  // overscroll (rubber-band) area matches the page.
+  themeColor: "#f3f0e8",
   width: "device-width",
   initialScale: 1,
   // Zoom is LOCKED (user request): an accidental pinch left the surface scaled
@@ -35,7 +35,7 @@ export default function PocketLayout({ children }: { children: React.ReactNode }
           paint so there is no flash, and sync the theme-color meta for overscroll. */}
       <script
         dangerouslySetInnerHTML={{
-          __html: `(function(){try{var r=document.currentScript&&document.currentScript.parentElement;if(!r)return;var t=localStorage.getItem('dt-pocket-theme');var dark=t==='dark'||((t==='system'||!t)&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);r.setAttribute('data-pocket-mode',dark?'dark':'light');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#0c1220':'#f2f2f7');}catch(e){}})();`,
+          __html: `(function(){try{var r=document.currentScript&&document.currentScript.parentElement;if(!r)return;var t=localStorage.getItem('dt-pocket-theme');var dark=t==='dark'||((t==='system'||!t)&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);r.setAttribute('data-pocket-mode',dark?'dark':'light');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#0d0d0d':'#f3f0e8');}catch(e){}})();`,
         }}
       />
       {children}
