@@ -77,6 +77,11 @@ body:has(.pocket-root) {
   --pk-banner-border: rgba(154, 84, 16, 0.28);
   --pk-banner-ink: #8a4a0c; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
 
+  /* Tab-bar clearance for every scroll surface: the bar's own bottom-padding
+     formula + its fixed part (1px border + 2px top pad + 44px tabs) + ~15px
+     breathing. SINGLE SOURCE — keep in sync with .pk-tabbar's padding. */
+  --pk-tabbar-clear: calc(max(6px, env(safe-area-inset-bottom, 0px) - 18px) + 62px);
+
   /* Terminal mono — same family as /terminal + globals (loaded app-wide) */
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
     "Courier New", monospace;
@@ -145,8 +150,8 @@ body:has(.pocket-root) {
   overflow-y: auto;
   overscroll-behavior-y: contain; /* don't chain a top/bottom overpull to the viewport */
   -webkit-overflow-scrolling: touch;
-  /* bottom pad clears the floating tab bar (which is fixed over this content) */
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
+  /* bottom pad clears the docked tab bar (which is fixed over this content) */
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px var(--pk-tabbar-clear);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
@@ -336,10 +341,11 @@ body:has(.pocket-root) {
 
 /* docked tab bar -------------------------------------------------------- */
 /* Terminal style: a flat FULL-WIDTH bar pinned to the bottom edge, hairline-
-   topped (no floating pill, no soft shadow). Still position:fixed over the
-   content — every screen already reserves ≥76px bottom clearance, which covers
-   the bar (4 + 44 + max(4, safe-area)). Safe-area: bottom inset padded in full,
-   left/right insets respected on notched landscape. */
+   topped (no floating pill, no soft shadow). Sits LOW: most of the iOS
+   home-indicator inset is trimmed — max(6px, inset − 18px) ≈ 16px on a modern
+   iPhone, 6px floor on devices with no inset — so the bar hugs the physical
+   bottom instead of floating the full 34px up. Tabs keep the 44px hit target.
+   Content clearance mirrors this formula via --pk-tabbar-clear (root). */
 .pk-tabbar {
   position: fixed;
   left: 0;
@@ -349,8 +355,8 @@ body:has(.pocket-root) {
   display: flex;
   justify-content: center;
   gap: 2px;
-  padding: 4px max(10px, env(safe-area-inset-right))
-    max(4px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left));
+  padding: 2px max(10px, env(safe-area-inset-right))
+    max(6px, env(safe-area-inset-bottom, 0px) - 18px) max(10px, env(safe-area-inset-left));
   border-top: 1px solid var(--pk-hairline);
   background: var(--pk-tabbar-bg);
   backdrop-filter: saturate(180%) blur(20px);
@@ -362,9 +368,12 @@ body:has(.pocket-root) {
   background: transparent;
   color: var(--pk-muted);
   font-family: inherit;
-  font-size: 10px; /* icon above, small CAPS-feel label below */
+  font-size: 9px; /* icon above, ALL-CAPS terminal label below */
   font-weight: 600;
-  padding: 5px 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px;
+  position: relative; /* anchors the ::before active tick */
   flex: 1 1 0; /* equal-width across the full bar */
   min-width: 0;
   max-width: 168px; /* don't balloon on wide/landscape screens */
@@ -380,6 +389,20 @@ body:has(.pocket-root) {
   white-space: nowrap;
 }
 .pk-tab-ico { display: block; flex: 0 0 auto; }
+/* terminal active marker: a 2px amber tick on the bar's top edge (spans the
+   bar's 2px top pad + 1px hairline) — instant active-tab read, even at a glance */
+.pk-tab::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 32px;
+  height: 2px;
+  background: var(--pk-accent);
+  transition: transform 0.15s ease;
+}
+.pk-tab[data-active="true"]::before { transform: translateX(-50%) scaleX(1); }
 .pk-tab[data-active="true"] {
   color: var(--pk-accent); /* terminal: active section reads amber */
   font-weight: 700;
@@ -700,9 +723,9 @@ body:has(.pocket-root) {
   min-height: 0;
   flex: 1 1 0;
   gap: 24px;
-  /* bottom pad = the floating tab-bar clearance; the docked .pk-dots band sits at
-     the top of this pad (~8px above the bar), the scroll region above the dots. */
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 76px);
+  /* bottom pad = the docked tab-bar clearance; the .pk-dots band sits at the
+     top of this pad (just above the bar), the scroll region above the dots. */
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px var(--pk-tabbar-clear);
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
 }
@@ -1213,7 +1236,7 @@ body:has(.pocket-root) {
   flex-direction: column;
   gap: 8px;
   /* tighter 14px gutter — the surface owns its edges (other tabs keep 24px) */
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px calc(env(safe-area-inset-bottom, 0px) + 88px);
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px var(--pk-tabbar-clear);
   padding-left: max(14px, env(safe-area-inset-left));
   padding-right: max(14px, env(safe-area-inset-right));
 }
@@ -1567,8 +1590,7 @@ body:has(.pocket-root) {
   .pk-activity {
     gap: 12px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-    /* 70 (was 64): the icon+label tab bar is ~4px taller than the text-only one */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+    padding-bottom: var(--pk-tabbar-clear);
   }
   /* D/W on the first row, M/Y on the second: four giant rows don't fit a short
      viewport. The hero auto-fit measures each row's clientWidth, so the numbers
