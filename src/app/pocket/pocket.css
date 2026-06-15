@@ -77,10 +77,11 @@ body:has(.pocket-root) {
   --pk-banner-border: rgba(154, 84, 16, 0.28);
   --pk-banner-ink: #8a4a0c; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
 
-  /* Tab-bar clearance for every scroll surface: the bar's own bottom-padding
-     formula + its fixed part (1px border + 2px top pad + 44px tabs) + ~15px
-     breathing. SINGLE SOURCE — keep in sync with .pk-tabbar's padding. */
-  --pk-tabbar-clear: calc(max(6px, env(safe-area-inset-bottom, 0px) - 24px) + 62px);
+  /* Breathing room between scroll content (and the page-dots band) and the
+     docked tab bar. The bar is now IN-FLOW — it holds its own space and the
+     home-indicator safe-area inset — so surfaces no longer reserve the bar's
+     height here; this is just the small gap above it. */
+  --pk-tabbar-clear: 16px;
 
   /* Terminal mono — same family as /terminal + globals (loaded app-wide) */
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
@@ -340,18 +341,19 @@ body:has(.pocket-root) {
 .pk-retry:active { opacity: 0.6; }
 
 /* docked tab bar -------------------------------------------------------- */
-/* Terminal style: a flat FULL-WIDTH bar pinned to the bottom edge, hairline-
-   topped (no floating pill, no soft shadow). Sits LOW: most of the iOS
-   home-indicator inset is trimmed — max(6px, inset − 24px) ≈ 10px on a modern
-   iPhone, 6px floor on devices with no inset — so the labels hug the bottom,
-   left just clear of the home indicator. Tabs keep the 44px hit target.
-   Content clearance mirrors this formula via --pk-tabbar-clear (root). */
+/* Terminal style: a flat FULL-WIDTH bar, hairline-topped (no floating pill, no
+   soft shadow). DOCKED IN-FLOW — the last child of the .pocket-root flex column
+   (height:100dvh), NOT position:fixed. Fixed positioning anchored the bar to the
+   layout viewport, which on iOS detaches from the dynamic-viewport content box
+   and leaves a tall dead gap below the bar (the home-indicator inset + Safari's
+   collapsing toolbar). In-flow, the bar sits flush at the TRUE bottom of the
+   visible viewport and tracks the toolbar as it collapses — no gap below it.
+   Bottom padding trims most of the home-indicator inset (max(6px, inset − 24px)
+   ≈ 10px on a modern iPhone) so labels sit low, just clear of the indicator.
+   Tabs keep the 44px hit target. --pk-tabbar-clear is now just breathing room
+   between the content/dots and the bar (the bar holds its own space in flow). */
 .pk-tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 50;
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   gap: 2px;
