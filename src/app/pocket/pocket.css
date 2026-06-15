@@ -80,7 +80,7 @@ body:has(.pocket-root) {
   /* Tab-bar clearance for every scroll surface: the bar's own bottom-padding
      formula + its fixed part (1px border + 2px top pad + 44px tabs) + ~15px
      breathing. SINGLE SOURCE — keep in sync with .pk-tabbar's padding. */
-  --pk-tabbar-clear: calc(max(6px, env(safe-area-inset-bottom, 0px) - 18px) + 62px);
+  --pk-tabbar-clear: calc(max(6px, env(safe-area-inset-bottom, 0px) - 24px) + 62px);
 
   /* Terminal mono — same family as /terminal + globals (loaded app-wide) */
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
@@ -342,9 +342,9 @@ body:has(.pocket-root) {
 /* docked tab bar -------------------------------------------------------- */
 /* Terminal style: a flat FULL-WIDTH bar pinned to the bottom edge, hairline-
    topped (no floating pill, no soft shadow). Sits LOW: most of the iOS
-   home-indicator inset is trimmed — max(6px, inset − 18px) ≈ 16px on a modern
-   iPhone, 6px floor on devices with no inset — so the bar hugs the physical
-   bottom instead of floating the full 34px up. Tabs keep the 44px hit target.
+   home-indicator inset is trimmed — max(6px, inset − 24px) ≈ 10px on a modern
+   iPhone, 6px floor on devices with no inset — so the labels hug the bottom,
+   left just clear of the home indicator. Tabs keep the 44px hit target.
    Content clearance mirrors this formula via --pk-tabbar-clear (root). */
 .pk-tabbar {
   position: fixed;
@@ -356,7 +356,7 @@ body:has(.pocket-root) {
   justify-content: center;
   gap: 2px;
   padding: 2px max(10px, env(safe-area-inset-right))
-    max(6px, env(safe-area-inset-bottom, 0px) - 18px) max(10px, env(safe-area-inset-left));
+    max(6px, env(safe-area-inset-bottom, 0px) - 24px) max(10px, env(safe-area-inset-left));
   border-top: 1px solid var(--pk-hairline);
   background: var(--pk-tabbar-bg);
   backdrop-filter: saturate(180%) blur(20px);
