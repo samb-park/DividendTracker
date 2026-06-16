@@ -14,7 +14,7 @@ import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
 import { usePocketGroups } from "./use-pocket-groups";
 import { usePocketSync } from "./use-pocket-sync";
-import { PocketHero } from "./pocket-hero";
+import { DividendsContent } from "./dividends-content";
 import { PocketSettings } from "./pocket-settings";
 import { PocketTabBar, type PocketTab } from "./pocket-tabbar";
 import { GroupManager } from "./group-manager";
@@ -83,6 +83,8 @@ function DividendsPager({
   error,
   onRetry,
   onOpenPicker,
+  basis,
+  setBasis,
 }: {
   derivedByPortfolio: Derived[];
   portfolioOrder: (string | null)[];
@@ -93,6 +95,8 @@ function DividendsPager({
   error: boolean;
   onRetry: () => void;
   onOpenPicker: () => void;
+  basis: Basis;
+  setBasis: (b: Basis) => void;
 }) {
   const pagerRef = useRef<SwipePagerHandle>(null);
   const dotsRef = useRef<HTMLDivElement>(null);
@@ -140,10 +144,13 @@ function DividendsPager({
             const d = derivedByPortfolio[i];
             if (!d) return null;
             return (
-              <PocketHero
+              <DividendsContent
                 annualUSD={d.annualUSD}
                 totalValueUSD={d.totalValueUSD}
                 avgYieldPct={d.avgYieldPct}
+                included={d.included}
+                basis={basis}
+                setBasis={setBasis}
                 loading={loading}
                 error={error}
                 isEmpty={d.isEmpty}
@@ -384,6 +391,8 @@ export function PocketShell() {
             error={error}
             onRetry={() => load()}
             onOpenPicker={() => setPickerOpen(true)}
+            basis={basis}
+            setBasis={setBasis}
           />
         )}
 
