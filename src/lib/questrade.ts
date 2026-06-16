@@ -63,6 +63,9 @@ export interface QtBalance {
 }
 
 const QT_TIMEOUT_MS = 20000;
+// Activities is by far the slowest QT endpoint and occasionally hangs server-side;
+// fail fast so a multi-account sync can't pin the /pocket sync banner for a minute.
+const QT_ACTIVITIES_TIMEOUT_MS = 10000;
 
 export async function getBalances(
   apiServer: string,
@@ -137,7 +140,7 @@ export async function getActivities(
   const end = endTime.toISOString();
   const res = await fetch(
     `${apiServer}v1/accounts/${accountNumber}/activities?startTime=${start}&endTime=${end}`,
-    { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(QT_TIMEOUT_MS) }
+    { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(QT_ACTIVITIES_TIMEOUT_MS) }
   );
   if (!res.ok) throw new Error(`getActivities failed: ${res.status}`);
   const data = await res.json();

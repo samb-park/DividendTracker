@@ -13,7 +13,7 @@ import { prisma } from "@/lib/db";
 import { log } from "@/lib/logger";
 
 export interface EnsureRulebookVersionInput {
-  /** Stable identifier, e.g. "v4.4.6.1-1" (matches RULEBOOK_PROMPT_VERSION). */
+  /** Stable identifier, e.g. "v4.5.1-1" (matches RULEBOOK_PROMPT_VERSION). */
   version: string;
   /** sha256 of (RULEBOOK_GUARDRAILS + AI_OUTPUT_RULES + structure constants). */
   promptHash: string;

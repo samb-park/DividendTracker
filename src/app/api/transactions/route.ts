@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { getFxRate } from "@/lib/price";
 
-const LEGACY_INCOME_TICKER = ["JE", "PQ"].join("");
+const LEGACY_HOLD_ONLY_TICKERS = new Set(["QQQM", "QQQI", ["JE", "PQ"].join(""), "IAUM"]);
+const TQQQ_TFSA_ONLY_TICKER = "TQQQ";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
-  const { action, date, quantity, price, commission, notes } = body;
+  const { action, date, quantity, price, commission, notes, reason } = body;
   if (!action || !date || !quantity || !price) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -50,14 +51,21 @@ export async function POST(req: NextRequest) {
     // Existing flow: holdingId provided directly
     const holding = await prisma.holding.findUnique({
       where: { id: body.holdingId as string },
-      select: { id: true, ticker: true, currency: true, portfolio: { select: { userId: true } } },
+      select: { id: true, ticker: true, currency: true, portfolio: { select: { userId: true, accountType: true } } },
     });
     if (!holding || holding.portfolio.userId !== session.user.id) {
       return NextResponse.json({ error: "Holding not found" }, { status: 404 });
     }
-    if (action === "BUY" && holding.ticker.toUpperCase() === LEGACY_INCOME_TICKER) {
+    const holdingTicker = holding.ticker.toUpperCase();
+    if (action === "BUY" && LEGACY_HOLD_ONLY_TICKERS.has(holdingTicker)) {
       return NextResponse.json(
-        { error: "Rulebook v4.4.6.1 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
+        { error: "Rulebook v4.5.1 violation: QQQM/QQQI/JEPQ/IAUM are legacy hold-only; new BUYs are prohibited" },
+        { status: 422 },
+      );
+    }
+    if ((action === "BUY" || action === "SELL") && holdingTicker === TQQQ_TFSA_ONLY_TICKER && holding.portfolio.accountType !== "TFSA") {
+      return NextResponse.json(
+        { error: "Rulebook v4.5.1 violation: TQQQ trades are TFSA-only" },
         { status: 422 },
       );
     }
@@ -69,18 +77,24 @@ export async function POST(req: NextRequest) {
     if (!ticker) {
       return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
     }
-    if (action === "BUY" && ticker === LEGACY_INCOME_TICKER) {
+    if (action === "BUY" && LEGACY_HOLD_ONLY_TICKERS.has(ticker)) {
       return NextResponse.json(
-        { error: "Rulebook v4.4.6.1 violation: satellite slot ticker is QQQM only; legacy JEPQ/QQQI new BUYs are prohibited" },
+        { error: "Rulebook v4.5.1 violation: QQQM/QQQI/JEPQ/IAUM are legacy hold-only; new BUYs are prohibited" },
         { status: 422 },
       );
     }
     const portfolio = await prisma.portfolio.findUnique({
       where: { id: body.portfolioId as string },
-      select: { userId: true },
+      select: { userId: true, accountType: true },
     });
     if (!portfolio || portfolio.userId !== session.user.id) {
       return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
+    }
+    if ((action === "BUY" || action === "SELL") && ticker === TQQQ_TFSA_ONLY_TICKER && portfolio.accountType !== "TFSA") {
+      return NextResponse.json(
+        { error: "Rulebook v4.5.1 violation: TQQQ trades are TFSA-only" },
+        { status: 422 },
+      );
     }
     const currency: "USD" | "CAD" = ticker.endsWith(".TO") ? "CAD" : "USD";
     const upserted = await prisma.holding.upsert({
@@ -131,6 +145,7 @@ export async function POST(req: NextRequest) {
       commission: com,
       fxRateCAD,
       notes: notes ? String(notes).slice(0, 500) : null,
+      reason: reason ? String(reason).slice(0, 120) : null,
     },
   });
   return NextResponse.json(tx);

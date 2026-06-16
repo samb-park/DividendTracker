@@ -72,6 +72,7 @@ model Transaction {
   withholdingTax Decimal?      @db.Decimal(18, 4)
   source     String?           // "questrade" if imported via broker sync
   notes      String?
+  reason     String?           // rulebook execution reason, e.g. "TQQQ_PROFIT_ROUTED"
   externalId String?           // e.g. "qt:2026-04-25:SCHD:Buy:100.00"
   holding    Holding           @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   cashLedgerRows CashLedger[]
@@ -234,6 +235,40 @@ model PortfolioSnapshot {
   @@unique([userId, date])
 }
 
+/// User-defined ticker groups for the /pocket dividend surface ("포트폴리오").
+/// Distinct from `Portfolio` (= a brokerage account): this is a saved, named
+/// subset of the user's HELD tickers used to filter the Dividends/Upcoming view.
+/// userId is a soft reference (no FK) so it survives independent of auth wiring,
+/// matching the single-user-mode id pattern used elsewhere.
+model PocketGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?  // hex accent, e.g. "#0a8043" (null → neutral)
+  icon      String?  // optional emoji label (null → color dot)
+  accounts  String[] @default([]) // account-type scope (TFSA/RRSP/FHSA/NON_REG/CASH); empty = all
+  tickers   String[]
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Web Push subscriptions for same-day Ex/Pay dividend alerts (multi-device).
+/// userId is a soft ref (single-user mode: "sangbong"); no FK, matching PocketGroup.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  lastSeenAt DateTime @default(now()) @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
 // =============================================================================
 // Observability layer (Phase 1 — Slice 1.1) — additive only.
 //   - No FK to existing tables (audit trails must survive user deletion).
@@ -303,11 +338,11 @@ model AssetWeightSnapshot {
   schdCAD             Decimal  @db.Decimal(18, 2)
   qldCAD              Decimal  @db.Decimal(18, 2)
   sgovCAD             Decimal  @db.Decimal(18, 2)
-  iaumCAD             Decimal  @db.Decimal(18, 2)              // legacy (v4.4.2 slot; pre-v4.4.6.1)
+  iaumCAD             Decimal  @db.Decimal(18, 2)              // legacy slot; pre-v4.5.0
   tqqqCAD             Decimal  @db.Decimal(18, 2)
   otherCAD            Decimal  @db.Decimal(18, 2)              // non-rulebook tickers, reserved
   cashCAD             Decimal  @db.Decimal(18, 2)
-  // — v4.4.6.1 QQQM satellite (additive, nullable for back-compat)
+  // — v4.5.1 QQQM legacy/hold-only observations (nullable for back-compat)
   qqqmCAD                Decimal? @db.Decimal(18, 2)
   qqqmTotalWeightPct     Decimal? @db.Decimal(6, 3)
   qqqmCumulativeCostUsd  Decimal? @db.Decimal(18, 2)
@@ -370,7 +405,7 @@ model RulebookTriggerEvent {
 /// promptHash = sha256(RULEBOOK_GUARDRAILS + AI_OUTPUT_RULES + structure
 /// constants) so silent guardrail edits are detectable.
 model RulebookVersion {
-  version       String   @id                                  // e.g. "v4.1.10-3"
+  version       String   @id                                  // e.g. "v4.5.1-1"
   promptHash    String
   effectiveFrom DateTime
   changelog     String   @db.Text

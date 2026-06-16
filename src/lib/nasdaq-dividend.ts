@@ -7,6 +7,7 @@ export interface NasdaqDividendData {
   exDividendDate: string | null; // YYYY-MM-DD (upcoming or most recent)
   paymentDate: string | null;    // YYYY-MM-DD
   amount: number | null;         // per-share dividend amount
+  estimated: boolean;            // true = the chosen ex/pay row is an estimate (not officially declared)
   history: Array<{ date: string; amount: number }>; // ascending, for frequency detection
 }
 
@@ -31,9 +32,13 @@ function parseAmount(s: string): number | null {
 }
 
 export async function getNasdaqDividend(ticker: string): Promise<NasdaqDividendData | null> {
-  // Skip Canadian tickers with exchange suffixes not on this site
-  const cleanTicker = ticker.replace(/\.(TO|TSX|V|CN)$/i, "");
+  // Canadian tickers (.TO/.TSX/.V/.CN): this source only covers US listings, so
+  // stripping the suffix would silently fetch the US-listed page and return USD
+  // amounts that callers then label CAD (~28% understated). Skip entirely and
+  // return null so every caller falls through to its Yahoo fallback.
   const isCanadian = /\.(TO|TSX|V|CN)$/i.test(ticker);
+  if (isCanadian) return null;
+  const cleanTicker = ticker;
 
   const hit = cache.get(ticker);
   if (hit && Date.now() - hit.fetchedAt < TTL) return hit.data;
@@ -89,13 +94,11 @@ export async function getNasdaqDividend(ticker: string): Promise<NasdaqDividendD
       exDividendDate: best.exDate,
       paymentDate: best.payDate,
       amount: best.amount,
+      estimated: best.isEstimated,
       history: ascending
         .filter((r) => !r.isEstimated) // only confirmed history for frequency detection
         .map((r) => ({ date: r.exDate, amount: r.amount })),
     };
-
-    // Suppress unused variable warning for isCanadian
-    void isCanadian;
 
     cache.set(ticker, { data, fetchedAt: Date.now() });
     return data;

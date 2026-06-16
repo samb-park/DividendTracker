@@ -73,7 +73,7 @@ export function PerformanceChart() {
   const [benchmarkError, setBenchmarkError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [allLoaded, setAllLoaded] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [rangeDropOpen, setRangeDropOpen] = useState(false);
   const [benchmarkDropOpen, setBenchmarkDropOpen] = useState(false);
   const [projectionDropOpen, setProjectionDropOpen] = useState(false);
@@ -95,19 +95,24 @@ export function PerformanceChart() {
   }, []);
 
   useEffect(() => {
-    if (range === "all" && allLoaded) return;
+    // Always re-fetch when the range changes. (A prior `allLoaded` cache skipped
+    // the fetch when returning to "all", leaving the previously selected range's
+    // snapshots in state — so e.g. 3m → all left the chart showing 3m data.)
+    // `ignore` drops out-of-order responses when the range is switched rapidly.
+    let ignore = false;
     setLoading(true);
     setFetchError(false);
     fetch(`/api/snapshots?range=${range}`)
       .then((r) => r.json())
       .then((d) => {
+        if (ignore) return;
         setSnapshots(d.snapshots ?? []);
         setContributionEventsCAD(d.contributionEventsCAD ?? []);
-        if (range === "all") setAllLoaded(true);
         setLoading(false);
       })
-      .catch(() => { setFetchError(true); setLoading(false); });
-  }, [range, allLoaded]);
+      .catch(() => { if (!ignore) { setFetchError(true); setLoading(false); } });
+    return () => { ignore = true; };
+  }, [range, reloadNonce]);
 
   useEffect(() => {
     setBenchmarkError(false);
@@ -124,20 +129,13 @@ export function PerformanceChart() {
   const { xirr, mdd, valueChange, chartData } = useMemo(() => {
     if (snapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
-    // ALL range: clip to >= 2025-05-21 (frontend-only display cutoff).
-    // 다른 range (3m/6m/1y/3y/5y) 는 백엔드에서 이미 range filter 적용됨 → 그대로 사용.
-    const ALL_RANGE_START_DATE = "2025-05-21";
-    const effectiveSnapshots = range === "all"
-      ? snapshots.filter((s) => {
-          const raw = s.date as unknown;
-          const iso = raw instanceof Date
-            ? raw.toISOString().slice(0, 10)
-            : typeof raw === "string"
-              ? raw.slice(0, 10)
-              : "";
-          return iso >= ALL_RANGE_START_DATE;
-        })
-      : snapshots;
+    // No early-data display clip: /api/snapshots now values each range-boundary
+    // day at market price (opening positions no longer fall back to avgCost), so
+    // the sparse early reconstruction no longer produces a spurious start-of-range
+    // spike. Every range shows its full natural window with all three lines
+    // anchored at 0% on the first visible day. (The prior 2025-05-21 floor was a
+    // band-aid for that now-fixed backend valuation bug.)
+    const effectiveSnapshots = snapshots;
     if (effectiveSnapshots.length < 2) return { xirr: null, mdd: null, valueChange: null, chartData: [] };
 
     const { xirr, mdd, valueChange } = computePerformanceMetrics(effectiveSnapshots, range, contributionEventsCAD);
@@ -747,7 +745,7 @@ export function PerformanceChart() {
       ) : fetchError ? (
         <div className="h-36 flex flex-col items-center justify-center text-xs space-y-2 border border-dashed border-border">
           <span className="text-negative">FAILED TO LOAD PERFORMANCE DATA</span>
-          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => { setFetchError(false); setLoading(true); setAllLoaded(false); }}>RETRY</button>
+          <button className="btn-retro text-[10px] px-3 py-1" onClick={() => setReloadNonce((n) => n + 1)}>RETRY</button>
         </div>
       ) : !hasSufficientData ? (
         <div className="h-36 flex flex-col items-center justify-center text-muted-foreground text-xs space-y-1 border border-dashed border-border">

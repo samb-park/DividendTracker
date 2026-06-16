@@ -82,11 +82,11 @@ assert.match(
   "cron snapshot must suppress drift alerts when CashLedger is empty and engine falls back to legacy values",
 );
 
-// v4.4.6.1: QQQM sibling of the JEPQ auto-buy invariant check.
+// v4.5.1: QQQM sibling of the JEPQ auto-buy invariant check.
 assert.match(
   source,
   /QQQM_AUTO_BUY_VIOLATION/,
-  "cron snapshot must emit QQQM_AUTO_BUY_VIOLATION sibling alerts (v4.4.6.1)",
+  "cron snapshot must emit QQQM_AUTO_BUY_VIOLATION sibling alerts (v4.5.1)",
 );
 
 assert.match(

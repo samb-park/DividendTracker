@@ -72,6 +72,130 @@ export function rsi(closes: number[], period: number = 14): (number | null)[] {
 }
 
 // ---------------------------------------------------------------------------
+// EMA (Exponential Moving Average) — module-private helper
+// ---------------------------------------------------------------------------
+
+/**
+ * EMA seeded with the SMA of the first `period` values, then recursed.
+ * Operates only over the contiguous run of finite numbers; callers that pass
+ * arrays with leading nulls should compact first (see `macd`).
+ */
+function emaSeeded(values: number[], period: number): (number | null)[] {
+  const result: (number | null)[] = values.map(() => null);
+  if (values.length < period) return result;
+
+  const k = 2 / (period + 1);
+
+  // Seed: SMA of the first `period` values.
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += values[i];
+  let prev = sum / period;
+  result[period - 1] = prev;
+
+  for (let i = period; i < values.length; i++) {
+    prev = values[i] * k + prev * (1 - k);
+    result[i] = prev;
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// MACD (Moving Average Convergence Divergence)
+// ---------------------------------------------------------------------------
+
+/**
+ * MACD line = EMA(fast) − EMA(slow); signal = EMA(signal) of the MACD line;
+ * histogram = MACD − signal. Leading entries are null until each component has
+ * enough data — never fabricated/zero-filled.
+ */
+export function macd(
+  closes: number[],
+  fast: number = 12,
+  slow: number = 26,
+  signal: number = 9
+): { macd: (number | null)[]; signal: (number | null)[]; histogram: (number | null)[] } {
+  const n = closes.length;
+  const macdLine: (number | null)[] = closes.map(() => null);
+  const signalLine: (number | null)[] = closes.map(() => null);
+  const histogram: (number | null)[] = closes.map(() => null);
+
+  if (n < slow) {
+    return { macd: macdLine, signal: signalLine, histogram };
+  }
+
+  const emaFast = emaSeeded(closes, fast);
+  const emaSlow = emaSeeded(closes, slow);
+
+  // MACD line is defined only where both EMAs are non-null (from index slow-1).
+  for (let i = 0; i < n; i++) {
+    const f = emaFast[i];
+    const s = emaSlow[i];
+    if (f != null && s != null) {
+      macdLine[i] = Math.round((f - s) * 100) / 100;
+    }
+  }
+
+  // Signal line: EMA(signal) of the contiguous, non-null tail of the MACD line.
+  const firstIdx = macdLine.findIndex((v) => v != null);
+  if (firstIdx !== -1) {
+    const compact = macdLine.slice(firstIdx).map((v) => v as number);
+    const sig = emaSeeded(compact, signal);
+    for (let j = 0; j < sig.length; j++) {
+      const sv = sig[j];
+      if (sv != null) {
+        const absIdx = firstIdx + j;
+        const rounded = Math.round(sv * 100) / 100;
+        signalLine[absIdx] = rounded;
+        const m = macdLine[absIdx];
+        if (m != null) {
+          histogram[absIdx] = Math.round((m - rounded) * 100) / 100;
+        }
+      }
+    }
+  }
+
+  return { macd: macdLine, signal: signalLine, histogram };
+}
+
+// ---------------------------------------------------------------------------
+// Bollinger Bands
+// ---------------------------------------------------------------------------
+
+/**
+ * Middle band = SMA(period); upper/lower = middle ± mult × population stddev
+ * over the same window. Leading entries null until the window fills.
+ */
+export function bollingerBands(
+  closes: number[],
+  period: number = 20,
+  mult: number = 2
+): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const n = closes.length;
+  const middle = sma(closes, period);
+  const upper: (number | null)[] = closes.map(() => null);
+  const lower: (number | null)[] = closes.map(() => null);
+
+  if (n < period) {
+    return { upper, middle, lower };
+  }
+
+  for (let i = period - 1; i < n; i++) {
+    const mean = middle[i];
+    if (mean == null) continue;
+    let varSum = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const d = closes[j] - mean;
+      varSum += d * d;
+    }
+    const stddev = Math.sqrt(varSum / period); // population stddev
+    upper[i] = Math.round((mean + mult * stddev) * 100) / 100;
+    lower[i] = Math.round((mean - mult * stddev) * 100) / 100;
+  }
+
+  return { upper, middle, lower };
+}
+
+// ---------------------------------------------------------------------------
 // Signal detection (Golden Cross, Death Cross, RSI extremes)
 // ---------------------------------------------------------------------------
 

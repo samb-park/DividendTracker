@@ -2,6 +2,10 @@
 
 Dividend tracking app backed by Prisma.
 
+> **SnapTerminal** (Bloomberg 스타일 고밀도 금융 터미널, `/terminal`) 문서는
+> [`docs/SNAPTERMINAL.md`](docs/SNAPTERMINAL.md) 참고 — 실행/배포/API 키/데이터 제공자/
+> 가짜데이터 정책/보안/브로커 연동/레이아웃 커스터마이징.
+
 ## Database
 
 This app now targets **PostgreSQL** via Prisma.

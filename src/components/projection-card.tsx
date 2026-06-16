@@ -3,7 +3,7 @@
 // AI PROJECTION card — slim. Renders ONLY the future-looking content:
 // scenario selector + per-year projection table + AI narrative.
 // Current portfolio snapshot (Top Summary 4-stat), trigger status (RulebookStatus),
-// and static 70/30 execution plan (ThisWeekActionPlan) are owned by other components.
+// and static 60/40 execution plan (ThisWeekActionPlan) are owned by other components.
 import { useState, useEffect } from "react";
 import { sanitizeAiOutput } from "@/lib/ai-output-rules";
 import type { ProjectionApiResponse as ProjectionData } from "@/lib/types/ai-projection";
@@ -131,8 +131,8 @@ export function ProjectionCard() {
                         const isRetirement = a?.retirementYear === p.year;
                         // Event labels shown in the projection table per simulated year.
                         const events: string[] = [];
-                        if (p.hardExitApplied) events.push("Emergency cap");
-                        if (p.softExitApplied) events.push("Soft Exit");
+                        if (p.hardExitApplied) events.push("Exit 폐지");
+                        if (p.softExitApplied) events.push("Exit 폐지");
                         if (p.crisisT2Applied) events.push("Crisis T2");
                         else if (p.crisisT1Applied) events.push("Crisis T1");
                         if (p.caseAApplied) events.push("Case A");
@@ -171,7 +171,7 @@ export function ProjectionCard() {
                 <ul className="md:hidden grid grid-cols-2 gap-px bg-border border border-border">
                   {activeRows.map((p) => {
                     const isRetirement = a?.retirementYear === p.year;
-                    // v4.4.2 event labels (short form for mobile).
+                    // v4.5.1 event labels (short form for mobile).
                     const events: string[] = [];
                     if (p.hardExitApplied) events.push("Emerg");
                     if (p.softExitApplied) events.push("Soft");

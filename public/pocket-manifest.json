@@ -1,0 +1,34 @@
+{
+  "name": "Dividends",
+  "short_name": "Dividends",
+  "description": "Forward dividend run-rate — D / W / M / Y",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0a0c10",
+  "background_color": "#0a0c10",
+  "start_url": "/pocket",
+  "scope": "/pocket",
+  "lang": "en",
+  "categories": [
+    "finance"
+  ],
+  "icons": [
+    {
+      "src": "/icon-v3.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-v3.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-icon-v3.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

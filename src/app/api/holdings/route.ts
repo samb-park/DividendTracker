@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { getPrice } from "@/lib/price";
 import { auth } from "@/auth";
 
-const LEGACY_INCOME_TICKER = ["JE", "PQ"].join("");
+const LEGACY_HOLD_ONLY_TICKERS = new Set(["QQQM", "QQQI", ["JE", "PQ"].join(""), "IAUM"]);
+const TQQQ_TFSA_ONLY_TICKER = "TQQQ";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -15,16 +16,22 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify portfolio belongs to current user
-  const portfolio = await prisma.portfolio.findUnique({
+  const portfolio = await prisma.portfolio.findFirst({
     where: { id: portfolioId, userId: session.user.id },
-    select: { id: true },
+    select: { id: true, accountType: true },
   });
   if (!portfolio) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
 
   const upperTicker = ticker.trim().toUpperCase();
-  if (upperTicker === LEGACY_INCOME_TICKER) {
+  if (LEGACY_HOLD_ONLY_TICKERS.has(upperTicker)) {
     return NextResponse.json(
-      { error: "Rulebook v4.4.2 violation: income slot ticker is QQQI only" },
+      { error: "Rulebook v4.5.1 violation: QQQM/QQQI/JEPQ/IAUM are legacy hold-only" },
+      { status: 422 },
+    );
+  }
+  if (upperTicker === TQQQ_TFSA_ONLY_TICKER && portfolio.accountType !== "TFSA") {
+    return NextResponse.json(
+      { error: "Rulebook v4.5.1 violation: TQQQ holdings are TFSA-only" },
       { status: 422 },
     );
   }

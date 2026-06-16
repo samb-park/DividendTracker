@@ -202,7 +202,7 @@ assert.match(
 
 assert.match(
   chartSource,
-  /buildCashflowAdjustedBaselineReturnSeriesForRate\(\s*snapshots,\s*baselinePortfolioValueCAD,\s*contributionEventsCAD,\s*option\.cagrPct,\s*\)/,
+  /buildCashflowAdjustedBaselineReturnSeriesForRate\(\s*effectiveSnapshots,\s*baselinePortfolioValueCAD,\s*contributionEventsCAD,\s*option\.cagrPct,\s*\)/,
   "Performance chart BASE series must use selected-range portfolio baseline, cashflows, and fixed return rate",
 );
 

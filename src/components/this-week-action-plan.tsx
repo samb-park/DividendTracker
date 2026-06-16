@@ -1,7 +1,7 @@
 "use client";
 
 // SOLE authoritative renderer for "이번 주 실행안" action plan.
-// v4.4.6.1: Static 70/30 Core (SCHD/QLD or overlay SCHD/TQQQ) + Satellite stream (SGOV/QQQM Settings CAD) + grand total.
+// v4.5.1: Static 60/40 Core (SCHD/QLD) + SGOV user stream + QQQM hold-only/no-new-buy display.
 // No other component on the AI page should display per-asset weekly buy CAD amounts.
 import { useEffect, useState } from "react";
 import type {
@@ -72,10 +72,10 @@ export function ThisWeekActionPlan() {
 function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan?: QqqmWeeklyPlan }) {
   const nonCoreSum = plan.sgovReserveCAD + plan.qqqmCashAccumCAD;
   const totalOut = plan.totalWeeklyOutCAD ?? plan.weeklyContribCAD + nonCoreSum;
-  const overlay = plan.overlayActive;
-  const coreTitle = overlay ? "Core (정적 70/30 · 오버레이)" : "Core (정적 70/30)";
-  const growthLabel = overlay ? "TQQQ" : "QLD";
-  const growthBuyCAD = overlay ? plan.tqqqBuyCAD : plan.qldBuyCAD;
+  void qqqmPlan;
+  const coreTitle = "Core (정적 60/40)";
+  const growthLabel = "QLD";
+  const growthBuyCAD = plan.qldBuyCAD;
 
   return (
     <>
@@ -92,13 +92,12 @@ function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan
           <tbody>
             <tr className="border-b border-border/50">
               <td className="text-left py-1.5 px-2 text-muted-foreground" rowSpan={2}>{coreTitle}</td>
-              <td className="text-left py-1.5 px-2">SCHD (70%)</td>
+              <td className="text-left py-1.5 px-2">SCHD (60%)</td>
               <td className="text-right py-1.5 px-2">{fmtDollar(plan.schdBuyCAD)}</td>
             </tr>
             <tr className="border-b border-border/50">
               <td className="text-left py-1.5 px-2">
-                {growthLabel} (30%)
-                {overlay && <span className="ml-1 text-[9px] text-amber-500">(overlay)</span>}
+                {growthLabel} (40%)
               </td>
               <td className="text-right py-1.5 px-2">{fmtDollar(growthBuyCAD)}</td>
             </tr>
@@ -128,7 +127,7 @@ function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan
               <td className="text-right py-1.5 px-2">{fmtDollar(plan.weeklyContribCAD)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/20">
-              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Satellite 추가 (SGOV+QQQM)</td>
+              <td className="text-left py-1.5 px-2 text-muted-foreground" colSpan={2}>Satellite 추가 (SGOV)</td>
               <td className="text-right py-1.5 px-2">{fmtDollar(nonCoreSum)}</td>
             </tr>
             <tr className="border-t border-border bg-muted/30">
@@ -145,11 +144,10 @@ function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan
           {coreTitle}
         </div>
         <ul className="divide-y divide-border">
-          <MobileRow label="SCHD (70%)" value={fmtDollar(plan.schdBuyCAD)} />
+          <MobileRow label="SCHD (60%)" value={fmtDollar(plan.schdBuyCAD)} />
           <MobileRow
-            label={`${growthLabel} (30%)`}
+            label={`${growthLabel} (40%)`}
             value={fmtDollar(growthBuyCAD)}
-            hint={overlay ? "overlay" : undefined}
           />
         </ul>
         <div className="bg-muted/10 px-3 py-1.5 text-[10px] tracking-wide text-muted-foreground">
@@ -173,8 +171,7 @@ function ActionPlanBody({ plan, qqqmPlan }: { plan: CoreAllocationPlan; qqqmPlan
       </div>
 
       <div className="text-[10px] text-muted-foreground mt-2">
-        v4.4.6.1 정적 분배: 정상은 SCHD 70 / QLD 30 (주간 380 CAD = SCHD 266 / QLD 114). TQQQ 오버레이 활성(TQQQ &gt; 0) 시 SCHD 70 / TQQQ 30 / QLD 0. SCHD 배당 재투자도 동일 70/30 분배. SGOV는 Settings 별도 CAD 스트림 (룰북-default 주간 contribution 없음 — 보충은 annual rebal / QQQM 12/31 4% skim 경로). QQQM은 Sangbong TFSA only, 주간 45 CAD CAD-accum (분기 NG batch 사용자 외부 처리), cap 없음, 분기 매도 / 차익실현 절대 금지, 연 1회 12/31 skim만 매도. 위기 트리거(§6.1, MONTH-END)는 SGOV → TQQQ (SGOV 0%까지 소진 가능, QQQM 매도 금지).
-        {qqqmPlan?.reason && <> · QQQM: {qqqmPlan.reason}</>}
+        v4.5.1 정적 분배: Core 주간 455 CAD = SCHD 273 / QLD 182 (60/40). TQQQ 오버레이 없음. SCHD 배당 재투자도 SCHD 60 / QLD 40. SGOV는 Settings 별도 CAD 스트림이며, QQQM/QQQI/JEPQ/IAUM 신규 매수는 금지(기존 보유분 hold-only).
       </div>
     </>
   );

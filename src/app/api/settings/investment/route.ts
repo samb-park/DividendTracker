@@ -4,23 +4,22 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { buildGlidepathTargets } from "@/lib/glide-path";
 import { deleteUserAiCache } from "@/lib/ai-cache";
-import { RULEBOOK_TARGETS } from "@/lib/rulebook";
 
-// v4.4.6.1 rulebook defaults exposed to the Settings UI so it can pre-fill /
+// v4.5.1 rulebook defaults exposed to the Settings UI so it can pre-fill /
 // surface fallback values for satellite tickers when the user has no override.
 // SGOV reserve: no rulebook-default weekly contribution (refill comes from annual
-// rebal / QQQM 12/31 skim). QQQM satellite: 45 CAD/wk TFSA cash-accum.
+// year-end trim). QQQM legacy hold-only: no new buy / no 12-31 skim.
 const RULEBOOK_NON_CORE_DEFAULTS = {
   QQQM: {
     frequency: "weekly" as const,
-    cad: RULEBOOK_TARGETS.QQQM_WEEKLY_BUY_CAD,
+    cad: 0,
     account: "TFSA" as const,
-    rulebookVersion: "v4.4.6.1",
+    rulebookVersion: "v4.5.1",
   },
   SGOV: {
     frequency: "weekly" as const,
-    cad: 0,                                  // v4.4.6.1: no rulebook-default refill
-    rulebookVersion: "v4.4.6.1",
+    cad: 0,                                  // v4.5.1: no rulebook-default refill
+    rulebookVersion: "v4.5.1",
   },
 };
 
@@ -66,7 +65,7 @@ const accountMappingSchema = z.object({
 });
 const triggerParamsSchema = z.object({
   type: z.literal("trigger_params"),
-  // upperTriggerPct removed: rulebook v4.1.8 fixes the QLD emergency cap at 38%
+  // upperTriggerPct removed: rulebook v4.5.1 removes the QLD emergency cap
   // (core basis); user-configurable trigger threshold is no longer supported.
   glidepathAuto: z.boolean(),
 });
@@ -124,17 +123,17 @@ export async function GET() {
 
   const triggerParamsSetting = get("investment:trigger_params");
   // Stored shape may still contain a legacy upperTriggerPct from older clients;
-  // we ignore it here (rulebook v4.1.8 fixes the cap at 38%).
+  // we ignore it here (rulebook v4.5.1 removes the cap).
   const triggerParams: { glidepathAuto: boolean } = triggerParamsSetting
     ? (() => {
         try {
           const parsed = JSON.parse(triggerParamsSetting.value) as { glidepathAuto?: boolean };
-          return { glidepathAuto: parsed.glidepathAuto ?? true };
+          return { glidepathAuto: parsed.glidepathAuto ?? false };
         } catch {
-          return { glidepathAuto: true };
+          return { glidepathAuto: false };
         }
       })()
-    : { glidepathAuto: true };
+    : { glidepathAuto: false };
 
   const targets: Record<string, { pct: number; excluded?: boolean; nonCorePlan?: { frequency: "weekly" | "biweekly" | "monthly"; cad: number } }> = {};
   for (const s of settings) {
@@ -161,7 +160,7 @@ export async function GET() {
     accountMapping,
     triggerParams,
     projectionAssumptions,
-    // v4.4.6.1: rulebook-default non-core CAD streams. UI uses these as fallback
+    // v4.5.1: rulebook-default non-core CAD streams. UI uses these as fallback
     // pre-fill when the user has no per-ticker nonCorePlan override saved.
     nonCoreDefaults: RULEBOOK_NON_CORE_DEFAULTS,
   });
@@ -231,7 +230,7 @@ export async function POST(req: Request) {
     if (triggerSetting) {
       try {
         const parsed = JSON.parse(triggerSetting.value) as { glidepathAuto?: boolean };
-        glidepathAuto = parsed.glidepathAuto ?? true;
+        glidepathAuto = parsed.glidepathAuto ?? false;
       } catch { /* fall back to default true */ }
     }
 

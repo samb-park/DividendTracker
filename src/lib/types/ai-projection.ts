@@ -14,10 +14,9 @@ export interface ProjectionYear {
   totalContribCAD: number;
 }
 
-// Rulebook-based projection point (v4.4.6.1). Per-asset CAD evolves year-by-year
-// through static 70/30 contribution / SGOV (base 5% / max 8% / no floor) / QQQM gating (TFSA only) /
-// Soft Exit (34%) / Emergency cap (38%) / Crisis (SGOV→TQQQ, month-end) / Case A/B annual rebal /
-// QQQM 12/31 annual skim (4% if USD-profitable).
+// Rulebook-based projection point (v4.5.1). Per-asset CAD evolves year-by-year
+// through static 60/40 contribution / SGOV target-range / TQQQ VR-Lite /
+// Crisis (SGOV→QLD, month-end) / year-end rebalance.
 export interface ProjectionYearV2 {
   year: number;
   yearsFromNow: number;
@@ -109,8 +108,8 @@ export interface CurrentState {
 
 export type NonCoreSource = "user-settings" | "rulebook-default" | "rulebook-inactive";
 
-// v4.4.6.1 — Static 70/30 Core allocation. Overlay (TQQQ > 0) moves the 30% to TQQQ.
-// Satellite streams: SGOV (user-settings only) + QQQM (TFSA only, weekly 45 CAD CAD-accum, no cap).
+// v4.5.1 — Static 60/40 Core allocation. No TQQQ overlay.
+// Satellite stream: SGOV user-settings only. QQQM is hold-only/no-new-buy.
 export interface CoreAllocationPlan {
   weeklyContribCAD: number;
   coreContribCAD: number;
@@ -119,7 +118,7 @@ export interface CoreAllocationPlan {
   tqqqBuyCAD: number;
   overlayActive: boolean;
   sgovReserveCAD: number;
-  /** Weekly CAD accumulation toward quarterly NG batch (user handles externally). */
+  /** v4.5.1: always 0; QQQM is hold-only/no-new-buy. */
   qqqmCashAccumCAD: number;
   sgovSource?: NonCoreSource;
   qqqmSource?: NonCoreSource;
@@ -137,8 +136,7 @@ export interface QqqmWeeklyPlan {
 }
 
 /**
- * v4.4.6.1 §4 — QQQM annual skim eligibility report (12/31 only, USD-profitable check).
- * Server-side computed once per AI call; UI renders eligibility + next-skim-date row.
+ * v4.5.1 legacy compatibility object. QQQM annual skim is abolished; estimated amount is always 0.
  */
 export interface QqqmAnnualSkimPlan {
   nextSkimDateISO: string;
@@ -153,10 +151,7 @@ export interface QqqmAnnualSkimPlan {
   vUsd: number;
 }
 
-// v4.4.2 — three event-driven plans.
-//
-// TqqqExitPlanOut: §6.2 Soft (growth bucket ≥ 34%, half TQQQ) / §10 Emergency cap (≥ 38%, all TQQQ + QLD to 30% core).
-// Proceeds order: SGOV → 8% of total → SCHD.
+// v4.5.1: Soft Exit / Emergency cap abolished. Kept for response-shape compatibility; active should remain false.
 export interface TqqqExitPlanOut {
   active: boolean;
   variant?: "soft" | "hard";
@@ -168,21 +163,20 @@ export interface TqqqExitPlanOut {
   proceedsOrder?: string;
 }
 
-// CrisisTriggerPlanOut: §6.1 (core W ≤25 → T1, ≤20 → T2). SGOV → TQQQ buy.
-// Only mechanism that may pierce SGOV 5% floor. Cycle-gated by `cycleArmable`.
+// CrisisTriggerPlanOut: §6.1 (core W ≤25 → T1, ≤20 → T2). SGOV → QLD buy.
+// SGOV may exhaust to 0%; reset when QLD core weight ≥ 30%.
 export interface CrisisTriggerPlanOut {
   active: boolean;
   tier?: "T1" | "T2";
   sgovSaleCAD?: number;
   tqqqBuyCAD?: number;
+  qldBuyCAD?: number;
   postSgovTotalWeightPct?: number;
   reason?: string;
 }
 
 // AnnualRebalancePlanOut: §5 Dec-31 rebalance with ±1% deadband.
-//   Case A (W >31): QLD sale → SGOV 8% → SCHD.
-//   Case B (W <29 AND TQQQ=0): SGOV (above 5% floor) → QLD.
-//   case_b_no_room: Case B eligible but SGOV at/below 5% floor → no action.
+//   v4.5.1: Core target is 60/40; overshoot trim proceeds route to SGOV. Case B remains no-action.
 export interface AnnualRebalancePlanOut {
   action: "deadband" | "case_a" | "case_b" | "case_b_no_room";
   qldSaleCAD?: number;

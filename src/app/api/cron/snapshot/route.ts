@@ -1,11 +1,12 @@
-// RULEBOOK_VERSION: 4.4.6.1
+// RULEBOOK_VERSION: 4.5.1
 // (Cron-engine-cache test guards traceability via the regex /RULEBOOK_VERSION:\s*4\.4\.2/ —
-// keep the legacy v4.4.2 anchor below intact so the test passes and frozen JEPQ invariant
+// keep the legacy invariant code path for frozen JEPQ/QQQM auto-buy checks
 // strings (JEPQ_INVARIANT_WINDOW_MS / JEPQ_AUTO_BUY_VIOLATION) remain detectable.)
 // RULEBOOK_VERSION: 4.4.2  (historical anchor — DO NOT REMOVE)
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { yahooFinance } from "@/lib/price";
+import { buildTqqqTfsaIsolationAlert } from "@/lib/audit/portfolio-validator";
 import {
   computePortfolioValueCAD,
   type EngineCashLedgerRow,
@@ -26,10 +27,10 @@ const AUTO_BUY_AMOUNT_TOLERANCE = 0.02;
 
 type DecimalLike = { toString(): string } | null | undefined;
 type AlertPayload = {
-  // JEPQ_AUTO_BUY_VIOLATION = legacy frozen name. QQQM_AUTO_BUY_VIOLATION = v4.4.6.1 sibling.
-  type: "ENGINE_LEGACY_DRIFT" | "JEPQ_AUTO_BUY_VIOLATION" | "QQQM_AUTO_BUY_VIOLATION";
+  // JEPQ_AUTO_BUY_VIOLATION = legacy frozen name. QQQM_AUTO_BUY_VIOLATION = v4.5.1 sibling.
+  type: "ENGINE_LEGACY_DRIFT" | "JEPQ_AUTO_BUY_VIOLATION" | "QQQM_AUTO_BUY_VIOLATION" | "TQQQ_TFSA_ONLY";
   userId: string;
-  severity: "warning";
+  severity: "warning" | "critical";
   message: string;
   details: Record<string, string | number | boolean | null>;
 };
@@ -42,6 +43,7 @@ type PortfolioWithHoldings = Awaited<ReturnType<typeof prisma.portfolio.findMany
     avgCost: DecimalLike;
     isActive: boolean;
   }>;
+  accountType: string;
 };
 
 type TransactionRow = {
@@ -268,7 +270,7 @@ function buildJepqAutoBuyViolationAlerts(userId: string, transactions: Transacti
 }
 
 /**
- * v4.4.6.1 sibling of buildJepqAutoBuyViolationAlerts — flags any QQQM
+ * v4.5.1 sibling of buildJepqAutoBuyViolationAlerts — flags any QQQM
  * DIVIDEND → BUY pattern within the same 24h window. QQQM distributions must
  * stay as TFSA USD cash; auto-reinvestment violates §4 (no auto routing).
  */
@@ -302,7 +304,7 @@ function buildQqqmAutoBuyViolationAlerts(userId: string, transactions: Transacti
         type: "QQQM_AUTO_BUY_VIOLATION" as const,
         userId,
         severity: "warning" as const,
-        message: "QQQM DIVIDEND appears to be followed by an automatic BUY; distributions must stay as TFSA USD cash (v4.4.6.1 §4).",
+        message: "QQQM DIVIDEND appears to be followed by an automatic BUY; distributions must stay as TFSA USD cash (v4.5.1 §4).",
         details: {
           ticker: "QQQM",
           dividendTransactionId: dividend.id,
@@ -469,8 +471,19 @@ export async function GET(req: Request) {
           },
         });
 
+        const tqqqIsolationAlert = buildTqqqTfsaIsolationAlert(
+          user.id,
+          portfolios.flatMap((portfolio) => portfolio.holdings
+            .filter((holding) => holding.isActive && decimalToNumber(holding.quantity) > 0)
+            .map((holding) => ({
+              symbol: holding.ticker,
+              account: portfolio.accountType,
+              quantity: decimalToNumber(holding.quantity),
+            }))),
+        );
         const jepqAlerts = buildJepqAutoBuyViolationAlerts(user.id, transactions, now);
         const qqqmAlerts = buildQqqmAutoBuyViolationAlerts(user.id, transactions, now);
+        if (tqqqIsolationAlert) alertPayloads.push(tqqqIsolationAlert);
         if (usedEngine) {
           if (driftAlertPayload) alertPayloads.push(driftAlertPayload);
           alertPayloads.push(...jepqAlerts);

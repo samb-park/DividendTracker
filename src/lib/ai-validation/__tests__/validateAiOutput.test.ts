@@ -48,7 +48,7 @@ test("empty string passes", () => {
 
 test("normal briefing text passes", () => {
   expectPass(
-    "QLD 코어 비중이 33% (코어 기준)이므로 §5 정적 70/30 기준으로 진행합니다. SCHD/QLD 모두 정상.",
+    "QLD 코어 비중이 40% (코어 기준)이므로 §5 정적 60/40 기준으로 진행합니다. SCHD/QLD 모두 정상.",
   );
 });
 
@@ -161,7 +161,7 @@ test("QQQI_FIXED_TARGET detects 5% target language", () => {
   );
 });
 
-// ── v4.4.6.1 QQQM detectors ────────────────────────────────────────────────
+// ── v4.5.1 QQQM legacy hold-only detectors ─────────────────────────────────
 test("QQQM_INCORRECT_FRAMING detects QQQM 5% cap framing", () => {
   expectViolation("QQQM은 5% cap을 항상 유지하세요.", "QQQM_INCORRECT_FRAMING");
 });
