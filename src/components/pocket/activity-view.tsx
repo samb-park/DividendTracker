@@ -11,6 +11,7 @@ import type {
   TransactionRow,
 } from "@/lib/pocket-types";
 import { ACCT_LABELS, inAccountScope, rollupTickers } from "@/lib/pocket-types";
+import { PocketPanel } from "./pocket-panel";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -464,14 +465,16 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
         </div>
       </div>
 
-      {/* Section header + honesty captions (account-only scope / fallback FX). */}
-      <div className="pk-act-section">
-        <span className="pk-section-label">{SECTION_LABEL[mode]}</span>
-        {(fxFallback || fxRate == null) && mode !== "upcoming" && (
-          <span className="pk-scope-note warn">default FX</span>
-        )}
-      </div>
-
+      {/* Section list as an MDD panel: header bar = section label + FX honesty flag. */}
+      <PocketPanel
+        title={SECTION_LABEL[mode]}
+        right={
+          (fxFallback || fxRate == null) && mode !== "upcoming" ? (
+            <span className="pk-scope-note warn">default FX</span>
+          ) : undefined
+        }
+        bodyClassName="list"
+      >
       {mode === "upcoming" && (
         <>
           {loading && <SkeletonRows />}
@@ -479,7 +482,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
             <p className="pk-note">No upcoming dividends for the selected holdings.</p>
           )}
           {!loading && upEvents.length > 0 && (
-            <div className="pk-picker">
+            <div className="pk-picker pk-zebra">
               {upEvents.map((e) => (
                 <div className="pk-act-row" key={`${e.ticker}-${e.type}`}>
                   <div className="pk-act-main">
@@ -517,7 +520,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
             <p className="pk-note">No dividends received in {year}.</p>
           )}
           {!histError && !histLoading && divRows.length > 0 && (
-            <div className="pk-picker">
+            <div className="pk-picker pk-zebra">
               {divRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">
@@ -550,7 +553,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
             <p className="pk-note">No transactions in {year}.</p>
           )}
           {!histError && !histLoading && tradeRows.length > 0 && (
-            <div className="pk-picker">
+            <div className="pk-picker pk-zebra">
               {tradeRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">
@@ -587,7 +590,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
             <p className="pk-note">No cash activity in {year}.</p>
           )}
           {!histError && !histLoading && cashRows.length > 0 && (
-            <div className="pk-picker">
+            <div className="pk-picker pk-zebra">
               {cashRows.map((t) => (
                 <div className="pk-act-row" key={t.id}>
                   <div className="pk-act-main">
@@ -613,6 +616,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
           )}
         </>
       )}
+      </PocketPanel>
     </div>
   );
 }

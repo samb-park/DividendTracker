@@ -1,7 +1,5 @@
 "use client";
 
-import { ALLOCATION_COLORS } from "@/lib/chart-tokens";
-
 export interface DonutSlice {
   label: string;
   value: number; // > 0; same unit as the others on the page (USD/yr)
@@ -11,8 +9,22 @@ interface FoldedSlice extends DonutSlice {
   color: string;
 }
 
-/** Muted gray for the folded "Other" slice — never one of the ranked colors. */
-const OTHER_COLOR = "hsl(220, 9%, 55%)";
+/** MDD terminal series palette (mirrors MDD's seriesColors) — cyan/orange-led so
+    the donut matches the rest of the re-skinned surface. Kept local to /pocket so
+    the shared chart-tokens (used by other app surfaces) stay untouched. */
+const MDD_SERIES = [
+  "#00e5ff", // cyan
+  "#ff8c1a", // orange
+  "#5b8def", // info blue
+  "#00d26a", // green
+  "#b18cff", // violet
+  "#ffd60a", // yellow
+  "#ff6ec7", // pink
+  "#7ee8a2", // mint
+] as const;
+
+/** text-low gray for the folded "Other" slice — never one of the ranked colors. */
+const OTHER_COLOR = "#525e6d";
 
 /** Whole-dollar USD (no cents) — distribution figures don't need cent precision. */
 const usd0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -48,9 +60,9 @@ const pctLabel = (p: number, value: number) => (value > 0 && p < 1 ? "<1%" : `${
 export function foldTopN(slices: DonutSlice[], n = 6): FoldedSlice[] {
   const sorted = slices.filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
   if (sorted.length <= n + 1) {
-    return sorted.map((s, i) => ({ ...s, color: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length] }));
+    return sorted.map((s, i) => ({ ...s, color: MDD_SERIES[i % MDD_SERIES.length] }));
   }
-  const top = sorted.slice(0, n).map((s, i) => ({ ...s, color: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length] }));
+  const top = sorted.slice(0, n).map((s, i) => ({ ...s, color: MDD_SERIES[i % MDD_SERIES.length] }));
   const rest = sorted.slice(n);
   const otherVal = rest.reduce((s, x) => s + x.value, 0);
   return [...top, { label: `Other (${rest.length})`, value: otherVal, color: OTHER_COLOR }];

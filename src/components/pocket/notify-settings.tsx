@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PocketPanel } from "./pocket-panel";
 
 /** Web Push is iOS-gated: installed (home-screen) PWA, iOS 16.4+, these APIs present. */
 function pushSupported(): boolean {
@@ -172,18 +173,14 @@ export function NotifySettings() {
   );
 
   return (
-    <section>
-      <div className="pk-section-label">Dividend alerts</div>
-
-      {!supported ? (
-        <div className="pk-card">
+    <PocketPanel title="Dividend alerts" bodyClassName="flush">
+      <div className="pk-card">
+        {!supported ? (
           <p className="pk-note pk-card-note">
             Add this app to your Home Screen and open it from there to enable alerts (iOS 16.4+).
           </p>
-        </div>
-      ) : (
-        <>
-          <div className="pk-card">
+        ) : (
+          <>
             <div className="pk-switch-row">
               <span className="pk-switch-label">Ex-dividend day</span>
               <button
@@ -214,16 +211,15 @@ export function NotifySettings() {
                 <span className="pk-switch-knob" aria-hidden />
               </button>
             </div>
-          </div>
-
-          {permission === "denied" && (
-            <p className="pk-note warn">
-              Notifications are blocked — enable them in iOS Settings for this app.
-            </p>
-          )}
-          {errMsg && <p className="pk-note warn">{errMsg}</p>}
-        </>
-      )}
-    </section>
+            {permission === "denied" && (
+              <p className="pk-note warn pk-card-note">
+                Notifications are blocked — enable them in iOS Settings for this app.
+              </p>
+            )}
+            {errMsg && <p className="pk-note warn pk-card-note">{errMsg}</p>}
+          </>
+        )}
+      </div>
+    </PocketPanel>
   );
 }

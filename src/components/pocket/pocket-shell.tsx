@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { RunRateResponse, TickerAgg, Basis } from "@/lib/pocket-types";
 import { ACCT_LABELS, ACCT_PORTFOLIO_PREFIX, rollupTickers, type PortfolioOption } from "@/lib/pocket-types";
-import { useBasis, usePocketTheme } from "./use-pocket-prefs";
+import { useBasis } from "./use-pocket-prefs";
 import { SwipePager, type SwipePagerHandle } from "./swipe-pager";
 import { PageDots, setActiveDots } from "./page-dots";
 import { usePocketGroups } from "./use-pocket-groups";
@@ -181,7 +181,6 @@ export function PocketShell() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [basis, setBasis] = useBasis();
-  const [themePref, setThemePref] = usePocketTheme();
   const groupsApi = usePocketGroups();
   const { groups, loaded: groupsLoaded, activeId, setActiveId } = groupsApi;
 
@@ -425,8 +424,6 @@ export function PocketShell() {
             onEdit={() => setManaging(true)}
             basis={basis}
             setBasis={setBasis}
-            themePref={themePref}
-            setThemePref={setThemePref}
           />
         )}
       </div>

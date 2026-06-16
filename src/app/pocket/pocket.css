@@ -3,9 +3,9 @@
    Scoped to .pocket-root (the global retro scanline + 600-weight body stay
    killed), but deliberately ALIGNED with the app's terminal language
    (/terminal, globals.css): IBM Plex Mono everywhere, near-black bg with
-   hairline-bordered panels, amber accent for titles/active states, green/red
-   for money, square-ish radii, dense compact layout. Light mode is the same
-   terminal re-skinned on the global warm-paper palette (theme toggle kept).
+   hairline-bordered panels, CYAN accent for active states + ORANGE for titles,
+   green/red for money, ZERO radii, dense compact layout. DARK-ONLY — the MDD
+   Bloomberg palette is the single theme (the light/dark toggle was removed).
 
    DESIGN SYSTEM (keep values consistent with these scales):
    · Spacing (4-based):  4 · 8 · 12 · 16 · 24 · 32
@@ -17,8 +17,8 @@
             Display(hero) fluid 26–58/700 · Micro 12/600
    · Letter-spacing:  NONE on mono body/figures · positive (+0.4…0.08em) on
             ALL-CAPS labels/titles only
-   · Radius:  controls 3-4 · segmented 3/2 · badge/chip 2-3 · sheet top 10
-              (switch knob / dots / swatches stay round — they're affordances)
+   · Radius:  0 everywhere (MDD sharp panels)
+              (switch knob / dots / swatches / sheet grip stay round — affordances)
    =========================================================================== */
 
 /* Kill the global retro scanline overlay + body chrome on this surface only.
@@ -29,9 +29,7 @@ body:has(.pocket-root)::before { display: none !important; }
    overscroll, e.g. a focused-input keyboard nudge): pocket background, not the
    global dark body. */
 html:has(.pocket-root),
-body:has(.pocket-root) { background: #f3f0e8; }
-html:has(.pocket-root[data-pocket-mode="dark"]),
-body:has(.pocket-root[data-pocket-mode="dark"]) { background: #0d0d0d; }
+body:has(.pocket-root) { background: #0a0c10; }
 
 /* Document-level backstop: lock the viewport scroller so a downward drag on the
    (often short, non-scrollable) default Dividends screen can't rubber-band the
@@ -51,31 +49,36 @@ body:has(.pocket-root) {
 }
 
 .pocket-root {
-  /* Light terminal (global warm-paper palette: hsl 42° tints, dark warm ink) */
-  --pk-bg: #f3f0e8;
-  --pk-card: #faf8f3; /* inset panel (lists, settings groups) */
-  --pk-elevated: #ffffff; /* active segment pill */
-  --pk-sheet: #efece3; /* bottom sheets — paper so panels read inside */
-  --pk-card-sheet: #faf8f3; /* card fill INSIDE a sheet (one step above --pk-sheet) */
-  --pk-ink: #29251c;
-  --pk-muted: #6b6457; /* secondary text — ≥4.5:1 on the paper bg */
-  --pk-badge-ink: #5f5949; /* non-filled badge text (EX/BUY/DIV), ≥4.5:1 */
-  --pk-faint: #c9c3b4;
-  --pk-accent: #9a5410; /* terminal amber (dark variant for light bg, ≥4.5:1) */
-  --pk-pill-bg: #9a5410; /* selected chip/check fill = amber */
-  --pk-pill-ink: #faf8f3;
-  --pk-hairline: rgba(60, 52, 32, 0.16);
-  --pk-tabbar-bg: rgba(243, 240, 232, 0.92);
-  --pk-tabbar-active: rgba(154, 84, 16, 0.12); /* amber tint behind the active tab */
-  --pk-warn: #9a5410;
-  --pk-fill: rgba(60, 52, 32, 0.07); /* neutral subtle fill */
-  --pk-danger: #c03434;
-  --pk-green: #1e7a3f; /* positive amounts / received badges */
-  --pk-green-fill: rgba(30, 122, 63, 0.12);
-  --pk-danger-fill: rgba(192, 52, 52, 0.1);
-  --pk-banner-bg: rgba(154, 84, 16, 0.08); /* amber upcoming banner (Activity) */
-  --pk-banner-border: rgba(154, 84, 16, 0.28);
-  --pk-banner-ink: #8a4a0c; /* darker than --pk-warn: 13px/10px text on the tint needs ≥4.5:1 */
+  /* MDD Bloomberg terminal palette — dark-only (cool blue-black + cyan/orange).
+     Mirrors /mnt/.../MDD/frontend/src/app/globals.css so the two surfaces share
+     one visual language. */
+  --pk-bg: #0a0c10; /* cool blue-black */
+  --pk-card: #11141a; /* panel surface (lists, cards, inputs) */
+  --pk-elevated: #171c24; /* panel-header bar / active segment pill */
+  --pk-sheet: #0d1015; /* bottom sheets / inset */
+  --pk-card-sheet: #171c24; /* card fill INSIDE a sheet (one step above --pk-sheet) */
+  --pk-ink: #e6edf3; /* text-hi */
+  --pk-muted: #8b97a5; /* text-mid — field/section labels */
+  --pk-badge-ink: #8b97a5; /* non-filled badge text (EX/BUY/DIV) */
+  --pk-faint: #525e6d; /* text-low */
+  --pk-accent: #00e5ff; /* CYAN — primary / active states */
+  --pk-accent-2: #ff8c1a; /* ORANGE — screen titles / brand / banner */
+  --pk-pill-bg: #00e5ff; /* selected chip/check fill = cyan */
+  --pk-pill-ink: #0a0c10; /* near-black text on the cyan fill */
+  --pk-hairline: #262d38; /* MDD panel border (opaque) */
+  --pk-border-bright: #3b4554;
+  --pk-gridline: #1c222c;
+  --pk-tabbar-bg: rgba(10, 12, 16, 0.92);
+  --pk-tabbar-active: rgba(0, 229, 255, 0.12); /* cyan tint behind the active tab */
+  --pk-warn: #ffb020;
+  --pk-fill: rgba(255, 255, 255, 0.04); /* neutral subtle fill */
+  --pk-danger: #ff4d4d;
+  --pk-green: #00d26a; /* positive amounts / received badges */
+  --pk-green-fill: rgba(0, 210, 106, 0.14);
+  --pk-danger-fill: rgba(255, 77, 77, 0.14);
+  --pk-banner-bg: rgba(255, 140, 26, 0.1); /* orange upcoming banner (Activity) */
+  --pk-banner-border: rgba(255, 140, 26, 0.32);
+  --pk-banner-ink: #ff8c1a; /* orange, reads on the dark tint */
 
   /* Breathing room between scroll content (and the page-dots band) and the
      docked tab bar. The bar is now IN-FLOW — it holds its own space and the
@@ -113,34 +116,8 @@ body:has(.pocket-root) {
   touch-action: pan-x pan-y;
 }
 
-.pocket-root[data-pocket-mode="dark"] {
-  /* Dark TERMINAL palette (Bloomberg): near-black bg, hairline panels, amber
-     accent, bright green/red money. Matches globals.css (#0d0d0d ≈ 0 0% 5%). */
-  --pk-bg: #0d0d0d;
-  --pk-card: #141414; /* inset panel / inputs — one step above the black bg */
-  --pk-elevated: #232323; /* active seg pill — a real step above the card/track */
-  --pk-sheet: #111111;
-  --pk-card-sheet: #1c1c1c; /* card fill INSIDE a sheet (one step above --pk-sheet) */
-  --pk-ink: #e8e2d4; /* warm off-white (45° 20% 88%) — the terminal text tone */
-  --pk-muted: #8f8f8f; /* ≥4.5:1 on the black bg */
-  --pk-badge-ink: #a6a6a6;
-  --pk-faint: #3a3a3a;
-  --pk-accent: #f5a623; /* terminal amber — titles / hero keys / active states */
-  --pk-pill-bg: #f5a623; /* selected chip/check fill = amber, black text */
-  --pk-pill-ink: #0d0d0d;
-  --pk-hairline: rgba(232, 226, 212, 0.14);
-  --pk-tabbar-bg: rgba(13, 13, 13, 0.92);
-  --pk-tabbar-active: rgba(245, 166, 35, 0.14); /* amber tint behind the active tab */
-  --pk-warn: #f5a623;
-  --pk-fill: rgba(232, 226, 212, 0.08);
-  --pk-danger: #f87171;
-  --pk-green: #4ade80; /* terminal green (globals --positive) */
-  --pk-green-fill: rgba(74, 222, 128, 0.14);
-  --pk-danger-fill: rgba(248, 113, 113, 0.14);
-  --pk-banner-bg: rgba(245, 166, 35, 0.1);
-  --pk-banner-border: rgba(245, 166, 35, 0.35);
-  --pk-banner-ink: var(--pk-warn); /* amber, ~7:1 on the dark tint */
-}
+/* Dark-only surface: the single MDD palette lives on .pocket-root above — there
+   is no light/dark split anymore (the theme toggle was removed). */
 
 /* layout shell ---------------------------------------------------------- */
 .pk-screen {
@@ -209,13 +186,13 @@ body:has(.pocket-root) {
    from ever starting a horizontal scroll, silently killing the pager. */
 /* header ---------------------------------------------------------------- */
 .pk-title {
-  /* terminal panel header: compact ALL-CAPS amber, not an iOS display title */
+  /* screen title = MDD orange wordmark accent (compact ALL-CAPS, not iOS display) */
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.2;
-  color: var(--pk-accent);
+  color: var(--pk-accent-2);
 }
 /* Dividends fixed header: title + active-portfolio name (dots sit above it). */
 .pk-dividends-head {
@@ -260,7 +237,7 @@ body:has(.pocket-root) {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px; /* unified ALL-CAPS tracking (was 0.4) */
-  color: var(--pk-accent); /* terminal field label — amber key, ink value */
+  color: var(--pk-muted); /* MDD: field labels read quiet (text-mid), value is bright */
 }
 .pk-summary-value {
   font-size: 20px;
@@ -287,7 +264,7 @@ body:has(.pocket-root) {
 .pk-row-label {
   flex: 0 0 auto;
   width: 1.15em; /* fixed gutter so all numbers left-align regardless of letter */
-  color: var(--pk-accent); /* D/W/M/Y keys in terminal amber */
+  color: var(--pk-accent); /* D/W/M/Y keys in cyan (active/data accent) */
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1;
@@ -334,7 +311,7 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px; /* unified button metrics (matches .pk-action / .pk-danger) */
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   transition: opacity 0.12s ease;
 }
@@ -379,7 +356,7 @@ body:has(.pocket-root) {
   flex: 1 1 0; /* equal-width across the full bar */
   min-width: 0;
   max-width: 168px; /* don't balloon on wide/landscape screens */
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
   display: inline-flex;
@@ -391,7 +368,7 @@ body:has(.pocket-root) {
   white-space: nowrap;
 }
 .pk-tab-ico { display: block; flex: 0 0 auto; }
-/* terminal active marker: a 2px amber tick on the bar's top edge (spans the
+/* terminal active marker: a 2px cyan tick on the bar's top edge (spans the
    bar's 2px top pad + 1px hairline) — instant active-tab read, even at a glance */
 .pk-tab::before {
   content: "";
@@ -406,7 +383,7 @@ body:has(.pocket-root) {
 }
 .pk-tab[data-active="true"]::before { transform: translateX(-50%) scaleX(1); }
 .pk-tab[data-active="true"] {
-  color: var(--pk-accent); /* terminal: active section reads amber */
+  color: var(--pk-accent); /* terminal: active section reads cyan */
   font-weight: 700;
   background: var(--pk-tabbar-active);
 }
@@ -419,7 +396,7 @@ body:has(.pocket-root) {
 .pk-card {
   background: var(--pk-card);
   border: 1px solid var(--pk-hairline); /* terminal panel: hairline-bordered */
-  border-radius: 4px;
+  border-radius: 0;
   padding: 0 16px;
 }
 .pk-sheet .pk-card { background: var(--pk-card-sheet); }
@@ -445,7 +422,56 @@ body:has(.pocket-root) {
    than the #2C2C2E pill, inverting the raised-pill read. Recess the track with a
    black tint instead so the pill stays a clear step above. Light is unaffected
    (white card + 6% black track + white pill = the stock iOS look). */
-.pocket-root[data-pocket-mode="dark"] .pk-card .pk-seg { background: rgba(0, 0, 0, 0.4); }
+.pk-card .pk-seg { background: rgba(0, 0, 0, 0.4); }
+
+/* MDD labeled panel ----------------------------------------------------- */
+/* Mirrors MDD's <Panel>: a hairline-bordered block with a 28px header bar
+   (raised bg, bottom hairline, 10px ALL-CAPS tracked muted title). Used to give
+   Activity/Settings sections the terminal "panel" chrome. */
+.pk-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--pk-hairline);
+  background: var(--pk-card);
+}
+.pk-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--pk-hairline);
+  background: var(--pk-elevated);
+}
+.pk-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pk-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-panel-right {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--pk-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pk-panel-body { padding: 10px; min-width: 0; }
+.pk-panel-body.flush { padding: 0; }       /* child (a .pk-card / list) owns its padding */
+.pk-panel-body.list { padding: 0 12px; }    /* row list: 12px gutter, rows divide full-width */
+/* A .pk-card inside a panel body is just the list container — the panel draws the
+   frame, so the inner card goes borderless/transparent (no double frame). */
+.pk-panel-body > .pk-card { border: 0; background: transparent; }
+/* MDD dense zebra: alternate row tint on a list inside a panel. */
+.pk-zebra > *:nth-child(odd) { background: rgba(255, 255, 255, 0.02); }
 
 /* list rows: shared edge (flush with screen padding), shared divider -------
    Applies to ticker-picker / upcoming / history rows. */
@@ -526,8 +552,8 @@ body:has(.pocket-root) {
   z-index: 61;
   background: var(--pk-sheet); /* grouped sheet bg — cards inside use --pk-card-sheet */
   border-top: 1px solid var(--pk-hairline);
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   padding: 10px 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
   max-height: 82dvh;
   overflow-y: auto;
@@ -549,19 +575,19 @@ body:has(.pocket-root) {
   padding: 8px 0 12px;
 }
 .pk-sheet-title {
-  /* sheet header = terminal panel header (matches .pk-title language) */
+  /* sheet header = screen title language (MDD orange wordmark accent) */
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   line-height: 1.2;
-  color: var(--pk-accent);
+  color: var(--pk-accent-2);
 }
 .pk-textbtn {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--pk-accent); /* terminal function-key amber for sheet Back/Save/Done */
+  color: var(--pk-accent); /* terminal function-key cyan for sheet Back/Save/Done */
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
@@ -601,7 +627,7 @@ body:has(.pocket-root) {
   display: flex;
   width: 100%;
   padding: 2px;
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--pk-fill);
   gap: 2px;
 }
@@ -617,7 +643,7 @@ body:has(.pocket-root) {
   font-weight: 600;
   text-align: center;
   padding: 5px 8px; /* tightened so the 4-way Activity switch fits four labels at 390px */
-  border-radius: 2px;
+  border-radius: 0;
   cursor: pointer;
   min-height: 30px;
   /* match the pill's glide so the label color settles AS the pill arrives (was 0.15s ease) */
@@ -663,7 +689,7 @@ body:has(.pocket-root) {
   left: 2px;
   bottom: 2px;
   width: calc((100% - 4px) / var(--seg-count, 3)); /* N segments, minus 2px L/R padding */
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--pk-elevated);
   box-shadow: inset 0 0 0 1px var(--pk-hairline); /* flat terminal hairline */
   transform: translateX(calc(var(--seg-progress, 0) * 100%));
@@ -688,7 +714,7 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   min-height: 44px;
   transition: background 0.12s ease;
@@ -778,7 +804,7 @@ body:has(.pocket-root) {
   font-size: 13px;
   font-weight: 600;
   padding: 5px 12px;
-  border-radius: 3px; /* square terminal chip (was a 999 pill) */
+  border-radius: 0; /* square terminal chip (was a 999 pill) */
   cursor: pointer;
   min-height: 30px;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
@@ -818,7 +844,7 @@ body:has(.pocket-root) {
   letter-spacing: 0;
   text-align: left;
   padding: 12px 10px; /* taller hit target for the portfolio rows (was 10px) */
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
 }
 .pk-pfrow[data-active="true"] { background: var(--pk-fill); }
@@ -900,14 +926,14 @@ body:has(.pocket-root) {
    overlay WRAPPER to follow the finger 1:1; this scale is on the inner node, so
    the two compose without lag. */
 .pk-lifted {
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--pk-card-sheet); /* matches the card the row was lifted from */
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
   transform: scale(1.03);
   animation: pk-pickup 160ms cubic-bezier(0.32, 0.72, 0, 1);
   cursor: grabbing;
 }
-.pocket-root[data-pocket-mode="dark"] .pk-lifted { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6); }
+.pk-lifted { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6); }
 @keyframes pk-pickup {
   from { transform: scale(1); }
   to { transform: scale(1.03); }
@@ -926,7 +952,7 @@ body:has(.pocket-root) {
   font-weight: 700;
   letter-spacing: 0;
   padding: 12px 14px;
-  border-radius: 4px;
+  border-radius: 0;
   margin-bottom: 4px;
 }
 .pk-input:focus { outline: none; border-color: var(--pk-pill-bg); }
@@ -953,7 +979,7 @@ body:has(.pocket-root) {
   font-size: 15px;
   font-weight: 700;
   padding: 12px 16px; /* unified button metrics — differs from .pk-retry only by color */
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   margin-top: 4px;
 }
@@ -1032,7 +1058,7 @@ body:has(.pocket-root) {
 .pocket-root :focus-visible {
   outline: 2px solid var(--pk-accent);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 0;
 }
 /* the name field already signals focus via its border-color — no double ring */
 .pk-input:focus-visible { outline: none; }
@@ -1126,7 +1152,7 @@ body:has(.pocket-root) {
 }
 .pk-legend { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; }
 .pk-legend-row { display: flex; align-items: center; gap: 10px; }
-.pk-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.pk-legend-dot { width: 10px; height: 10px; border-radius: 0; flex: 0 0 auto; }
 .pk-legend-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -1185,7 +1211,7 @@ body:has(.pocket-root) {
 .pk-skel-row:last-child { border-bottom: none; }
 .pk-skel-bar {
   height: 14px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--pk-fill);
 }
 .pk-skel-bar.right { justify-self: end; width: 64px; }
@@ -1216,7 +1242,7 @@ body:has(.pocket-root) {
 /* ===========================================================================
    Activity tab — reference-style single scrolling surface:
    Account/Year dropdowns → search + filter icon → (expandable) View chips →
-   amber upcoming banner with horizontal next-payment cards → summary card →
+   orange upcoming banner with horizontal next-payment cards → summary card →
    section list of two-line rows. All icons are lucide.
    =========================================================================== */
 .pk-activity {
@@ -1263,7 +1289,7 @@ body:has(.pocket-root) {
   width: 100%;
   min-height: 32px;
   border: 1px solid var(--pk-hairline);
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
@@ -1303,7 +1329,7 @@ body:has(.pocket-root) {
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--pk-hairline);
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--pk-card);
   color: var(--pk-ink);
   font-family: inherit;
@@ -1347,7 +1373,7 @@ body:has(.pocket-root) {
   height: 26px;
   appearance: none;
   border: none;
-  border-radius: 2px;
+  border-radius: 0;
   background: transparent;
   color: var(--pk-muted);
   display: inline-flex;
@@ -1403,7 +1429,7 @@ body:has(.pocket-root) {
 .pk-banner {
   border: 1px solid var(--pk-banner-border);
   background: var(--pk-banner-bg);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
@@ -1437,7 +1463,7 @@ body:has(.pocket-root) {
   min-width: 112px;
   background: var(--pk-card);
   border: 1px solid var(--pk-hairline);
-  border-radius: 3px;
+  border-radius: 0;
   padding: 5px 8px;
   display: flex;
   flex-direction: column;
@@ -1450,7 +1476,7 @@ body:has(.pocket-root) {
   letter-spacing: 0.5px;
   color: var(--pk-banner-ink);
   background: var(--pk-banner-bg);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 2px 6px;
   font-variant-numeric: tabular-nums;
 }
@@ -1567,7 +1593,7 @@ body:has(.pocket-root) {
   letter-spacing: 0.4px;
   text-transform: uppercase;
   padding: 2px 6px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--pk-fill);
   color: var(--pk-badge-ink);
   white-space: nowrap;

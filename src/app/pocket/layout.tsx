@@ -14,10 +14,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Light default (warm terminal paper); the bootstrap script + theme handler
-  // flip this to the near-black terminal bg in dark mode so iOS Safari's
-  // overscroll (rubber-band) area matches the page.
-  themeColor: "#f3f0e8",
+  // Dark-only MDD terminal: the near-black bg also paints iOS Safari's overscroll
+  // (rubber-band) area so it matches the page. No light/dark split anymore.
+  themeColor: "#0a0c10",
   width: "device-width",
   initialScale: 1,
   // Zoom is LOCKED (user request): an accidental pinch left the surface scaled
@@ -30,14 +29,7 @@ export const viewport: Viewport = {
 
 export default function PocketLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pocket-root" id="pocket-root" data-pocket-mode="light">
-      {/* Theme bootstrap: resolve dt-pocket-theme (system|light|dark) before first
-          paint so there is no flash, and sync the theme-color meta for overscroll. */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var r=document.currentScript&&document.currentScript.parentElement;if(!r)return;var t=localStorage.getItem('dt-pocket-theme');var dark=t==='dark'||((t==='system'||!t)&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);r.setAttribute('data-pocket-mode',dark?'dark':'light');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#0d0d0d':'#f3f0e8');}catch(e){}})();`,
-        }}
-      />
+    <div className="pocket-root" id="pocket-root">
       {children}
     </div>
   );

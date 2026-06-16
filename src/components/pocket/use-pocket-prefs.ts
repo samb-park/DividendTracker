@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Basis, ThemePref } from "@/lib/pocket-types";
+import type { Basis } from "@/lib/pocket-types";
 
 const EXCLUDED_KEY = "dt-pocket-excluded-v1";
 const EXCLUDED_ACCOUNTS_KEY = "dt-pocket-accounts-excluded-v1";
 const BASIS_KEY = "dt-pocket-basis-v1";
-const THEME_KEY = "dt-pocket-theme";
 
 /**
  * Persisted EXCLUSION set (not inclusion): default empty → everything is shown,
@@ -83,58 +82,4 @@ export function useBasis(): [Basis, (b: Basis) => void] {
   }, []);
 
   return [basis, setBasis];
-}
-
-function resolveMode(pref: ThemePref): "light" | "dark" {
-  if (pref === "light" || pref === "dark") return pref;
-  if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return "light";
-}
-
-function applyMode(mode: "light" | "dark") {
-  const root = document.getElementById("pocket-root");
-  if (root) root.setAttribute("data-pocket-mode", mode);
-  // Keep the theme-color meta in sync so iOS Safari's overscroll area matches.
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", mode === "dark" ? "#0d0d0d" : "#f3f0e8");
-}
-
-export function usePocketTheme(): [ThemePref, (p: ThemePref) => void] {
-  const [pref, setPrefState] = useState<ThemePref>("system");
-
-  // Load saved preference and reconcile the attribute with it.
-  useEffect(() => {
-    let initial: ThemePref = "system";
-    try {
-      const raw = localStorage.getItem(THEME_KEY);
-      if (raw === "system" || raw === "light" || raw === "dark") initial = raw;
-    } catch {
-      /* ignore */
-    }
-    setPrefState(initial);
-    applyMode(resolveMode(initial));
-  }, []);
-
-  // Track OS theme while in "system" mode.
-  useEffect(() => {
-    if (pref !== "system" || typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyMode(mq.matches ? "dark" : "light");
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [pref]);
-
-  const setPref = useCallback((p: ThemePref) => {
-    setPrefState(p);
-    try {
-      localStorage.setItem(THEME_KEY, p);
-    } catch {
-      /* ignore */
-    }
-    applyMode(resolveMode(p));
-  }, []);
-
-  return [pref, setPref];
 }

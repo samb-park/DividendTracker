@@ -124,7 +124,6 @@ export interface TransactionRow {
   currency: string;
   accountType: string; // TFSA/RRSP/FHSA/NON_REG/CASH — for portfolio (account-scope) filtering
 }
-export type ThemePref = "system" | "light" | "dark";
 
 /** Human labels for account types — shared by the group manager and the charts. */
 export const ACCT_LABELS: Record<string, string> = {
