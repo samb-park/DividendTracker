@@ -11,7 +11,10 @@ import type {
   TransactionRow,
 } from "@/lib/pocket-types";
 import { ACCT_LABELS, inAccountScope, rollupTickers } from "@/lib/pocket-types";
-import { PocketPanel } from "./pocket-panel";
+import { Panel } from "./terminal/panel";
+import { DenseTable } from "./terminal/dense-table";
+import { MetricCell } from "./terminal/metric-cell";
+import { NumberText } from "./terminal/number-text";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -68,24 +71,6 @@ const cashCache = new Map<number, { items: CashFlowRow[]; years: number[] }>();
 // component remounts on every entry).
 let lastMode: HistoryMode = "dividends";
 let lastAcct = "all"; // "all" | an account type (TFSA/RRSP/…)
-
-/** Row-shaped loading skeleton — mirrors the two-line .pk-act-row metrics so the
- *  list doesn't layout-shift when real rows replace it. */
-function SkeletonRows() {
-  return (
-    <div className="pk-picker" aria-hidden>
-      {[72, 56, 64, 48, 60].map((w, i) => (
-        <div className="pk-skel-row pk-skel-act" key={i}>
-          <span className="pk-skel-main">
-            <span className="pk-skel-bar" style={{ width: w }} />
-            <span className="pk-skel-bar thin" style={{ width: w + 52 }} />
-          </span>
-          <span className="pk-skel-bar right" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 interface Props {
   basis: Basis;
@@ -451,172 +436,98 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
         </div>
       )}
 
-      {/* Mode summary card. */}
-      <div className="pk-total-card pk-card">
-        <div className="pk-total-main">
-          <span className="pk-total-label">{summary.label}</span>
-          <span className="pk-total-value" data-green={summary.green}>
-            {sumLoading ? "—" : summary.value}
-          </span>
-        </div>
-        <div className="pk-total-side">
-          <span>{sumLoading ? "—" : summary.sub}</span>
-          {!sumLoading && summary.sub2 && <span>{summary.sub2}</span>}
-        </div>
-      </div>
-
-      {/* Section list as an MDD panel: header bar = section label + FX honesty flag. */}
-      <PocketPanel
-        title={SECTION_LABEL[mode]}
-        right={
+      {/* Mode summary — MDD metric panel. */}
+      <Panel
+        title="SUMMARY"
+        titleRight={
           (fxFallback || fxRate == null) && mode !== "upcoming" ? (
-            <span className="pk-scope-note warn">default FX</span>
+            <span className="font-mono text-[9px] uppercase tracking-wider text-warn">default FX</span>
           ) : undefined
         }
-        bodyClassName="list"
+        loading={sumLoading}
       >
+        <div className="flex items-end justify-between gap-3">
+          <MetricCell
+            label={summary.label}
+            value={sumLoading ? "—" : summary.value}
+            intent={summary.green ? "pos" : "neutral"}
+            size="lg"
+          />
+          <div className="flex flex-col items-end gap-0.5 text-right">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-text-low">
+              {sumLoading ? "" : summary.sub}
+            </span>
+            {!sumLoading && summary.sub2 && (
+              <span className="font-mono text-[10px] text-text-low">{summary.sub2}</span>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {/* Section list — MDD dense sortable table per mode (header bar = label). */}
       {mode === "upcoming" && (
-        <>
-          {loading && <SkeletonRows />}
-          {!loading && upEvents.length === 0 && (
-            <p className="pk-note">No upcoming dividends for the selected holdings.</p>
-          )}
-          {!loading && upEvents.length > 0 && (
-            <div className="pk-picker pk-zebra">
-              {upEvents.map((e) => (
-                <div className="pk-act-row" key={`${e.ticker}-${e.type}`}>
-                  <div className="pk-act-main">
-                    <span className="pk-act-line1">
-                      <span className="pk-act-ticker">{e.ticker}</span>
-                      <span className="pk-badge" data-kind={e.type}>
-                        {e.type === "ex" ? "EX" : "PAY"}
-                      </span>
-                    </span>
-                    <span className="pk-act-line2">
-                      {!e.confirmed && (
-                        <>
-                          <span className="pk-sr-only">estimated </span>
-                          <Clock className="pk-est-ico" size={11} strokeWidth={2.2} aria-hidden focusable="false" />
-                        </>
-                      )}
-                      {fmtLong(e.date)} · {daysUntil(e.date) <= 0 ? "today" : `in ${daysUntil(e.date)}d`}
-                    </span>
-                  </div>
-                  <span className="pk-act-amt" data-tone="green">
-                    ${money(e.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        <Panel title={SECTION_LABEL[mode]} loading={loading} bodyClassName="p-0">
+          <DenseTable
+            columns={[
+              { key: "ticker", header: "SYMBOL", sortValue: (e) => e.ticker, cell: (e) => <span className="font-medium uppercase text-text-hi">{e.ticker}</span> },
+              { key: "type", header: "TYPE", sortValue: (e) => e.type, cell: (e) => <span className="text-text-mid">{e.type === "ex" ? "EX" : "PAY"}</span> },
+              { key: "date", header: "DATE", sortValue: (e) => e.date, cell: (e) => <span className="text-text-mid">{e.confirmed ? "" : "~"}{e.date}</span> },
+              { key: "amt", header: "NET/PMT", align: "right", sortValue: (e) => e.amount, cell: (e) => <NumberText value={`$${money(e.amount)}`} intent="cyan" /> },
+            ]}
+            data={upEvents}
+            initialSort={{ key: "date", desc: false }}
+            emptyText="NO UPCOMING"
+          />
+        </Panel>
       )}
 
       {mode === "dividends" && (
-        <>
-          {histError && <p className="pk-note warn">Couldn’t load history.</p>}
-          {!histError && histLoading && <SkeletonRows />}
-          {!histError && !histLoading && divRows.length === 0 && (
-            <p className="pk-note">No dividends received in {year}.</p>
-          )}
-          {!histError && !histLoading && divRows.length > 0 && (
-            <div className="pk-picker pk-zebra">
-              {divRows.map((t) => (
-                <div className="pk-act-row" key={t.id}>
-                  <div className="pk-act-main">
-                    <span className="pk-act-line1">
-                      <span className="pk-act-ticker">{t.ticker}</span>
-                      <span className="pk-badge" data-kind="received">
-                        Received
-                      </span>
-                    </span>
-                    <span className="pk-act-line2">
-                      <span className="pk-act-line2-text">{fmtLong(t.date)}</span>
-                      <span className="pk-badge pk-badge-acct">{ACCT_LABELS[t.accountType] ?? t.accountType}</span>
-                    </span>
-                  </div>
-                  <span className="pk-act-amt" data-tone="green">
-                    +${money(toUSD(t.total, t.currency))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        <Panel title={SECTION_LABEL[mode]} loading={histLoading} error={histError ? "Couldn't load history" : null} bodyClassName="p-0">
+          <DenseTable
+            columns={[
+              { key: "ticker", header: "SYMBOL", sortValue: (t) => t.ticker, cell: (t) => <span className="font-medium uppercase text-text-hi">{t.ticker}</span> },
+              { key: "date", header: "DATE", sortValue: (t) => t.date, cell: (t) => <span className="text-text-mid">{t.date}</span> },
+              { key: "acct", header: "ACCT", sortValue: (t) => t.accountType, cell: (t) => <span className="text-text-mid">{ACCT_LABELS[t.accountType] ?? t.accountType}</span> },
+              { key: "amt", header: "AMOUNT", align: "right", sortValue: (t) => toUSD(t.total, t.currency), cell: (t) => <NumberText value={`+$${money(toUSD(t.total, t.currency))}`} intent="pos" /> },
+            ]}
+            data={divRows}
+            initialSort={{ key: "date", desc: true }}
+            emptyText={`NO DIVIDENDS IN ${year}`}
+          />
+        </Panel>
       )}
 
       {mode === "transactions" && (
-        <>
-          {histError && <p className="pk-note warn">Couldn’t load transactions.</p>}
-          {!histError && histLoading && <SkeletonRows />}
-          {!histError && !histLoading && tradeRows.length === 0 && (
-            <p className="pk-note">No transactions in {year}.</p>
-          )}
-          {!histError && !histLoading && tradeRows.length > 0 && (
-            <div className="pk-picker pk-zebra">
-              {tradeRows.map((t) => (
-                <div className="pk-act-row" key={t.id}>
-                  <div className="pk-act-main">
-                    <span className="pk-act-line1">
-                      <span className="pk-act-ticker">{t.ticker}</span>
-                      <span className="pk-badge" data-kind={t.action.toLowerCase()}>
-                        {t.action === "DIVIDEND" ? "Div" : t.action === "BUY" ? "Buy" : "Sell"}
-                      </span>
-                    </span>
-                    <span className="pk-act-line2">
-                      {/* price converted to USD so qty × price reconciles with the amount */}
-                      <span className="pk-act-line2-text">
-                        {fmtLong(t.date)}
-                        {t.action !== "DIVIDEND" && ` · ${qtyFmt(t.quantity)} sh × $${money(toUSD(t.price, t.currency))}`}
-                      </span>
-                      <span className="pk-badge pk-badge-acct">{ACCT_LABELS[t.accountType] ?? t.accountType}</span>
-                    </span>
-                  </div>
-                  <span className="pk-act-amt" data-tone={t.action === "BUY" ? "out" : "green"}>
-                    {t.action === "BUY" ? "−" : "+"}${money(toUSD(t.total, t.currency))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        <Panel title={SECTION_LABEL[mode]} loading={histLoading} error={histError ? "Couldn't load transactions" : null} bodyClassName="p-0">
+          <DenseTable
+            columns={[
+              { key: "ticker", header: "SYMBOL", sortValue: (t) => t.ticker, cell: (t) => <span className="font-medium uppercase text-text-hi">{t.ticker}</span> },
+              { key: "action", header: "ACTION", sortValue: (t) => t.action, cell: (t) => <span className="text-text-mid">{t.action === "DIVIDEND" ? "DIV" : t.action}</span> },
+              { key: "date", header: "DATE", sortValue: (t) => t.date, cell: (t) => <span className="text-text-mid">{t.date}</span> },
+              { key: "amt", header: "AMOUNT", align: "right", sortValue: (t) => (t.action === "BUY" ? -1 : 1) * toUSD(t.total, t.currency), cell: (t) => <NumberText value={`${t.action === "BUY" ? "−" : "+"}$${money(toUSD(t.total, t.currency))}`} intent={t.action === "BUY" ? "neg" : "pos"} /> },
+            ]}
+            data={tradeRows}
+            initialSort={{ key: "date", desc: true }}
+            emptyText={`NO TRANSACTIONS IN ${year}`}
+          />
+        </Panel>
       )}
 
       {mode === "cashflow" && (
-        <>
-          {histError && <p className="pk-note warn">Couldn’t load cash flow.</p>}
-          {!histError && histLoading && <SkeletonRows />}
-          {!histError && !histLoading && cashRows.length === 0 && (
-            <p className="pk-note">No cash activity in {year}.</p>
-          )}
-          {!histError && !histLoading && cashRows.length > 0 && (
-            <div className="pk-picker pk-zebra">
-              {cashRows.map((t) => (
-                <div className="pk-act-row" key={t.id}>
-                  <div className="pk-act-main">
-                    <span className="pk-act-line1">
-                      <span className="pk-act-ticker pk-act-trunc">{t.portfolioName}</span>
-                      <span className="pk-badge" data-kind={t.action === "DEPOSIT" ? "deposit" : "withdrawal"}>
-                        {t.action === "DEPOSIT" ? "Deposit" : "Withdrawal"}
-                      </span>
-                    </span>
-                    <span className="pk-act-line2">
-                      <span className="pk-act-line2-text">{fmtLong(t.date)}</span>
-                      <span className="pk-badge pk-badge-acct">
-                        {ACCT_LABELS[t.portfolioAccountType] ?? t.portfolioAccountType}
-                      </span>
-                    </span>
-                  </div>
-                  <span className="pk-act-amt" data-tone={t.action === "DEPOSIT" ? "green" : "out"}>
-                    {t.action === "DEPOSIT" ? "+" : "−"}C${money(toCAD(t.amount, t.currency))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        <Panel title={SECTION_LABEL[mode]} loading={histLoading} error={histError ? "Couldn't load cash flow" : null} bodyClassName="p-0">
+          <DenseTable
+            columns={[
+              { key: "acct", header: "ACCOUNT", sortValue: (t) => t.portfolioName, cell: (t) => <span className="truncate text-text-hi">{t.portfolioName}</span> },
+              { key: "type", header: "ACCT", sortValue: (t) => t.portfolioAccountType, cell: (t) => <span className="text-text-mid">{ACCT_LABELS[t.portfolioAccountType] ?? t.portfolioAccountType}</span> },
+              { key: "date", header: "DATE", sortValue: (t) => t.date, cell: (t) => <span className="text-text-mid">{t.date}</span> },
+              { key: "amt", header: "AMOUNT", align: "right", sortValue: (t) => (t.action === "DEPOSIT" ? 1 : -1) * toCAD(t.amount, t.currency), cell: (t) => <NumberText value={`${t.action === "DEPOSIT" ? "+" : "−"}C$${money(toCAD(t.amount, t.currency))}`} intent={t.action === "DEPOSIT" ? "pos" : "neg"} /> },
+            ]}
+            data={cashRows}
+            initialSort={{ key: "date", desc: true }}
+            emptyText={`NO CASH ACTIVITY IN ${year}`}
+          />
+        </Panel>
       )}
-      </PocketPanel>
     </div>
   );
 }

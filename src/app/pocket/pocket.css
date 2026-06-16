@@ -139,12 +139,13 @@ body:has(.pocket-root) {
    co-scrolls vertically with the pages. Settings keeps the base .pk-screen
    (vertical scroll + padding) — it does NOT match this selector. */
 .pk-screen[data-tab="dividends"],
-.pk-screen[data-tab="charts"],
 .pk-screen[data-tab="activity"] {
   overflow: hidden;
   padding: 0;
   min-height: 0;
 }
+/* Charts is now a normal vertical-scroll screen (MDD stacked panels, no pager) —
+   it uses the base .pk-screen scroll + padding above. */
 
 /* The track. Its DEFINITE height comes from inset:0 ALONE (do NOT add height:100%
    here — that would be a % against the flex item and reintroduce the fragile path).
