@@ -474,6 +474,18 @@ body:has(.pocket-root) {
 /* MDD dense zebra: alternate row tint on a list inside a panel. */
 .pk-zebra > *:nth-child(odd) { background: rgba(255, 255, 255, 0.02); }
 
+/* A DenseTable inside the Activity scroller needs its OWN horizontal axis: the
+   ancestor .pk-activity is touch-action:pan-y, which would otherwise consume a
+   sideways drag and leave a wide (Trades/Cash) table's right column unreachable.
+   pan-x pan-y = horizontal scrolls the table, vertical still scrolls the surface
+   (same fix the upcoming banner cards use). NOT applied to the Dividends pager,
+   where the holdings table is sized to fit so it never gains a horizontal scroller
+   that would fight the portfolio swipe. */
+.pk-activity .pk-dense-scroll {
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+}
+
 /* list rows: shared edge (flush with screen padding), shared divider -------
    Applies to ticker-picker / upcoming / history rows. */
 .pk-picker { display: flex; flex-direction: column; }

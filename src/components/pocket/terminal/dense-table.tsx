@@ -60,7 +60,7 @@ export function DenseTable<T>({
   };
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
+    <div className={cn("pk-dense-scroll overflow-x-auto", className)}>
       <table className="w-full border-collapse font-mono text-xs tabular-nums">
         <thead>
           <tr className="sticky top-0 z-10 bg-panel-header">

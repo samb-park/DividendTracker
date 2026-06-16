@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
   content: [
@@ -81,7 +82,15 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Tailwind v3 has no built-in `pointer-coarse:` variant (v4 does) — the ported
+    // MDD terminal components use it to grow touch hit targets (panel header h-9,
+    // toggle min-h-9). Define it so those utilities emit CSS on touch devices.
+    plugin(function ({ addVariant }) {
+      addVariant("pointer-coarse", "@media (pointer: coarse)");
+      addVariant("pointer-fine", "@media (pointer: fine)");
+    }),
+  ],
 };
 
 export default config;

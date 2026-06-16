@@ -472,7 +472,7 @@ export function ActivityView({ basis, fxRate, fxFallback, positions, accountType
               { key: "ticker", header: "SYMBOL", sortValue: (e) => e.ticker, cell: (e) => <span className="font-medium uppercase text-text-hi">{e.ticker}</span> },
               { key: "type", header: "TYPE", sortValue: (e) => e.type, cell: (e) => <span className="text-text-mid">{e.type === "ex" ? "EX" : "PAY"}</span> },
               { key: "date", header: "DATE", sortValue: (e) => e.date, cell: (e) => <span className="text-text-mid">{e.confirmed ? "" : "~"}{e.date}</span> },
-              { key: "amt", header: "NET/PMT", align: "right", sortValue: (e) => e.amount, cell: (e) => <NumberText value={`$${money(e.amount)}`} intent="cyan" /> },
+              { key: "amt", header: "PER PMT", align: "right", sortValue: (e) => e.amount, cell: (e) => <NumberText value={`$${money(e.amount)}`} intent="cyan" /> },
             ]}
             data={upEvents}
             initialSort={{ key: "date", desc: false }}

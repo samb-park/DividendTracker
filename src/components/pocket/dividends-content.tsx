@@ -9,9 +9,6 @@ import { NumberText } from "./terminal/number-text";
 import { DenseTable, type DenseColumn } from "./terminal/dense-table";
 import { fmtUsd, fmtUsdCompact, fmtPct } from "./terminal/format";
 
-const qty = (n: number) =>
-  n.toLocaleString("en-US", { maximumFractionDigits: n % 1 === 0 ? 0 : 2 });
-
 /** NET / GROSS segmented toggle — MDD BasisToggle look. */
 function BasisToggle({ value, onChange }: { value: Basis; onChange: (b: Basis) => void }) {
   const opts: { v: Basis; label: string }[] = [
@@ -88,13 +85,6 @@ export function DividendsContent({
         cell: (t) => <span className="font-medium uppercase text-text-hi">{t.ticker}</span>,
       },
       {
-        key: "shares",
-        header: "SHARES",
-        align: "right",
-        sortValue: (t) => t.shares,
-        cell: (t) => <NumberText value={qty(t.shares)} intent="neutral" />,
-      },
-      {
         key: "annual",
         header: "ANNUAL",
         align: "right",
@@ -107,7 +97,13 @@ export function DividendsContent({
         align: "right",
         sortValue: (t) => (t.marketValueUSD ? pick(t) / t.marketValueUSD : -1),
         cell: (t) => (
-          <NumberText value={t.marketValueUSD ? fmtPct((pick(t) / t.marketValueUSD) * 100) : "—"} />
+          <NumberText
+            value={
+              t.marketValueUSD != null && t.marketValueUSD !== 0
+                ? fmtPct((pick(t) / t.marketValueUSD) * 100)
+                : "—"
+            }
+          />
         ),
       },
       {
